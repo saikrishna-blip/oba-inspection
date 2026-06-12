@@ -312,29 +312,25 @@ function updateUnit(idx, field, value){
 
 function evaluateUnit(idx){
   const u = lotState.units[idx];
-  // Black dot evaluation
-  let bdPass = false;
-  let bdFailReasons = [];
+  // Black dot evaluation (recorded as a note only - does NOT affect Pass/Fail)
+  let bdEntered = false;
+  let bdNote = "";
   if(u.bdNoDot){
-    bdPass = false;
-    bdFailReasons.push("NO black dot");
-  } else if(u.bdSize === "" || u.bdSize === null){
-    bdPass = null; // not yet entered
-  } else {
+    bdEntered = true;
+    bdNote = "NO black dot";
+  } else if(u.bdSize !== "" && u.bdSize !== null){
     const size = parseFloat(u.bdSize);
-    if(isNaN(size)){
-      bdPass = null;
-    } else if(size < lotState.bdMin){
-      bdPass = false;
-      bdFailReasons.push(`Black dot size ${size}mm < ${lotState.bdMin}mm`);
-    } else {
-      bdPass = true;
+    if(!isNaN(size)){
+      bdEntered = true;
+      if(size < lotState.bdMin){
+        bdNote = `Black dot size ${size}mm < ${lotState.bdMin}mm`;
+      }
     }
   }
 
-  // Other tests
+  // Function/Screen/Aesthetic determine final Pass/Fail
   const tests = [u.func, u.screen, u.aes];
-  const allEntered = bdPass !== null && tests.every(t => t === 'Pass' || t === 'Fail');
+  const allEntered = bdEntered && tests.every(t => t === 'Pass' || t === 'Fail');
 
   if(!allEntered){
     u.result = "";
@@ -346,14 +342,16 @@ function evaluateUnit(idx){
   if(u.screen === 'Fail') otherFails.push("Screen Fail");
   if(u.aes === 'Fail') otherFails.push("Aesthetic Fail");
 
-  const allFails = [...bdFailReasons, ...otherFails];
-
-  if(allFails.length === 0){
+  if(otherFails.length === 0){
     u.result = "Pass";
+    if(bdNote && !u.remark){
+      u.remark = bdNote;
+    }
   } else {
     u.result = "Fail";
     if(!u.remark){
-      u.remark = allFails.join(", ");
+      const allNotes = bdNote ? [bdNote, ...otherFails] : otherFails;
+      u.remark = allNotes.join(", ");
     }
   }
 }
@@ -391,10 +389,6 @@ function renderSummary(){
   const cls = lotState.lotResult === 'PASS' ? 'badge-pass' : 'badge-fail';
   badge.innerHTML = `<span class="badge ${cls}">LOT ${lotState.lotNumber}: ${lotState.lotResult}</span>`;
 
-  const goodEstimate = lotState.lotResult === 'PASS'
-    ? lotState.lotSize
-    : `${lotState.lotSize - estimateRejection()} (estimate - review failed units)`;
-
   document.getElementById('summaryStats').innerHTML = `
     <div><b>${lotState.units.length}</b>Units Inspected</div>
     <div><b style="color:var(--pass)">${lotState.passCount}</b>Pass</div>
@@ -419,11 +413,6 @@ function renderSummary(){
     `;
     body.appendChild(tr);
   });
-}
-
-function estimateRejection(){
-  // simple placeholder - not part of formal AQL accept/reject table
-  return lotState.failCount;
 }
 
 // ---------------- SAVE TO DRIVE ----------------
