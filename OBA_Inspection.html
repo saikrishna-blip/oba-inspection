@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OBA Inspection - IS 2500 G2</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --primary:#1a73e8; --pass:#1e8e3e; --fail:#d93025; --bg:#f5f7fa;
+    --card:#ffffff; --border:#dadce0; --text:#202124; --muted:#5f6368;
+  }
+  *{box-sizing:border-box; font-family:'Segoe UI',Roboto,Arial,sans-serif;}
+  body{margin:0; background:var(--bg); color:var(--text);}
+  .container{max-width:1200px; margin:0 auto; padding:20px;}
+  h1{font-size:22px; margin-bottom:4px;}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:20px;}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:10px; padding:24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  label{display:block; font-size:13px; font-weight:600; margin-bottom:4px; color:var(--muted);}
+  input, select{width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; margin-bottom:14px;}
+  .row{display:flex; gap:16px; flex-wrap:wrap;}
+  .row > div{flex:1; min-width:160px;}
+  button{background:var(--primary); color:#fff; border:none; padding:11px 22px; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer;}
+  button.secondary{background:#fff; color:var(--primary); border:1px solid var(--primary);}
+  button:disabled{background:#ccc; cursor:not-allowed;}
+  button.danger{background:var(--fail);}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th,td{border:1px solid var(--border); padding:6px 8px; text-align:center;}
+  th{background:#eef2f7; font-size:12px;}
+  td input, td select{margin-bottom:0; padding:6px; font-size:13px;}
+  .status-pass{color:var(--pass); font-weight:700;}
+  .status-fail{color:var(--fail); font-weight:700;}
+  .status-pending{color:var(--muted);}
+  .center{text-align:center;}
+  .badge{display:inline-block; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:700; color:#fff;}
+  .badge-pass{background:var(--pass);}
+  .badge-fail{background:var(--fail);}
+  .badge-pending{background:#9aa0a6;}
+  .hidden{display:none;}
+  .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .userinfo{font-size:13px; color:var(--muted); display:flex; align-items:center; gap:8px;}
+  .userinfo img{width:28px; height:28px; border-radius:50%;}
+  .footerbtns{display:flex; justify-content:space-between; margin-top:18px;}
+  .small-note{font-size:12px; color:var(--muted); margin-top:6px;}
+  .summary-row{display:flex; gap:30px; flex-wrap:wrap; margin-bottom:10px;}
+  .summary-row div{font-size:14px;}
+  .summary-row b{display:block; font-size:20px;}
+  textarea{width:100%; min-height:60px; border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px;}
+  .lot-history{font-size:13px; margin-top:10px;}
+  .lot-history table{margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>OBA Inspection</h1>
+  <div class="sub">Sampling Standard: IS 2500 &nbsp;|&nbsp; Inspection Level: G2 &nbsp;|&nbsp; Sample Size: 13 units per lot of 90</div>
+
+  <!-- LOGIN SCREEN -->
+  <div id="loginScreen" class="card">
+    <h3>Sign in to continue</h3>
+    <p class="small-note">Sign in with Google to enable saving inspection records to your Google Drive.</p>
+    <div id="setupClientId">
+      <label>Google OAuth Client ID (one-time setup)</label>
+      <input type="text" id="clientIdInput" placeholder="xxxxxxxx.apps.googleusercontent.com">
+      <p class="small-note">Create an OAuth 2.0 Client ID (type: Web application) in Google Cloud Console, enable the Google Drive API, and add this page's URL under "Authorized JavaScript origins". Paste the Client ID above, then click Continue.</p>
+      <button onclick="initGoogle()">Continue</button>
+    </div>
+    <div id="signInArea" class="hidden" style="margin-top:14px;">
+      <div id="googleBtn"></div>
+    </div>
+  </div>
+
+  <!-- LOT SETUP SCREEN -->
+  <div id="lotScreen" class="card hidden">
+    <div class="topbar">
+      <h3 style="margin:0;">New Lot Setup</h3>
+      <div class="userinfo" id="userInfoBox"></div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Lot Number</label>
+        <input type="text" id="lotNumber" placeholder="e.g. LOT-001">
+      </div>
+      <div>
+        <label>Product / Kit Name</label>
+        <input type="text" id="kitName" placeholder="e.g. LH1G">
+      </div>
+      <div>
+        <label>Lot Size (units)</label>
+        <input type="number" id="lotSize" value="90">
+      </div>
+      <div>
+        <label>Sample Size (units to inspect)</label>
+        <input type="number" id="sampleSize" value="13">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Black Dot Min Allowable Size (mm)</label>
+        <input type="number" id="bdMin" value="2.4" step="0.1">
+      </div>
+      <div>
+        <label>Inspector Name (optional)</label>
+        <input type="text" id="inspectorName" placeholder="Your name">
+      </div>
+    </div>
+    <button onclick="startLot()">Start Inspection</button>
+    <div id="lotHistoryArea" class="lot-history"></div>
+  </div>
+
+  <!-- INSPECTION SCREEN -->
+  <div id="inspectionScreen" class="card hidden">
+    <div class="topbar">
+      <div>
+        <h3 style="margin:0;" id="lotTitle">Lot</h3>
+        <div class="small-note" id="lotMeta"></div>
+      </div>
+      <div class="userinfo" id="userInfoBox2"></div>
+    </div>
+    <div style="overflow-x:auto;">
+    <table id="inspTable">
+      <thead>
+        <tr>
+          <th style="width:30px;">#</th>
+          <th style="width:160px;">Serial Number</th>
+          <th style="width:170px;">Black Dot Size (mm) / Status</th>
+          <th style="width:90px;">Function</th>
+          <th style="width:90px;">Screen</th>
+          <th style="width:90px;">Aesthetic</th>
+          <th>Remark (if Fail)</th>
+          <th style="width:90px;">Unit Result</th>
+        </tr>
+      </thead>
+      <tbody id="inspBody"></tbody>
+    </table>
+    </div>
+    <div class="footerbtns">
+      <button class="secondary" onclick="cancelLot()">Cancel Lot</button>
+      <div>
+        <span id="progressText" class="small-note" style="margin-right:14px;"></span>
+        <button id="finishBtn" disabled onclick="finishLot()">Finish Lot &amp; Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUMMARY SCREEN -->
+  <div id="summaryScreen" class="card hidden">
+    <h3>Lot Inspection Summary</h3>
+    <div id="summaryBadge"></div>
+    <div class="summary-row" id="summaryStats" style="margin-top:14px;"></div>
+    <div style="overflow-x:auto;">
+    <table id="summaryTable">
+      <thead><tr><th>#</th><th>Serial Number</th><th>Black Dot</th><th>Function</th><th>Screen</th><th>Aesthetic</th><th>Remark</th><th>Result</th></tr></thead>
+      <tbody id="summaryBody"></tbody>
+    </table>
+    </div>
+    <p class="small-note" id="saveStatus" style="margin-top:10px;"></p>
+    <div class="footerbtns">
+      <button class="secondary" onclick="newLot()">Start New Lot</button>
+      <button onclick="saveToDrive()">Save to Google Drive</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let CLIENT_ID = "";
+let accessToken = null;
+let tokenClient = null;
+let currentUser = null;
+
+let lotState = null; // {lotNumber, kitName, lotSize, sampleSize, bdMin, inspector, startTime, units:[]}
+let lotHistory = []; // in-memory history of completed lots this session
+
+const SCOPES = "https://www.googleapis.com/auth/drive.file profile email";
+
+function initGoogle(){
+  CLIENT_ID = document.getElementById('clientIdInput').value.trim();
+  if(!CLIENT_ID){ alert("Please enter your Google OAuth Client ID."); return; }
+  document.getElementById('setupClientId').classList.add('hidden');
+  document.getElementById('signInArea').classList.remove('hidden');
+
+  // Identity Sign-In button (for profile info)
+  google.accounts.id.initialize({
+    client_id: CLIENT_ID,
+    callback: handleCredentialResponse
+  });
+  google.accounts.id.renderButton(document.getElementById('googleBtn'), {theme:"outline", size:"large"});
+
+  // Token client for Drive access
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: (resp) => {
+      if(resp && resp.access_token){
+        accessToken = resp.access_token;
+        proceedAfterLogin();
+      }
+    }
+  });
+}
+
+function handleCredentialResponse(response){
+  // decode JWT for basic profile info
+  const payload = JSON.parse(atob(response.credential.split('.')[1]));
+  currentUser = {name: payload.name, email: payload.email, picture: payload.picture};
+  // request access token for Drive scope
+  tokenClient.requestAccessToken({prompt: accessToken ? '' : 'consent'});
+}
+
+function proceedAfterLogin(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('lotScreen').classList.remove('hidden');
+  renderUserInfo();
+}
+
+function renderUserInfo(){
+  const html = currentUser ? `<img src="${currentUser.picture}"><span>${currentUser.name}</span>` : '';
+  document.getElementById('userInfoBox').innerHTML = html;
+  document.getElementById('userInfoBox2').innerHTML = html;
+}
+
+// ---------------- LOT SETUP ----------------
+function startLot(){
+  const lotNumber = document.getElementById('lotNumber').value.trim();
+  const kitName = document.getElementById('kitName').value.trim();
+  const lotSize = parseInt(document.getElementById('lotSize').value) || 90;
+  const sampleSize = parseInt(document.getElementById('sampleSize').value) || 13;
+  const bdMin = parseFloat(document.getElementById('bdMin').value) || 2.4;
+  const inspector = document.getElementById('inspectorName').value.trim();
+
+  if(!lotNumber){ alert("Please enter Lot Number."); return; }
+  if(!kitName){ alert("Please enter Product / Kit Name."); return; }
+
+  lotState = {
+    lotNumber, kitName, lotSize, sampleSize, bdMin, inspector,
+    startTime: new Date(),
+    units: Array.from({length: sampleSize}, () => ({
+      serial:"", bdSize:"", bdNoDot:false, func:"", screen:"", aes:"", remark:"", result:""
+    }))
+  };
+
+  document.getElementById('lotScreen').classList.add('hidden');
+  document.getElementById('inspectionScreen').classList.remove('hidden');
+  document.getElementById('lotTitle').innerText = `Lot ${lotNumber} - ${kitName}`;
+  document.getElementById('lotMeta').innerText =
+    `Lot Size: ${lotSize} | Sample Size: ${sampleSize} | Black Dot Min: ${bdMin} mm | Started: ${lotState.startTime.toLocaleString()}`;
+  renderInspectionTable();
+}
+
+// ---------------- INSPECTION TABLE ----------------
+function renderInspectionTable(){
+  const body = document.getElementById('inspBody');
+  body.innerHTML = '';
+  lotState.units.forEach((u, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${idx+1}</td>
+      <td><input type="text" value="${u.serial}" placeholder="Scan/enter SN" onchange="updateUnit(${idx},'serial',this.value)"></td>
+      <td>
+        <div style="display:flex; gap:4px; align-items:center;">
+          <input type="number" step="0.1" style="width:70px;" value="${u.bdSize}" placeholder="mm"
+            ${u.bdNoDot?'disabled':''} onchange="updateUnit(${idx},'bdSize',this.value)">
+          <label style="font-size:11px; display:flex; align-items:center; gap:3px; margin:0;">
+            <input type="checkbox" style="width:auto; margin:0;" ${u.bdNoDot?'checked':''} onchange="toggleNoDot(${idx}, this.checked)"> No dot
+          </label>
+        </div>
+      </td>
+      <td>${selectHtml(idx,'func',u.func)}</td>
+      <td>${selectHtml(idx,'screen',u.screen)}</td>
+      <td>${selectHtml(idx,'aes',u.aes)}</td>
+      <td><input type="text" value="${u.remark}" placeholder="Remark" onchange="updateUnit(${idx},'remark',this.value)"></td>
+      <td><span class="${resultClass(u.result)}">${u.result || '-'}</span></td>
+    `;
+    body.appendChild(tr);
+  });
+  updateProgress();
+}
+
+function selectHtml(idx, field, val){
+  return `<select onchange="updateUnit(${idx},'${field}',this.value)">
+    <option value="">--</option>
+    <option value="Pass" ${val==='Pass'?'selected':''}>Pass</option>
+    <option value="Fail" ${val==='Fail'?'selected':''}>Fail</option>
+  </select>`;
+}
+
+function resultClass(r){
+  if(r==='Pass') return 'status-pass';
+  if(r==='Fail') return 'status-fail';
+  return 'status-pending';
+}
+
+function toggleNoDot(idx, checked){
+  lotState.units[idx].bdNoDot = checked;
+  if(checked) lotState.units[idx].bdSize = "";
+  evaluateUnit(idx);
+  renderInspectionTable();
+}
+
+function updateUnit(idx, field, value){
+  lotState.units[idx][field] = value;
+  evaluateUnit(idx);
+  // re-render only progress + result cell to avoid losing focus on every keystroke
+  updateProgress();
+  const u = lotState.units[idx];
+  const row = document.getElementById('inspBody').children[idx];
+  const resultCell = row.children[7].querySelector('span');
+  resultCell.className = resultClass(u.result);
+  resultCell.innerText = u.result || '-';
+}
+
+function evaluateUnit(idx){
+  const u = lotState.units[idx];
+  // Black dot evaluation
+  let bdPass = false;
+  let bdFailReasons = [];
+  if(u.bdNoDot){
+    bdPass = false;
+    bdFailReasons.push("NO black dot");
+  } else if(u.bdSize === "" || u.bdSize === null){
+    bdPass = null; // not yet entered
+  } else {
+    const size = parseFloat(u.bdSize);
+    if(isNaN(size)){
+      bdPass = null;
+    } else if(size < lotState.bdMin){
+      bdPass = false;
+      bdFailReasons.push(`Black dot size ${size}mm < ${lotState.bdMin}mm`);
+    } else {
+      bdPass = true;
+    }
+  }
+
+  // Other tests
+  const tests = [u.func, u.screen, u.aes];
+  const allEntered = bdPass !== null && tests.every(t => t === 'Pass' || t === 'Fail');
+
+  if(!allEntered){
+    u.result = "";
+    return;
+  }
+
+  const otherFails = [];
+  if(u.func === 'Fail') otherFails.push("Function Fail");
+  if(u.screen === 'Fail') otherFails.push("Screen Fail");
+  if(u.aes === 'Fail') otherFails.push("Aesthetic Fail");
+
+  const allFails = [...bdFailReasons, ...otherFails];
+
+  if(allFails.length === 0){
+    u.result = "Pass";
+  } else {
+    u.result = "Fail";
+    if(!u.remark){
+      u.remark = allFails.join(", ");
+    }
+  }
+}
+
+function updateProgress(){
+  const total = lotState.units.length;
+  const completed = lotState.units.filter(u => u.result !== "").length;
+  document.getElementById('progressText').innerText = `Completed: ${completed}/${total}`;
+  document.getElementById('finishBtn').disabled = completed < total;
+}
+
+function cancelLot(){
+  if(!confirm("Cancel this lot? Unsaved inspection data will be lost.")) return;
+  lotState = null;
+  document.getElementById('inspectionScreen').classList.add('hidden');
+  document.getElementById('lotScreen').classList.remove('hidden');
+}
+
+// ---------------- FINISH / SUMMARY ----------------
+function finishLot(){
+  lotState.endTime = new Date();
+  const passCount = lotState.units.filter(u => u.result === 'Pass').length;
+  const failCount = lotState.units.filter(u => u.result === 'Fail').length;
+  lotState.lotResult = (failCount === 0) ? 'PASS' : 'FAIL';
+  lotState.passCount = passCount;
+  lotState.failCount = failCount;
+
+  document.getElementById('inspectionScreen').classList.add('hidden');
+  document.getElementById('summaryScreen').classList.remove('hidden');
+  renderSummary();
+}
+
+function renderSummary(){
+  const badge = document.getElementById('summaryBadge');
+  const cls = lotState.lotResult === 'PASS' ? 'badge-pass' : 'badge-fail';
+  badge.innerHTML = `<span class="badge ${cls}">LOT ${lotState.lotNumber}: ${lotState.lotResult}</span>`;
+
+  const goodEstimate = lotState.lotResult === 'PASS'
+    ? lotState.lotSize
+    : `${lotState.lotSize - estimateRejection()} (estimate - review failed units)`;
+
+  document.getElementById('summaryStats').innerHTML = `
+    <div><b>${lotState.units.length}</b>Units Inspected</div>
+    <div><b style="color:var(--pass)">${lotState.passCount}</b>Pass</div>
+    <div><b style="color:var(--fail)">${lotState.failCount}</b>Fail</div>
+    <div><b>${lotState.lotSize}</b>Lot Size</div>
+  `;
+
+  const body = document.getElementById('summaryBody');
+  body.innerHTML = '';
+  lotState.units.forEach((u, idx) => {
+    const bdDisplay = u.bdNoDot ? "NO black dot" : (u.bdSize !== "" ? `${u.bdSize} mm` : '-');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${idx+1}</td>
+      <td>${u.serial || '-'}</td>
+      <td>${bdDisplay}</td>
+      <td>${u.func}</td>
+      <td>${u.screen}</td>
+      <td>${u.aes}</td>
+      <td>${u.remark || '-'}</td>
+      <td><span class="${resultClass(u.result)}">${u.result}</span></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function estimateRejection(){
+  // simple placeholder - not part of formal AQL accept/reject table
+  return lotState.failCount;
+}
+
+// ---------------- SAVE TO DRIVE ----------------
+async function saveToDrive(){
+  const statusEl = document.getElementById('saveStatus');
+  statusEl.innerText = "Saving to Google Drive...";
+
+  try{
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0,10);
+    const timeStr = now.toTimeString().slice(0,8).replace(/:/g,'-');
+    const fileNameBase = `Lot_${lotState.lotNumber}_${dateStr}_${timeStr}`;
+
+    // Build CSV summary
+    let csv = "Lot Number,Product,Lot Size,Sample Size,Inspector,Date,Time,Lot Result,Pass Count,Fail Count\n";
+    csv += `${lotState.lotNumber},${lotState.kitName},${lotState.lotSize},${lotState.sampleSize},${lotState.inspector||''},${dateStr},${now.toTimeString().slice(0,8)},${lotState.lotResult},${lotState.passCount},${lotState.failCount}\n\n`;
+    csv += "S.No,Serial Number,Black Dot,Function,Screen,Aesthetic,Remark,Unit Result\n";
+    lotState.units.forEach((u, idx) => {
+      const bdDisplay = u.bdNoDot ? "NO black dot" : (u.bdSize !== "" ? `${u.bdSize} mm` : '-');
+      csv += `${idx+1},${u.serial},${bdDisplay},${u.func},${u.screen},${u.aes},"${(u.remark||'').replace(/"/g,'""')}",${u.result}\n`;
+    });
+
+    // Find or create "OBA_Inspection" folder
+    const folderId = await getOrCreateFolder("OBA_Inspection");
+
+    await uploadFile(`${fileNameBase}.csv`, csv, "text/csv", folderId);
+
+    statusEl.innerHTML = `Saved successfully to Google Drive folder <b>OBA_Inspection</b> as <b>${fileNameBase}.csv</b>.`;
+
+    lotHistory.push({
+      lotNumber: lotState.lotNumber, result: lotState.lotResult,
+      pass: lotState.passCount, fail: lotState.failCount,
+      time: now.toLocaleString()
+    });
+  } catch(err){
+    console.error(err);
+    statusEl.innerText = "Error saving to Drive: " + (err.message || err);
+  }
+}
+
+async function getOrCreateFolder(name){
+  // search
+  const q = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${name}' and trashed=false`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  const data = await res.json();
+  if(data.files && data.files.length > 0) return data.files[0].id;
+
+  // create
+  const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  const created = await createRes.json();
+  return created.id;
+}
+
+async function uploadFile(name, content, mimeType, folderId){
+  const metadata = { name, mimeType, parents: folderId ? [folderId] : [] };
+  const boundary = '-------314159265358979323846';
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const close_delim = `\r\n--${boundary}--`;
+
+  const body =
+    delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(metadata) +
+    delimiter + `Content-Type: ${mimeType}\r\n\r\n` + content +
+    close_delim;
+
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': `multipart/related; boundary=${boundary}`
+    },
+    body
+  });
+  if(!res.ok){
+    const errText = await res.text();
+    throw new Error(errText);
+  }
+  return res.json();
+}
+
+// ---------------- NEW LOT ----------------
+function newLot(){
+  renderLotHistory();
+  document.getElementById('summaryScreen').classList.add('hidden');
+  document.getElementById('lotScreen').classList.remove('hidden');
+  // clear fields
+  document.getElementById('lotNumber').value = '';
+  document.getElementById('kitName').value = '';
+  lotState = null;
+}
+
+function renderLotHistory(){
+  const area = document.getElementById('lotHistoryArea');
+  if(lotHistory.length === 0){ area.innerHTML = ''; return; }
+  let html = '<h4>Session Lot History</h4><table><thead><tr><th>Lot</th><th>Time</th><th>Result</th><th>Pass</th><th>Fail</th></tr></thead><tbody>';
+  lotHistory.forEach(l => {
+    const cls = l.result === 'PASS' ? 'badge-pass' : 'badge-fail';
+    html += `<tr><td>${l.lotNumber}</td><td>${l.time}</td><td><span class="badge ${cls}">${l.result}</span></td><td>${l.pass}</td><td>${l.fail}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  area.innerHTML = html;
+}
+</script>
+</body>
+</html>
