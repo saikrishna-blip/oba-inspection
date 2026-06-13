@@ -351,6 +351,8 @@ async function saveKitEdit(idx){
     alert("Error: " + (res.error || "unknown"));
   }
 }
+
+function selectKit(idx){
   const k = window._openKits[idx];
   lotState = {
     kitName: k.kitName, lotNumber: k.lotNumber, lotSize: k.lotSize,
