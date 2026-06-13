@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OBA Inspection - IS 2500 G2</title>
+<style>
+  :root{
+    --primary:#1a73e8; --pass:#1e8e3e; --fail:#d93025; --bg:#f5f7fa;
+    --card:#ffffff; --border:#dadce0; --text:#202124; --muted:#5f6368;
+  }
+  *{box-sizing:border-box; font-family:'Segoe UI',Roboto,Arial,sans-serif;}
+  body{margin:0; background:var(--bg); color:var(--text);}
+  .container{max-width:1300px; margin:0 auto; padding:20px;}
+  h1{font-size:22px; margin-bottom:4px;}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:20px;}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:10px; padding:24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  label{display:block; font-size:13px; font-weight:600; margin-bottom:4px; color:var(--muted);}
+  input, select{width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; margin-bottom:14px;}
+  .row{display:flex; gap:16px; flex-wrap:wrap;}
+  .row > div{flex:1; min-width:160px;}
+  button{background:var(--primary); color:#fff; border:none; padding:11px 22px; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer;}
+  button.secondary{background:#fff; color:var(--primary); border:1px solid var(--primary);}
+  button:disabled{background:#ccc; cursor:not-allowed;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th,td{border:1px solid var(--border); padding:6px 8px; text-align:center;}
+  th{background:#eef2f7; font-size:12px;}
+  td input, td select{margin-bottom:0; padding:6px; font-size:13px;}
+  .status-pass{color:var(--pass); font-weight:700;}
+  .status-fail{color:var(--fail); font-weight:700;}
+  .status-pending{color:var(--muted);}
+  .badge{display:inline-block; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:700; color:#fff;}
+  .badge-pass{background:var(--pass);}
+  .badge-fail{background:var(--fail);}
+  .badge-open{background:var(--primary);}
+  .badge-closed{background:#9aa0a6;}
+  .hidden{display:none;}
+  .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .userinfo{font-size:13px; color:var(--muted);}
+  .footerbtns{display:flex; justify-content:space-between; margin-top:18px;}
+  .small-note{font-size:12px; color:var(--muted); margin-top:6px;}
+  .summary-row{display:flex; gap:30px; flex-wrap:wrap; margin-bottom:10px;}
+  .summary-row div{font-size:14px;}
+  .summary-row b{display:block; font-size:20px;}
+  .aql-box{background:#eef2f7; border-radius:8px; padding:10px 14px; font-size:12px; color:var(--muted); margin-bottom:14px;}
+  .kit-card{border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;}
+  .err{color:var(--fail); font-size:13px; margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>OBA Inspection</h1>
+  <div class="sub">Sampling Standard: IS 2500 &nbsp;|&nbsp; Level G2 &nbsp;|&nbsp; Lot Size 90 &nbsp;|&nbsp; Sample 13 &nbsp;|&nbsp; Minor AQL: Ac1/Re2 &nbsp;|&nbsp; Major AQL: Ac0/Re1</div>
+
+  <!-- API SETUP -->
+  <div id="apiSetup" class="card">
+    <h3>One-time Setup</h3>
+    <label>Apps Script Web App URL</label>
+    <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/XXXX/exec">
+    <button onclick="saveApiUrl()">Continue</button>
+    <p class="small-note">Paste the Web App URL from your Google Apps Script deployment.</p>
+  </div>
+
+  <!-- LOGIN -->
+  <div id="loginScreen" class="card hidden">
+    <h3>Login</h3>
+    <label>Username</label>
+    <input type="text" id="loginUser">
+    <label>Password</label>
+    <input type="password" id="loginPass">
+    <button onclick="doLogin()">Login</button>
+    <div id="loginErr" class="err"></div>
+  </div>
+
+  <!-- ADMIN PANEL -->
+  <div id="adminScreen" class="card hidden">
+    <div class="topbar">
+      <h3 style="margin:0;">Admin Panel</h3>
+      <div>
+        <span class="userinfo" id="adminUserInfo"></span>
+        <button class="secondary" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <h4>Create New Kit / Lot</h4>
+    <div class="row">
+      <div><label>Kit Name</label><input type="text" id="newKitName" placeholder="e.g. LH1G"></div>
+      <div><label>Lot Number</label><input type="text" id="newLotNumber" placeholder="e.g. LOT-001"></div>
+      <div><label>Lot Size</label><input type="number" id="newLotSize" value="90"></div>
+      <div><label>Sample Size</label><input type="number" id="newSampleSize" value="13"></div>
+      <div><label>Black Dot Pass Limit (mm, &lt; this)</label><input type="number" id="newBdMax" value="2.4" step="0.1"></div>
+    </div>
+    <button onclick="createKit()">Create Kit</button>
+    <div id="createKitMsg" class="small-note"></div>
+
+    <h4 style="margin-top:24px;">Add Inspector / Admin User</h4>
+    <div class="row">
+      <div><label>Username</label><input type="text" id="newUserName"></div>
+      <div><label>Password</label><input type="text" id="newUserPass"></div>
+      <div><label>Full Name</label><input type="text" id="newUserFullName"></div>
+      <div><label>Role</label>
+        <select id="newUserRole"><option value="inspector">Inspector</option><option value="admin">Admin</option></select>
+      </div>
+    </div>
+    <button onclick="addUser()">Add User</button>
+    <div id="addUserMsg" class="small-note"></div>
+
+    <h4 style="margin-top:24px;">All Kits</h4>
+    <div id="adminKitList"></div>
+    <button class="secondary" onclick="loadKits()">Refresh</button>
+  </div>
+
+  <!-- INSPECTOR: KIT SELECT -->
+  <div id="kitSelectScreen" class="card hidden">
+    <div class="topbar">
+      <h3 style="margin:0;">Select Open Kit / Lot</h3>
+      <div>
+        <span class="userinfo" id="inspUserInfo"></span>
+        <button class="secondary" onclick="logout()">Logout</button>
+      </div>
+    </div>
+    <div id="openKitList"></div>
+    <button class="secondary" onclick="loadKits()">Refresh</button>
+  </div>
+
+  <!-- INSPECTION SCREEN -->
+  <div id="inspectionScreen" class="card hidden">
+    <div class="topbar">
+      <div>
+        <h3 style="margin:0;" id="lotTitle">Lot</h3>
+        <div class="small-note" id="lotMeta"></div>
+      </div>
+      <span class="userinfo" id="inspUserInfo2"></span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table id="inspTable">
+      <thead>
+        <tr>
+          <th style="width:30px;">#</th>
+          <th style="width:160px;">Serial Number</th>
+          <th style="width:90px;">Aesthetic</th>
+          <th style="width:90px;">General</th>
+          <th style="width:90px;">Functional</th>
+          <th style="width:90px;">Screen</th>
+          <th style="width:170px;">Black Dot Size (mm)</th>
+          <th>Remark (if Fail)</th>
+          <th style="width:90px;">Sample Result</th>
+        </tr>
+      </thead>
+      <tbody id="inspBody"></tbody>
+    </table>
+    </div>
+    <div class="footerbtns">
+      <button class="secondary" onclick="cancelLot()">Back</button>
+      <div>
+        <span id="progressText" class="small-note" style="margin-right:14px;"></span>
+        <button id="finishBtn" disabled onclick="finishLot()">Finish Lot &amp; Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUMMARY SCREEN -->
+  <div id="summaryScreen" class="card hidden">
+    <h3>Lot Inspection Summary</h3>
+    <div id="summaryBadge"></div>
+    <div class="summary-row" id="summaryStats" style="margin-top:14px;"></div>
+    <div id="aqlDecision" class="aql-box"></div>
+    <div style="overflow-x:auto;">
+    <table id="summaryTable">
+      <thead><tr><th>#</th><th>Serial Number</th><th>Aesthetic</th><th>General</th><th>Functional</th><th>Screen</th><th>Black Dot (mm)</th><th>Remark</th><th>Result</th></tr></thead>
+      <tbody id="summaryBody"></tbody>
+    </table>
+    </div>
+    <p class="small-note" id="saveStatus" style="margin-top:10px;"></p>
+    <div class="footerbtns">
+      <button class="secondary" onclick="backToKitSelect()">Back to Kit List</button>
+      <button onclick="saveResults()">Save to Master File</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let API_URL = "";
+let currentUser = null; // {username, role, name}
+let lotState = null;
+let allKits = [];
+
+function saveApiUrl(){
+  API_URL = document.getElementById('apiUrlInput').value.trim();
+  if(!API_URL){ alert("Please paste the Apps Script Web App URL."); return; }
+  document.getElementById('apiSetup').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+}
+
+async function api(action, payload){
+  payload = payload || {};
+  payload.action = action;
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+async function doLogin(){
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value.trim();
+  document.getElementById('loginErr').innerText = "";
+  try{
+    const res = await api('login', {username, password});
+    if(res.ok){
+      currentUser = {username: res.username, role: res.role, name: res.name};
+      document.getElementById('loginScreen').classList.add('hidden');
+      if(currentUser.role === 'admin'){
+        document.getElementById('adminScreen').classList.remove('hidden');
+        document.getElementById('adminUserInfo').innerText = currentUser.name + " (Admin)";
+        loadKits();
+      } else {
+        document.getElementById('kitSelectScreen').classList.remove('hidden');
+        document.getElementById('inspUserInfo').innerText = currentUser.name + " (Inspector)";
+        loadKits();
+      }
+    } else {
+      document.getElementById('loginErr').innerText = res.error || "Login failed";
+    }
+  } catch(err){
+    document.getElementById('loginErr').innerText = "Error: " + err.message;
+  }
+}
+
+function logout(){
+  currentUser = null;
+  lotState = null;
+  ['adminScreen','kitSelectScreen','inspectionScreen','summaryScreen'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+}
+
+// ---------------- ADMIN ----------------
+async function createKit(){
+  const kitName = document.getElementById('newKitName').value.trim();
+  const lotNumber = document.getElementById('newLotNumber').value.trim();
+  const lotSize = parseInt(document.getElementById('newLotSize').value) || 90;
+  const sampleSize = parseInt(document.getElementById('newSampleSize').value) || 13;
+  const bdMax = parseFloat(document.getElementById('newBdMax').value) || 2.4;
+
+  if(!kitName || !lotNumber){ alert("Enter Kit Name and Lot Number"); return; }
+
+  const msg = document.getElementById('createKitMsg');
+  msg.innerText = "Creating...";
+  const res = await api('createKit', {kitName, lotNumber, lotSize, sampleSize, bdMax, createdBy: currentUser.username});
+  if(res.ok){
+    msg.innerText = `Kit "${kitName}" Lot "${lotNumber}" created and is now Open.`;
+    document.getElementById('newKitName').value = '';
+    document.getElementById('newLotNumber').value = '';
+    loadKits();
+  } else {
+    msg.innerText = "Error: " + (res.error || "unknown");
+  }
+}
+
+async function addUser(){
+  const username = document.getElementById('newUserName').value.trim();
+  const password = document.getElementById('newUserPass').value.trim();
+  const name = document.getElementById('newUserFullName').value.trim();
+  const role = document.getElementById('newUserRole').value;
+  if(!username || !password || !name){ alert("Fill all user fields"); return; }
+  const msg = document.getElementById('addUserMsg');
+  msg.innerText = "Adding...";
+  const res = await api('addUser', {username, password, name, role});
+  if(res.ok){
+    msg.innerText = `User "${username}" added as ${role}.`;
+    document.getElementById('newUserName').value = '';
+    document.getElementById('newUserPass').value = '';
+    document.getElementById('newUserFullName').value = '';
+  } else {
+    msg.innerText = "Error: " + (res.error || "unknown");
+  }
+}
+
+async function loadKits(){
+  const res = await api('getKits', {});
+  if(!res.ok) return;
+  allKits = res.kits;
+
+  if(currentUser.role === 'admin'){
+    const area = document.getElementById('adminKitList');
+    if(allKits.length === 0){ area.innerHTML = '<p class="small-note">No kits yet.</p>'; return; }
+    area.innerHTML = allKits.map(k => `
+      <div class="kit-card">
+        <div>
+          <b>${k.kitName}</b> - Lot ${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize}, BD&lt;${k.bdMax}mm)</span>
+        </div>
+        <span class="badge ${k.status==='Open'?'badge-open':'badge-closed'}">${k.status}</span>
+      </div>
+    `).join('');
+  } else {
+    const open = allKits.filter(k => k.status === 'Open');
+    const area = document.getElementById('openKitList');
+    if(open.length === 0){ area.innerHTML = '<p class="small-note">No open kits available. Ask admin to create one.</p>'; return; }
+    area.innerHTML = open.map((k, idx) => `
+      <div class="kit-card">
+        <div>
+          <b>${k.kitName}</b> - Lot ${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize}, BD&lt;${k.bdMax}mm)</span>
+        </div>
+        <button onclick='selectKit(${idx})'>Start Inspection</button>
+      </div>
+    `).join('');
+    window._openKits = open;
+  }
+}
+
+function selectKit(idx){
+  const k = window._openKits[idx];
+  lotState = {
+    kitName: k.kitName, lotNumber: k.lotNumber, lotSize: k.lotSize,
+    sampleSize: k.sampleSize, bdMax: k.bdMax,
+    units: Array.from({length: k.sampleSize}, () => ({
+      serial:"", aes:"", general:"", func:"", screen:"", bdSize:"", bdNoDot:false, remark:"", result:"", dupError:false
+    }))
+  };
+  document.getElementById('kitSelectScreen').classList.add('hidden');
+  document.getElementById('inspectionScreen').classList.remove('hidden');
+  document.getElementById('lotTitle').innerText = `${k.kitName} - LOT ${k.lotNumber}`;
+  document.getElementById('lotMeta').innerText = `Lot Size: ${k.lotSize} | Sample Size: ${k.sampleSize} | Black Dot Pass Limit: < ${k.bdMax} mm`;
+  document.getElementById('inspUserInfo2').innerText = currentUser.name + " (Inspector)";
+  renderInspectionTable();
+}
+
+function backToKitSelect(){
+  lotState = null;
+  document.getElementById('summaryScreen').classList.add('hidden');
+  document.getElementById('kitSelectScreen').classList.remove('hidden');
+  loadKits();
+}
+
+function cancelLot(){
+  if(!confirm("Go back? Unsaved inspection data will be lost.")) return;
+  lotState = null;
+  document.getElementById('inspectionScreen').classList.add('hidden');
+  document.getElementById('kitSelectScreen').classList.remove('hidden');
+}
+
+// ---------------- INSPECTION TABLE ----------------
+function renderInspectionTable(){
+  const body = document.getElementById('inspBody');
+  body.innerHTML = '';
+  lotState.units.forEach((u, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${idx+1}</td>
+      <td>
+        <input type="text" value="${u.serial}" placeholder="Scan/enter SN" onchange="updateSerial(${idx}, this)">
+        ${u.dupError ? '<div class="err">Duplicate serial!</div>' : ''}
+      </td>
+      <td>${selectHtml(idx,'aes',u.aes)}</td>
+      <td>${selectHtml(idx,'general',u.general)}</td>
+      <td>${selectHtml(idx,'func',u.func)}</td>
+      <td>${selectHtml(idx,'screen',u.screen)}</td>
+      <td>
+        <div style="display:flex; gap:4px; align-items:center;">
+          <input type="number" step="0.1" style="width:70px;" value="${u.bdSize}" placeholder="mm"
+            ${u.bdNoDot?'disabled':''} onchange="updateUnit(${idx},'bdSize',this.value)">
+          <label style="font-size:11px; display:flex; align-items:center; gap:3px; margin:0;">
+            <input type="checkbox" style="width:auto; margin:0;" ${u.bdNoDot?'checked':''} onchange="toggleNoDot(${idx}, this.checked)"> No dot
+          </label>
+        </div>
+      </td>
+      <td><input type="text" value="${u.remark}" placeholder="Remark" onchange="updateUnit(${idx},'remark',this.value)"></td>
+      <td><span class="${resultClass(u.result)}">${u.result || '-'}</span></td>
+    `;
+    body.appendChild(tr);
+  });
+  updateProgress();
+}
+
+function selectHtml(idx, field, val){
+  return `<select onchange="updateUnit(${idx},'${field}',this.value)">
+    <option value="">--</option>
+    <option value="Pass" ${val==='Pass'?'selected':''}>Pass</option>
+    <option value="Fail" ${val==='Fail'?'selected':''}>Fail</option>
+  </select>`;
+}
+
+function resultClass(r){
+  if(r==='Pass') return 'status-pass';
+  if(r==='Fail') return 'status-fail';
+  return 'status-pending';
+}
+
+function toggleNoDot(idx, checked){
+  lotState.units[idx].bdNoDot = checked;
+  if(checked) lotState.units[idx].bdSize = "";
+  evaluateUnit(idx);
+  renderInspectionTable();
+}
+
+async function updateSerial(idx, inputEl){
+  const value = inputEl.value.trim();
+  lotState.units[idx].serial = value;
+  lotState.units[idx].dupError = false;
+
+  // check duplicate within this lot's entries so far
+  const dupInLot = lotState.units.some((u,i) => i!==idx && u.serial && u.serial === value);
+  if(dupInLot){
+    lotState.units[idx].dupError = true;
+  } else if(value){
+    // check against master file via backend
+    try{
+      const res = await api('checkSerial', {serial: value});
+      if(res.ok && res.exists){
+        lotState.units[idx].dupError = true;
+      }
+    } catch(e){ /* ignore network errors for dup check */ }
+  }
+  evaluateUnit(idx);
+  renderInspectionTable();
+}
+
+function updateUnit(idx, field, value){
+  lotState.units[idx][field] = value;
+  evaluateUnit(idx);
+  updateProgress();
+  const u = lotState.units[idx];
+  const row = document.getElementById('inspBody').children[idx];
+  const resultCell = row.children[8].querySelector('span');
+  resultCell.className = resultClass(u.result);
+  resultCell.innerText = u.result || '-';
+}
+
+function evaluateBlackDot(u){
+  if(u.bdNoDot) return { entered: true, pass: true, note: "" };
+  if(u.bdSize === "" || u.bdSize === null) return { entered: false, pass: null, note: "" };
+  const size = parseFloat(u.bdSize);
+  if(isNaN(size)) return { entered: false, pass: null, note: "" };
+  if(size < lotState.bdMax) return { entered: true, pass: true, note: `Black dot ${size}mm (< ${lotState.bdMax}mm - OK)` };
+  return { entered: true, pass: false, note: `Black dot ${size}mm (>= ${lotState.bdMax}mm - FAIL)` };
+}
+
+function evaluateUnit(idx){
+  const u = lotState.units[idx];
+  const bd = evaluateBlackDot(u);
+  const coreTests = [u.aes, u.general, u.func, u.screen];
+  const allEntered = bd.entered && coreTests.every(t => t === 'Pass' || t === 'Fail') && u.serial && !u.dupError;
+
+  if(!allEntered){
+    u.result = "";
+    return;
+  }
+
+  const fails = [];
+  if(u.aes === 'Fail') fails.push("Aesthetic Fail");
+  if(u.general === 'Fail') fails.push("General Fail");
+  if(u.func === 'Fail') fails.push("Functional Fail");
+  if(u.screen === 'Fail') fails.push("Screen Fail");
+  if(!bd.pass) fails.push(bd.note || "Black dot Fail");
+
+  if(fails.length === 0){
+    u.result = "Pass";
+    if(!u.remark && bd.note) u.remark = bd.note;
+  } else {
+    u.result = "Fail";
+    if(!u.remark) u.remark = fails.join(", ");
+  }
+}
+
+function updateProgress(){
+  const total = lotState.units.length;
+  const completed = lotState.units.filter(u => u.result !== "").length;
+  document.getElementById('progressText').innerText = `Completed: ${completed}/${total}`;
+  document.getElementById('finishBtn').disabled = completed < total;
+}
+
+// ---------------- FINISH / SUMMARY ----------------
+function finishLot(){
+  let aestheticFails = 0, majorFails = 0, passCount = 0, failCount = 0;
+
+  lotState.units.forEach(u => {
+    if(u.result === 'Pass') passCount++; else failCount++;
+    if(u.aes === 'Fail') aestheticFails++;
+    const bd = evaluateBlackDot(u);
+    if(u.general === 'Fail' || u.func === 'Fail' || u.screen === 'Fail' || bd.pass === false) majorFails++;
+  });
+
+  const lotResult = (majorFails === 0 && aestheticFails <= 1) ? 'PASS' : 'FAIL';
+
+  lotState.passCount = passCount;
+  lotState.failCount = failCount;
+  lotState.aestheticFails = aestheticFails;
+  lotState.majorFails = majorFails;
+  lotState.lotResult = lotResult;
+
+  document.getElementById('inspectionScreen').classList.add('hidden');
+  document.getElementById('summaryScreen').classList.remove('hidden');
+  renderSummary();
+}
+
+function renderSummary(){
+  const badge = document.getElementById('summaryBadge');
+  const cls = lotState.lotResult === 'PASS' ? 'badge-pass' : 'badge-fail';
+  badge.innerHTML = `<span class="badge ${cls}">${lotState.kitName} - LOT ${lotState.lotNumber}: ${lotState.lotResult}</span>`;
+
+  document.getElementById('summaryStats').innerHTML = `
+    <div><b>${lotState.units.length}</b>Samples Inspected</div>
+    <div><b style="color:var(--pass)">${lotState.passCount}</b>Sample Pass</div>
+    <div><b style="color:var(--fail)">${lotState.failCount}</b>Sample Fail</div>
+    <div><b>${lotState.lotSize}</b>Lot Size</div>
+  `;
+
+  document.getElementById('aqlDecision').innerHTML =
+    `<b>AQL Decision (IS 2500, Level G2):</b><br>
+     Aesthetic (Minor) defects: ${lotState.aestheticFails} (Accept &le; 1, Reject &ge; 2)<br>
+     Major defects: ${lotState.majorFails} (Accept = 0, Reject &ge; 1)<br>
+     <b>Lot Decision: <span class="${lotState.lotResult==='PASS'?'status-pass':'status-fail'}">${lotState.lotResult}</span></b>`;
+
+  const body = document.getElementById('summaryBody');
+  body.innerHTML = '';
+  lotState.units.forEach((u, idx) => {
+    const bdDisplay = u.bdNoDot ? "No dot" : (u.bdSize !== "" ? `${u.bdSize}` : '-');
+    u.bdDisplay = bdDisplay;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${idx+1}</td><td>${u.serial}</td><td>${u.aes}</td><td>${u.general}</td>
+      <td>${u.func}</td><td>${u.screen}</td><td>${bdDisplay}</td>
+      <td>${u.remark || '-'}</td><td><span class="${resultClass(u.result)}">${u.result}</span></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+async function saveResults(){
+  const statusEl = document.getElementById('saveStatus');
+  statusEl.innerText = "Saving...";
+  try{
+    const res = await api('submitInspection', {
+      inspector: currentUser.name,
+      kitName: lotState.kitName,
+      lotNumber: lotState.lotNumber,
+      lotResult: lotState.lotResult,
+      units: lotState.units.map(u => ({
+        serial: u.serial, aes: u.aes, general: u.general, func: u.func, screen: u.screen,
+        bdDisplay: u.bdDisplay, remark: u.remark, result: u.result
+      }))
+    });
+    if(res.ok){
+      statusEl.innerText = "Saved to master file successfully. Kit marked as Closed.";
+    } else {
+      statusEl.innerText = "Error: " + (res.error || "unknown");
+    }
+  } catch(err){
+    statusEl.innerText = "Error saving: " + err.message;
+  }
+}
+</script>
+</body>
+</html>
