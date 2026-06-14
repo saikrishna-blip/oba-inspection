@@ -34,6 +34,8 @@
   .badge-fail{background:var(--fail);}
   .badge-open{background:var(--primary);}
   .badge-closed{background:#9aa0a6;}
+  .badge-pass{background:var(--pass);}
+  .badge-fail{background:var(--fail);}
   .hidden{display:none;}
   .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
   .userinfo{font-size:13px; color:var(--muted);}
@@ -121,6 +123,9 @@
     </div>
     <div id="openKitList"></div>
     <button class="secondary" onclick="loadKits()">Refresh</button>
+
+    <h4 style="margin-top:24px;">Recently Completed Lots</h4>
+    <div id="completedKitList"></div>
   </div>
 
   <!-- INSPECTION SCREEN -->
@@ -297,6 +302,7 @@ async function loadKits(){
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
           <span class="badge ${k.status==='Open'?'badge-open':'badge-closed'}">${k.status}</span>
+          ${k.result ? `<span class="badge ${k.result==='PASS'?'badge-pass':'badge-fail'}">${k.result}</span>` : ''}
           <button class="secondary" onclick="toggleEditKit(${idx})">Edit</button>
         </div>
       </div>
@@ -308,12 +314,25 @@ async function loadKits(){
     area.innerHTML = open.map((k, idx) => `
       <div class="kit-card">
         <div>
-          <b>${k.kitName}</b> - Lot ${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize}, BD&lt;${k.bdMax}mm)</span>
+          <b>${k.kitName}</b> - ${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize}, BD&lt;${k.bdMax}mm)</span>
         </div>
         <button onclick='selectKit(${idx})'>Start Inspection</button>
       </div>
     `).join('');
     window._openKits = open;
+
+    const closed = allKits.filter(k => k.status === 'Closed' && k.result);
+    const completedArea = document.getElementById('completedKitList');
+    if(closed.length === 0){
+      completedArea.innerHTML = '<p class="small-note">No completed lots yet.</p>';
+    } else {
+      completedArea.innerHTML = closed.slice(-10).reverse().map(k => `
+        <div class="kit-card">
+          <div><b>${k.kitName}</b> - ${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize})</span></div>
+          <span class="badge ${k.result==='PASS'?'badge-pass':'badge-fail'}">${k.result}</span>
+        </div>
+      `).join('');
+    }
   }
 }
 
