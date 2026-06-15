@@ -36,6 +36,10 @@
   .badge-closed{background:#9aa0a6;}
   .badge-pass{background:var(--pass);}
   .badge-fail{background:var(--fail);}
+  .kit-group{border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:14px;}
+  .kit-group-header{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;}
+  .progress-bar{background:#e0e4e8; border-radius:10px; height:8px; width:160px; overflow:hidden;}
+  .progress-fill{background:var(--primary); height:100%;}
   .hidden{display:none;}
   .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
   .userinfo{font-size:13px; color:var(--muted);}
@@ -286,40 +290,101 @@ async function addUser(){
   }
 }
 
+function groupKitsByName(kits){
+  const groups = {};
+  const order = [];
+  kits.forEach(k => {
+    if(!groups[k.kitName]){
+      groups[k.kitName] = [];
+      order.push(k.kitName);
+    }
+    groups[k.kitName].push(k);
+  });
+  return order.map(name => {
+    const lots = groups[name];
+    const totalLots = lots[0].totalLots || lots.length;
+    const kitQty = lots[0].kitTotalQty || lots.reduce((s,l)=>s + (Number(l.lotSize)||0), 0);
+    const completed = lots.filter(l => l.status === 'Closed').length;
+    const passCount = lots.filter(l => l.result === 'PASS').length;
+    const failCount = lots.filter(l => l.result === 'FAIL').length;
+    return {kitName: name, lots, totalLots, kitQty, completed, passCount, failCount};
+  });
+}
+
 async function loadKits(){
   const res = await api('getKits', {});
   if(!res.ok) return;
   allKits = res.kits;
+  const groups = groupKitsByName(allKits);
 
   if(currentUser.role === 'admin'){
     const area = document.getElementById('adminKitList');
     if(allKits.length === 0){ area.innerHTML = '<p class="small-note">No kits yet.</p>'; return; }
-    area.innerHTML = allKits.map((k, idx) => `
-      <div class="kit-card" id="kitCard${idx}">
-        <div style="flex:1;">
-          <b>${k.kitName}</b> - ${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize}, BD&lt;${k.bdMax}mm)</span>
-          <div id="editArea${idx}"></div>
+
+    area.innerHTML = groups.map(g => {
+      const pct = g.totalLots > 0 ? Math.round((g.completed / g.totalLots) * 100) : 0;
+      const lotCards = g.lots.map(k => {
+        const idx = allKits.indexOf(k);
+        return `
+        <div class="kit-card" id="kitCard${idx}">
+          <div style="flex:1;">
+            ${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize}, BD&lt;${k.bdMax}mm)</span>
+            <div id="editArea${idx}"></div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span class="badge ${k.status==='Open'?'badge-open':'badge-closed'}">${k.status}</span>
+            ${k.result ? `<span class="badge ${k.result==='PASS'?'badge-pass':'badge-fail'}">${k.result}</span>` : ''}
+            <button class="secondary" onclick="toggleEditKit(${idx})">Edit</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      return `
+      <div class="kit-group">
+        <div class="kit-group-header">
+          <div>
+            <b style="font-size:15px;">${g.kitName}</b>
+            <span class="small-note">&nbsp; Kit Qty: ${g.kitQty} | Total Lots: ${g.totalLots} | Completed: ${g.completed}/${g.totalLots}
+            ${g.passCount ? ` | Pass: ${g.passCount}`:''}${g.failCount ? ` | Fail: ${g.failCount}`:''}</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <span class="badge ${k.status==='Open'?'badge-open':'badge-closed'}">${k.status}</span>
-          ${k.result ? `<span class="badge ${k.result==='PASS'?'badge-pass':'badge-fail'}">${k.result}</span>` : ''}
-          <button class="secondary" onclick="toggleEditKit(${idx})">Edit</button>
-        </div>
-      </div>
-    `).join('');
+        ${lotCards}
+      </div>`;
+    }).join('');
+
   } else {
-    const open = allKits.filter(k => k.status === 'Open');
+    window._openKits = [];
     const area = document.getElementById('openKitList');
-    if(open.length === 0){ area.innerHTML = '<p class="small-note">No open kits available. Ask admin to create one.</p>'; return; }
-    area.innerHTML = open.map((k, idx) => `
-      <div class="kit-card">
-        <div>
-          <b>${k.kitName}</b> - ${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize}, BD&lt;${k.bdMax}mm)</span>
-        </div>
-        <button onclick='selectKit(${idx})'>Start Inspection</button>
-      </div>
-    `).join('');
-    window._openKits = open;
+    let html = '';
+    groups.forEach(g => {
+      const open = g.lots.filter(l => l.status === 'Open');
+      const pct = g.totalLots > 0 ? Math.round((g.completed / g.totalLots) * 100) : 0;
+      html += `
+      <div class="kit-group">
+        <div class="kit-group-header">
+          <div>
+            <b style="font-size:15px;">${g.kitName}</b>
+            <span class="small-note">&nbsp; Kit Qty: ${g.kitQty} | Total Lots: ${g.totalLots} | Completed: ${g.completed}/${g.totalLots}</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        </div>`;
+      if(open.length === 0){
+        html += `<p class="small-note">All lots completed for this kit.</p>`;
+      } else {
+        open.forEach(k => {
+          const idx = window._openKits.length;
+          window._openKits.push(k);
+          html += `
+          <div class="kit-card">
+            <div>${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize}, BD&lt;${k.bdMax}mm)</span></div>
+            <button onclick='selectKit(${idx})'>Start Inspection</button>
+          </div>`;
+        });
+      }
+      html += `</div>`;
+    });
+    area.innerHTML = html || '<p class="small-note">No kits available. Ask admin to create one.</p>';
 
     const closed = allKits.filter(k => k.status === 'Closed' && k.result);
     const completedArea = document.getElementById('completedKitList');
@@ -373,17 +438,20 @@ async function saveKitEdit(idx){
 
 function selectKit(idx){
   const k = window._openKits[idx];
+  const g = groupKitsByName(allKits).find(gr => gr.kitName === k.kitName);
   lotState = {
     kitName: k.kitName, lotNumber: k.lotNumber, lotSize: k.lotSize,
     sampleSize: k.sampleSize, bdMax: k.bdMax,
+    kitTotalQty: k.kitTotalQty, totalLots: k.totalLots,
     units: Array.from({length: k.sampleSize}, () => ({
       serial:"", aes:"", general:"", func:"", screen:"", bdSize:"", bdNoDot:false, remark:"", result:"", dupError:false
     }))
   };
   document.getElementById('kitSelectScreen').classList.add('hidden');
   document.getElementById('inspectionScreen').classList.remove('hidden');
-  document.getElementById('lotTitle').innerText = `${k.kitName} - LOT ${k.lotNumber}`;
-  document.getElementById('lotMeta').innerText = `Lot Size: ${k.lotSize} | Sample Size: ${k.sampleSize} | Black Dot Pass Limit: < ${k.bdMax} mm`;
+  document.getElementById('lotTitle').innerText = `${k.kitName} - ${k.lotNumber}`;
+  document.getElementById('lotMeta').innerText =
+    `Lot Size: ${k.lotSize} | Sample Size: ${k.sampleSize} | Black Dot Pass Limit: < ${k.bdMax} mm | Kit Qty: ${k.kitTotalQty} | Lots Completed: ${g ? g.completed : 0}/${k.totalLots}`;
   document.getElementById('inspUserInfo2').innerText = currentUser.name + " (Inspector)";
   renderInspectionTable();
 }
@@ -559,7 +627,7 @@ function finishLot(){
 function renderSummary(){
   const badge = document.getElementById('summaryBadge');
   const cls = lotState.lotResult === 'PASS' ? 'badge-pass' : 'badge-fail';
-  badge.innerHTML = `<span class="badge ${cls}">${lotState.kitName} - LOT ${lotState.lotNumber}: ${lotState.lotResult}</span>`;
+  badge.innerHTML = `<span class="badge ${cls}">${lotState.kitName} - ${lotState.lotNumber}: ${lotState.lotResult}</span>`;
 
   document.getElementById('summaryStats').innerHTML = `
     <div><b>${lotState.units.length}</b>Samples Inspected</div>
@@ -598,6 +666,8 @@ async function saveResults(){
       kitName: lotState.kitName,
       lotNumber: lotState.lotNumber,
       lotResult: lotState.lotResult,
+      kitTotalQty: lotState.kitTotalQty,
+      totalLots: lotState.totalLots,
       units: lotState.units.map(u => ({
         serial: u.serial, aes: u.aes, general: u.general, func: u.func, screen: u.screen,
         bdDisplay: u.bdDisplay, remark: u.remark, result: u.result
