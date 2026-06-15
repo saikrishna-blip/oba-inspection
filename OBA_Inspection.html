@@ -91,11 +91,12 @@
     <h4>Create New Kit / Lot</h4>
     <div class="row">
       <div><label>Kit Name</label><input type="text" id="newKitName" placeholder="e.g. LH1G"></div>
-      <div><label>Kit Size (total quantity)</label><input type="number" id="newKitSize" placeholder="e.g. 2000" min="1"></div>
+      <div><label>Kit Quantity (total units)</label><input type="number" id="newKitSize" placeholder="e.g. 2000" min="1"></div>
+      <div><label>Lot Size (units per lot)</label><input type="number" id="newLotSize" value="90" min="1"></div>
       <div><label>Sample Size per Lot</label><input type="number" id="newSampleSize" value="13"></div>
       <div><label>Black Dot Pass Limit (mm, &lt; this)</label><input type="number" id="newBdMax" value="2.4" step="0.1"></div>
     </div>
-    <div class="small-note" style="margin-bottom:14px;">Standard Lot Size is fixed at 90 units. Number of lots = Kit Size &divide; 90 (remaining units form an extra smaller lot if Kit Size is not an exact multiple of 90).</div>
+    <div class="small-note" style="margin-bottom:14px;">Number of lots = Kit Quantity &divide; Lot Size (rounded down). If Kit Quantity is not an exact multiple of Lot Size, the remaining units form one extra smaller lot — that lot still uses the same Sample Size (e.g. 13) for inspection.</div>
     <button onclick="createKit()">Create Kit</button>
     <div id="createKitMsg" class="small-note"></div>
 
@@ -252,15 +253,17 @@ function logout(){
 async function createKit(){
   const kitName = document.getElementById('newKitName').value.trim();
   const kitSize = parseInt(document.getElementById('newKitSize').value) || 0;
+  const lotSize = parseInt(document.getElementById('newLotSize').value) || 90;
   const sampleSize = parseInt(document.getElementById('newSampleSize').value) || 13;
   const bdMax = parseFloat(document.getElementById('newBdMax').value) || 2.4;
 
   if(!kitName){ alert("Enter Kit Name"); return; }
-  if(!kitSize || kitSize <= 0){ alert("Enter a valid Kit Size"); return; }
+  if(!kitSize || kitSize <= 0){ alert("Enter a valid Kit Quantity"); return; }
+  if(!lotSize || lotSize <= 0){ alert("Enter a valid Lot Size"); return; }
 
   const msg = document.getElementById('createKitMsg');
   msg.innerText = "Creating...";
-  const res = await api('createKit', {kitName, kitSize, sampleSize, bdMax, createdBy: currentUser.username});
+  const res = await api('createKit', {kitName, kitSize, lotSize, sampleSize, bdMax, createdBy: currentUser.username});
   if(res.ok){
     msg.innerText = `Kit "${kitName}" created with ${res.lotsCreated} lot(s) (Lot 1 - Lot ${res.lotsCreated}), all Open.`;
     document.getElementById('newKitName').value = '';
