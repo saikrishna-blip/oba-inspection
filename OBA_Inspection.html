@@ -3,820 +3,833 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OBA Inspection - IS 2500 G2</title>
+<title>IS2500 OBA Inspection HMI</title>
+<script src="https://cdn.tailwindcss.com"></script>
 <style>
-  :root{
-    --primary:#1a73e8; --pass:#1e8e3e; --fail:#d93025; --bg:#f5f7fa;
-    --card:#ffffff; --border:#dadce0; --text:#202124; --muted:#5f6368;
-  }
-  *{box-sizing:border-box; font-family:'Segoe UI',Roboto,Arial,sans-serif;}
-  body{margin:0; background:var(--bg); color:var(--text);}
-  .container{max-width:1400px; margin:0 auto; padding:20px;}
-  h1{font-size:22px; margin-bottom:4px;}
-  h4{margin-top:24px;}
-  .sub{color:var(--muted); font-size:13px; margin-bottom:20px;}
-  .card{background:var(--card); border:1px solid var(--border); border-radius:10px; padding:24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.05);}
-  label{display:block; font-size:13px; font-weight:600; margin-bottom:4px; color:var(--muted);}
-  input, select{width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; margin-bottom:14px;}
-  .row{display:flex; gap:16px; flex-wrap:wrap;}
-  .row > div{flex:1; min-width:160px;}
-  button{background:var(--primary); color:#fff; border:none; padding:11px 22px; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer;}
-  button.secondary{background:#fff; color:var(--primary); border:1px solid var(--primary);}
-  button:disabled{background:#ccc; cursor:not-allowed;}
-  table{width:100%; border-collapse:collapse; font-size:13px;}
-  th,td{border:1px solid var(--border); padding:6px 8px; text-align:center; vertical-align:top;}
-  th{background:#eef2f7; font-size:12px;}
-  td input, td select{margin-bottom:0; padding:6px; font-size:13px;}
-  .status-pass{color:var(--pass); font-weight:700;}
-  .status-fail{color:var(--fail); font-weight:700;}
-  .status-pending{color:var(--muted);}
-  .badge{display:inline-block; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:700; color:#fff;}
-  .badge-pass{background:var(--pass);}
-  .badge-fail{background:var(--fail);}
-  .badge-open{background:var(--primary);}
-  .badge-closed{background:#9aa0a6;}
-  .hidden{display:none;}
-  .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
-  .userinfo{font-size:13px; color:var(--muted);}
-  .footerbtns{display:flex; justify-content:space-between; margin-top:18px;}
-  .small-note{font-size:12px; color:var(--muted); margin-top:6px;}
-  .summary-row{display:flex; gap:30px; flex-wrap:wrap; margin-bottom:10px;}
-  .summary-row div{font-size:14px;}
-  .summary-row b{display:block; font-size:20px;}
-  .aql-box{background:#eef2f7; border-radius:8px; padding:10px 14px; font-size:12px; color:var(--muted); margin-bottom:14px;}
-  .kit-card{border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;}
-  .err{color:var(--fail); font-size:11px; margin-top:3px;}
-  .kit-group{border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:14px;}
-  .kit-group-header{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;}
-  .progress-bar{background:#e0e4e8; border-radius:10px; height:8px; width:160px; overflow:hidden;}
-  .progress-fill{background:var(--primary); height:100%;}
-  .bd-extra{display:flex; flex-wrap:wrap; gap:3px; margin-top:4px;}
-  .bd-extra input{width:55px; padding:4px; font-size:11px; margin-bottom:0;}
-  .bd-note{font-size:10px; margin-top:3px;}
-  .bd-note-pass{color:var(--pass);}
-  .bd-note-fail{color:var(--fail);}
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .fadeIn{animation:fadeIn 0.3s cubic-bezier(.16,1,.3,1) forwards}
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:#020617}
+  ::-webkit-scrollbar-thumb{background:#1e293b;border-radius:9999px}
 </style>
 </head>
-<body>
-<div class="container">
-  <h1>OBA Inspection</h1>
-  <div class="sub">Sampling Standard: IS 2500 &nbsp;|&nbsp; Level G2 &nbsp;|&nbsp; Lot Size 90 &nbsp;|&nbsp; Sample 13 &nbsp;|&nbsp; Minor (Aesthetic) AQL: Ac1/Re2 &nbsp;|&nbsp; Major (General/Functional/Screen/Black Dot) AQL: Ac0/Re1</div>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
 
-  <!-- API SETUP -->
-  <div id="apiSetup" class="card">
-    <h3>One-time Setup</h3>
-    <label>Apps Script Web App URL</label>
-    <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/XXXX/exec">
-    <button onclick="saveApiUrl()">Continue</button>
-    <p class="small-note">Paste the Web App URL from your Google Apps Script deployment.</p>
-  </div>
-
-  <!-- LOGIN -->
-  <div id="loginScreen" class="card hidden">
-    <h3>Login</h3>
-    <label>Username</label>
-    <input type="text" id="loginUser">
-    <label>Password</label>
-    <input type="password" id="loginPass">
-    <button onclick="doLogin()">Login</button>
-    <div id="loginErr" class="err"></div>
-  </div>
-
-  <!-- ADMIN PANEL -->
-  <div id="adminScreen" class="card hidden">
-    <div class="topbar">
-      <h3 style="margin:0;">Admin Panel</h3>
-      <div>
-        <span class="userinfo" id="adminUserInfo"></span>
-        <button class="secondary" onclick="logout()">Logout</button>
-      </div>
-    </div>
-
-    <h4>Create New Kit / Lots</h4>
-    <div class="row">
-      <div><label>Kit Name</label><input type="text" id="newKitName" placeholder="e.g. LH1G_June2026"></div>
-      <div><label>Kit Quantity (total units)</label><input type="number" id="newKitSize" placeholder="e.g. 2000" min="1"></div>
-      <div><label>Model</label>
-        <select id="newModel">
-          <option value="LH1G">LH1G (Code 1217)</option>
-          <option value="LH3G">LH3G (Code 1218)</option>
-        </select>
-      </div>
-      <div><label>Production Month</label><input type="month" id="newProdMonth"></div>
-    </div>
-    <div class="row">
-      <div><label>Lot Size (units per lot)</label><input type="number" id="newLotSize" value="90" min="1"></div>
-      <div><label>Sample Size per Lot</label><input type="number" id="newSampleSize" value="13"></div>
-      <div><label>Major Black Dot Limit (mm) &mdash; D &gt; this = Fail</label><input type="number" id="newBdMax" value="2.4" step="0.01"></div>
-    </div>
-    <div class="small-note" style="margin-bottom:14px;">
-      Number of lots = Kit Quantity &divide; Lot Size (rounded down). If not an exact multiple, the remaining units form one extra smaller lot (same Sample Size, e.g. 13, applies to it).
-      Each serial number must be 15 digits: first 4 = Model Code, next 4 = Production Month as MMYY, last 7 = unique numeric ID.
-    </div>
-    <button onclick="createKit()">Create Kit</button>
-    <div id="createKitMsg" class="small-note"></div>
-
-    <h4>Add Inspector / Admin User</h4>
-    <div class="row">
-      <div><label>Username</label><input type="text" id="newUserName"></div>
-      <div><label>Password</label><input type="text" id="newUserPass"></div>
-      <div><label>Full Name</label><input type="text" id="newUserFullName"></div>
-      <div><label>Role</label>
-        <select id="newUserRole"><option value="inspector">Inspector</option><option value="admin">Admin</option></select>
-      </div>
-    </div>
-    <button onclick="addUser()">Add User</button>
-    <div id="addUserMsg" class="small-note"></div>
-
-    <h4>All Kits</h4>
-    <div id="adminKitList"></div>
-    <button class="secondary" onclick="loadKits()">Refresh</button>
-  </div>
-
-  <!-- INSPECTOR: KIT SELECT -->
-  <div id="kitSelectScreen" class="card hidden">
-    <div class="topbar">
-      <h3 style="margin:0;">Kits / Lots</h3>
-      <div>
-        <span class="userinfo" id="inspUserInfo"></span>
-        <button class="secondary" onclick="logout()">Logout</button>
-      </div>
-    </div>
-    <div id="openKitList"></div>
-    <button class="secondary" onclick="loadKits()">Refresh</button>
-  </div>
-
-  <!-- INSPECTION SCREEN -->
-  <div id="inspectionScreen" class="card hidden">
-    <div class="topbar">
-      <div>
-        <h3 style="margin:0;" id="lotTitle">Lot</h3>
-        <div class="small-note" id="lotMeta"></div>
-      </div>
-      <span class="userinfo" id="inspUserInfo2"></span>
-    </div>
-    <div style="overflow-x:auto;">
-    <table id="inspTable">
-      <thead>
-        <tr>
-          <th style="width:30px;">#</th>
-          <th style="width:170px;">Serial Number (15-digit)</th>
-          <th style="width:80px;">Aesthetic<br>(Minor)</th>
-          <th style="width:80px;">General<br>(Major)</th>
-          <th style="width:80px;">Functional<br>(Major)</th>
-          <th style="width:80px;">Screen<br>(Major)</th>
-          <th style="width:190px;">Black Dot (Major)</th>
-          <th>Remark (if Fail)</th>
-          <th style="width:90px;">Sample Result</th>
-        </tr>
-      </thead>
-      <tbody id="inspBody"></tbody>
-    </table>
-    </div>
-    <div class="footerbtns">
-      <button class="secondary" onclick="cancelLot()">Back</button>
-      <div>
-        <span id="progressText" class="small-note" style="margin-right:14px;"></span>
-        <button id="finishBtn" disabled onclick="finishLot()">Finish Lot &amp; Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- SUMMARY SCREEN -->
-  <div id="summaryScreen" class="card hidden">
-    <h3>Lot Inspection Summary</h3>
-    <div id="summaryBadge"></div>
-    <div class="summary-row" id="summaryStats" style="margin-top:14px;"></div>
-    <div id="aqlDecision" class="aql-box"></div>
-    <div style="overflow-x:auto;">
-    <table id="summaryTable">
-      <thead><tr><th>#</th><th>Serial Number</th><th>Aesthetic</th><th>General</th><th>Functional</th><th>Screen</th><th>Black Dot</th><th>Remark</th><th>Result</th></tr></thead>
-      <tbody id="summaryBody"></tbody>
-    </table>
-    </div>
-    <div id="failRemarksBox" class="aql-box hidden"></div>
-    <p class="small-note" id="saveStatus" style="margin-top:10px;"></p>
-    <div class="footerbtns">
-      <button class="secondary" onclick="backToKitSelect()">Back to Kit List</button>
-      <button onclick="saveResults()">Save to Master File</button>
-    </div>
-  </div>
-
-</div>
+<div id="app"></div>
 
 <script>
-let API_URL = "";
+// ============================================================
+// STATE
+// ============================================================
+let API_URL = localStorage.getItem('oba_api_url') || '';
 let currentUser = null; // {username, role, name}
-let lotState = null;
 let allKits = [];
+let lotState = null;      // active inspection lot
+let sampleRows = [];      // 13 sample row objects
+let notification = null;
+let notifTimer = null;
 
-const MODEL_CODES = { "LH1G": "1217", "LH3G": "1218" };
+const MODEL_CODES = { 'LH1G':'1217', 'LH3G':'1218' };
 
-function monthToCode(monthStr){ // "2026-06" -> "0626"
-  if(!monthStr) return "";
-  const parts = monthStr.split('-');
-  return parts[1] + parts[0].slice(2);
+// ============================================================
+// UTILITY
+// ============================================================
+function mmyy(str){ // "2026-06" -> "0626"
+  if(!str) return '';
+  const [y,m] = str.split('-');
+  return m + y.slice(2);
 }
-function codeToMonth(code){ // "0626" -> "2026-06"
-  if(!code || code.length !== 4) return "";
-  return "20" + code.substring(2,4) + "-" + code.substring(0,2);
+function mmyyDisplay(code){ // "0626" -> "06/2026"
+  if(!code||code.length!==4) return '-';
+  return code.slice(0,2)+'/20'+code.slice(2);
 }
-function codeToDisplay(code){ // "0626" -> "06/26"
-  if(!code || code.length !== 4) return "-";
-  return code.substring(0,2) + "/" + code.substring(2,4);
+function mmyyToInput(code){ // "0626" -> "2026-06"
+  if(!code||code.length!==4) return '';
+  return '20'+code.slice(2)+'-'+code.slice(0,2);
 }
 
-function saveApiUrl(){
-  API_URL = document.getElementById('apiUrlInput').value.trim();
-  if(!API_URL){ alert("Please paste the Apps Script Web App URL."); return; }
-  document.getElementById('apiSetup').classList.add('hidden');
-  document.getElementById('loginScreen').classList.remove('hidden');
+function toast(msg, type='success'){
+  clearTimeout(notifTimer);
+  notification = {msg, type};
+  render();
+  notifTimer = setTimeout(()=>{ notification=null; render(); }, 3500);
 }
 
 async function api(action, payload){
-  payload = payload || {};
+  payload = payload||{};
   payload.action = action;
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: {'Content-Type': 'text/plain;charset=utf-8'},
-    body: JSON.stringify(payload)
+  const r = await fetch(API_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(payload)
   });
-  return res.json();
+  return r.json();
 }
 
-async function doLogin(){
-  const username = document.getElementById('loginUser').value.trim();
-  const password = document.getElementById('loginPass').value.trim();
-  document.getElementById('loginErr').innerText = "";
-  try{
-    const res = await api('login', {username, password});
-    if(res.ok){
-      currentUser = {username: res.username, role: res.role, name: res.name};
-      document.getElementById('loginScreen').classList.add('hidden');
-      if(currentUser.role === 'admin'){
-        document.getElementById('adminScreen').classList.remove('hidden');
-        document.getElementById('adminUserInfo').innerText = currentUser.name + " (Admin)";
-        loadKits();
-      } else {
-        document.getElementById('kitSelectScreen').classList.remove('hidden');
-        document.getElementById('inspUserInfo').innerText = currentUser.name + " (Inspector)";
-        loadKits();
-      }
-    } else {
-      document.getElementById('loginErr').innerText = res.error || "Login failed";
-    }
-  } catch(err){
-    document.getElementById('loginErr').innerText = "Error: " + err.message;
-  }
-}
-
-function logout(){
-  currentUser = null;
-  lotState = null;
-  ['adminScreen','kitSelectScreen','inspectionScreen','summaryScreen'].forEach(id => document.getElementById(id).classList.add('hidden'));
-  document.getElementById('loginScreen').classList.remove('hidden');
-  document.getElementById('loginUser').value = '';
-  document.getElementById('loginPass').value = '';
-}
-
-// ---------------- ADMIN: CREATE KIT ----------------
-async function createKit(){
-  const kitName = document.getElementById('newKitName').value.trim();
-  const kitSize = parseInt(document.getElementById('newKitSize').value) || 0;
-  const model = document.getElementById('newModel').value;
-  const prodMonth = document.getElementById('newProdMonth').value;
-  const lotSize = parseInt(document.getElementById('newLotSize').value) || 90;
-  const sampleSize = parseInt(document.getElementById('newSampleSize').value) || 13;
-  const bdMax = parseFloat(document.getElementById('newBdMax').value) || 2.4;
-
-  if(!kitName){ alert("Enter Kit Name"); return; }
-  if(!kitSize || kitSize <= 0){ alert("Enter a valid Kit Quantity"); return; }
-  if(!lotSize || lotSize <= 0){ alert("Enter a valid Lot Size"); return; }
-  if(!prodMonth){ alert("Select Production Month"); return; }
-
-  const prodMonthCode = monthToCode(prodMonth);
-
-  const msg = document.getElementById('createKitMsg');
-  msg.innerText = "Creating...";
-  const res = await api('createKit', {kitName, kitSize, lotSize, sampleSize, bdMax, model, prodMonthCode, createdBy: currentUser.username});
-  if(res.ok){
-    msg.innerText = `Kit "${kitName}" created with ${res.lotsCreated} lot(s) (Lot 1 - Lot ${res.lotsCreated}), all Open. Serial prefix expected: ${MODEL_CODES[model]}${prodMonthCode}xxxxxxx`;
-    document.getElementById('newKitName').value = '';
-    document.getElementById('newKitSize').value = '';
-    loadKits();
-  } else {
-    msg.innerText = "Error: " + (res.error || "unknown");
-  }
-}
-
-// ---------------- ADMIN: ADD USER ----------------
-async function addUser(){
-  const username = document.getElementById('newUserName').value.trim();
-  const password = document.getElementById('newUserPass').value.trim();
-  const name = document.getElementById('newUserFullName').value.trim();
-  const role = document.getElementById('newUserRole').value;
-  if(!username || !password || !name){ alert("Fill all user fields"); return; }
-  const msg = document.getElementById('addUserMsg');
-  msg.innerText = "Adding...";
-  const res = await api('addUser', {username, password, name, role});
-  if(res.ok){
-    msg.innerText = `User "${username}" added as ${role}.`;
-    document.getElementById('newUserName').value = '';
-    document.getElementById('newUserPass').value = '';
-    document.getElementById('newUserFullName').value = '';
-  } else {
-    msg.innerText = "Error: " + (res.error || "unknown");
-  }
-}
-
-// ---------------- KIT GROUPING & LOADING ----------------
-function groupKitsByName(kits){
-  const groups = {};
-  const order = [];
-  kits.forEach(k => {
-    if(!groups[k.kitName]){
-      groups[k.kitName] = [];
-      order.push(k.kitName);
-    }
-    groups[k.kitName].push(k);
-  });
-  return order.map(name => {
-    const lots = groups[name];
-    const totalLots = Number(lots[0].totalLots) || lots.length;
-    const kitQty = Number(lots[0].kitTotalQty) || lots.reduce((s,l)=>s + (Number(l.lotSize)||0), 0);
-    const completed = lots.filter(l => l.status === 'Closed').length;
-    const pending = lots.filter(l => l.status === 'Open').length;
-    const passCount = lots.filter(l => l.result === 'PASS').length;
-    const failCount = lots.filter(l => l.result === 'FAIL').length;
-    const fgPassTotal = lots.reduce((s,l)=> s + (l.fgPassQty !== "" ? Number(l.fgPassQty) : 0), 0);
-    return {kitName: name, lots, totalLots, kitQty, completed, pending, passCount, failCount, fgPassTotal,
-            model: lots[0].model, prodMonthCode: lots[0].prodMonthCode};
-  });
-}
-
-async function loadKits(){
-  const res = await api('getKits', {});
-  if(!res.ok) return;
-  allKits = res.kits;
-  const groups = groupKitsByName(allKits);
-
-  if(currentUser.role === 'admin'){
-    const area = document.getElementById('adminKitList');
-    if(allKits.length === 0){ area.innerHTML = '<p class="small-note">No kits yet.</p>'; return; }
-
-    area.innerHTML = groups.map(g => {
-      const pct = g.totalLots > 0 ? Math.round((g.completed / g.totalLots) * 100) : 0;
-      const lotCards = g.lots.map(k => {
-        const idx = allKits.indexOf(k);
-        return `
-        <div class="kit-card" id="kitCard${idx}">
-          <div style="flex:1;">
-            ${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize}, BD Major&gt;${k.bdMax}mm)</span>
-            <div id="editArea${idx}"></div>
-          </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <span class="badge ${k.status==='Open'?'badge-open':'badge-closed'}">${k.status}</span>
-            ${k.result ? `<span class="badge ${k.result==='PASS'?'badge-pass':'badge-fail'}">${k.result}</span>` : ''}
-            ${k.fgPassQty !== "" ? `<span class="small-note">FG Pass: ${k.fgPassQty}</span>` : ''}
-            <button class="secondary" onclick="toggleEditKit(${idx})">Edit</button>
-          </div>
-        </div>`;
-      }).join('');
-
-      return `
-      <div class="kit-group">
-        <div class="kit-group-header">
-          <div>
-            <b style="font-size:15px;">${g.kitName}</b>
-            <span class="small-note">&nbsp; Model: ${g.model || '-'} | Prod Month: ${codeToDisplay(g.prodMonthCode)} | Kit Qty: ${g.kitQty} | Total Lots: ${g.totalLots} | Completed: ${g.completed}/${g.totalLots} | Pending: ${g.pending}
-            ${g.passCount ? ` | Pass Lots: ${g.passCount}`:''}${g.failCount ? ` | Fail Lots: ${g.failCount}`:''}
-            &nbsp;|&nbsp; <b>FG Pass Qty: ${g.fgPassTotal} / ${g.kitQty}</b></span>
-          </div>
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        </div>
-        ${lotCards}
-      </div>`;
-    }).join('');
-
-  } else {
-    window._openKits = [];
-    const area = document.getElementById('openKitList');
-    let html = '';
-    groups.forEach(g => {
-      const pct = g.totalLots > 0 ? Math.round((g.completed / g.totalLots) * 100) : 0;
-      html += `
-      <div class="kit-group">
-        <div class="kit-group-header">
-          <div>
-            <b style="font-size:15px;">${g.kitName}</b>
-            <span class="small-note">&nbsp; Model: ${g.model || '-'} | Prod Month: ${codeToDisplay(g.prodMonthCode)} | Kit Qty: ${g.kitQty} | Total Lots: ${g.totalLots} | Completed: ${g.completed}/${g.totalLots} | Pending: ${g.pending}
-            &nbsp;|&nbsp; <b>FG Pass Qty: ${g.fgPassTotal} / ${g.kitQty}</b></span>
-          </div>
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        </div>`;
-      g.lots.forEach(k => {
-        if(k.status === 'Open'){
-          const idx = window._openKits.length;
-          window._openKits.push(k);
-          html += `
-          <div class="kit-card">
-            <div>${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize}, BD Major&gt;${k.bdMax}mm)</span></div>
-            <button onclick='selectKit(${idx})'>Start Inspection</button>
-          </div>`;
-        } else {
-          html += `
-          <div class="kit-card">
-            <div>${k.lotNumber} &nbsp; <span class="small-note">(Lot Size ${k.lotSize}, Sample ${k.sampleSize})</span></div>
-            <div style="display:flex; gap:8px; align-items:center;">
-              <span class="badge ${k.result==='PASS'?'badge-pass':'badge-fail'}">${k.result}</span>
-              <span class="small-note">FG Pass: ${k.fgPassQty}</span>
-            </div>
-          </div>`;
-        }
-      });
-      html += `</div>`;
-    });
-    area.innerHTML = html || '<p class="small-note">No kits available. Ask admin to create one.</p>';
-  }
-}
-
-// ---------------- ADMIN: EDIT KIT/LOT ----------------
-function toggleEditKit(idx){
-  const k = allKits[idx];
-  const area = document.getElementById('editArea' + idx);
-  if(area.innerHTML){ area.innerHTML = ''; return; }
-  area.innerHTML = `
-    <div class="row" style="margin-top:8px;">
-      <div><label>Lot Size</label><input type="number" id="editLotSize${idx}" value="${k.lotSize}"></div>
-      <div><label>Sample Size</label><input type="number" id="editSampleSize${idx}" value="${k.sampleSize}"></div>
-      <div><label>Major BD Limit (mm)</label><input type="number" step="0.01" id="editBdMax${idx}" value="${k.bdMax}"></div>
-      <div><label>Status</label>
-        <select id="editStatus${idx}">
-          <option value="Open" ${k.status==='Open'?'selected':''}>Open</option>
-          <option value="Closed" ${k.status==='Closed'?'selected':''}>Closed</option>
-        </select>
-      </div>
-      <div><label>Model</label>
-        <select id="editModel${idx}">
-          <option value="LH1G" ${k.model==='LH1G'?'selected':''}>LH1G (1217)</option>
-          <option value="LH3G" ${k.model==='LH3G'?'selected':''}>LH3G (1218)</option>
-        </select>
-      </div>
-      <div><label>Production Month</label><input type="month" id="editProdMonth${idx}" value="${codeToMonth(k.prodMonthCode)}"></div>
-    </div>
-    <button onclick="saveKitEdit(${idx})">Save Changes</button>
-  `;
-}
-
-async function saveKitEdit(idx){
-  const k = allKits[idx];
-  const lotSize = parseInt(document.getElementById('editLotSize'+idx).value);
-  const sampleSize = parseInt(document.getElementById('editSampleSize'+idx).value);
-  const bdMax = parseFloat(document.getElementById('editBdMax'+idx).value);
-  const status = document.getElementById('editStatus'+idx).value;
-  const model = document.getElementById('editModel'+idx).value;
-  const prodMonthVal = document.getElementById('editProdMonth'+idx).value;
-  const prodMonthCode = prodMonthVal ? monthToCode(prodMonthVal) : k.prodMonthCode;
-
-  const res = await api('updateKit', {kitName: k.kitName, lotNumber: k.lotNumber, lotSize, sampleSize, bdMax, status, model, prodMonthCode});
-  if(res.ok){
-    loadKits();
-  } else {
-    alert("Error: " + (res.error || "unknown"));
-  }
-}
-
-// ---------------- INSPECTOR: SELECT LOT ----------------
-function selectKit(idx){
-  const k = window._openKits[idx];
-  const g = groupKitsByName(allKits).find(gr => gr.kitName === k.kitName);
-  lotState = {
-    kitName: k.kitName, lotNumber: k.lotNumber, lotSize: Number(k.lotSize),
-    sampleSize: k.sampleSize, bdMax: parseFloat(k.bdMax) || 2.4,
-    model: k.model, modelCode: MODEL_CODES[k.model] || '', prodMonthCode: k.prodMonthCode,
-    kitTotalQty: k.kitTotalQty, totalLots: k.totalLots,
-    units: Array.from({length: k.sampleSize}, () => ({
-      serial:"", aes:"", general:"", func:"", screen:"",
-      bdVisible:"", bdD:"", bdN:"", bdDS:"", bdAreaA:"", bdAreaB:"", bdNote:"",
-      remark:"", result:"", dupError:false, serialError:""
-    }))
-  };
-  document.getElementById('kitSelectScreen').classList.add('hidden');
-  document.getElementById('inspectionScreen').classList.remove('hidden');
-  document.getElementById('lotTitle').innerText = `${k.kitName} - ${k.lotNumber}`;
-  document.getElementById('lotMeta').innerText =
-    `Lot Size: ${k.lotSize} | Sample Size: ${k.sampleSize} | Model: ${k.model} (${lotState.modelCode}) | Prod Month: ${codeToDisplay(k.prodMonthCode)} | Major BD Limit: >${k.bdMax}mm = Fail | Kit Qty: ${k.kitTotalQty} | Lots Completed: ${g ? g.completed : 0}/${k.totalLots}`;
-  document.getElementById('inspUserInfo2').innerText = currentUser.name + " (Inspector)";
-  renderInspectionTable();
-}
-
-function backToKitSelect(){
-  lotState = null;
-  document.getElementById('summaryScreen').classList.add('hidden');
-  document.getElementById('kitSelectScreen').classList.remove('hidden');
-  loadKits();
-}
-
-function cancelLot(){
-  if(!confirm("Go back? Unsaved inspection data will be lost.")) return;
-  lotState = null;
-  document.getElementById('inspectionScreen').classList.add('hidden');
-  document.getElementById('kitSelectScreen').classList.remove('hidden');
-}
-
-// ---------------- INSPECTION TABLE ----------------
-function renderInspectionTable(){
-  const body = document.getElementById('inspBody');
-  body.innerHTML = '';
-  lotState.units.forEach((u, idx) => {
-    const tr = document.createElement('tr');
-
-    const bdShowDetails = (u.bdVisible === 'Yes');
-    const D = parseFloat(u.bdD);
-    const bdShowArea = bdShowDetails && !isNaN(D) && D > 1.28 && D <= (lotState.bdMax || 2.4);
-
-    let bdHtml = `<select onchange="updateUnit(${idx},'bdVisible',this.value)">
-        <option value="">Visible @2m?</option>
-        <option value="No" ${u.bdVisible==='No'?'selected':''}>No</option>
-        <option value="Yes" ${u.bdVisible==='Yes'?'selected':''}>Yes</option>
-      </select>`;
-    if(bdShowDetails){
-      bdHtml += `<div class="bd-extra">
-        <input type="number" step="0.01" placeholder="D mm" value="${u.bdD}" onchange="updateUnit(${idx},'bdD',this.value)">
-        <input type="number" placeholder="N spots" value="${u.bdN}" onchange="updateUnit(${idx},'bdN',this.value)">
-        <input type="number" step="0.1" placeholder="DS mm" value="${u.bdDS}" onchange="updateUnit(${idx},'bdDS',this.value)">
-        ${bdShowArea ? `
-          <input type="number" placeholder="Area A" value="${u.bdAreaA}" onchange="updateUnit(${idx},'bdAreaA',this.value)">
-          <input type="number" placeholder="Area B" value="${u.bdAreaB}" onchange="updateUnit(${idx},'bdAreaB',this.value)">
-        ` : ''}
-      </div>`;
-    }
-    if(u.bdNote){
-      const bd = evaluateBlackDot(u);
-      bdHtml += `<div class="bd-note ${bd.pass===true?'bd-note-pass':(bd.pass===false?'bd-note-fail':'')}">${u.bdNote}</div>`;
-    }
-
-    tr.innerHTML = `
-      <td>${idx+1}</td>
-      <td>
-        <input type="text" value="${u.serial}" placeholder="Scan/enter 15-digit SN" onchange="updateSerial(${idx}, this)">
-        ${u.dupError ? '<div class="err">Duplicate serial (already in master)</div>' : ''}
-        ${u.serialError ? `<div class="err">${u.serialError}</div>` : ''}
-      </td>
-      <td>${selectHtml(idx,'aes',u.aes)}</td>
-      <td>${selectHtml(idx,'general',u.general)}</td>
-      <td>${selectHtml(idx,'func',u.func)}</td>
-      <td>${selectHtml(idx,'screen',u.screen)}</td>
-      <td>${bdHtml}</td>
-      <td><input type="text" value="${u.remark}" placeholder="Remark" onchange="updateUnit(${idx},'remark',this.value)"></td>
-      <td><span class="${resultClass(u.result)}">${u.result || '-'}</span></td>
-    `;
-    body.appendChild(tr);
-  });
-  updateProgress();
-}
-
-function selectHtml(idx, field, val){
-  return `<select onchange="updateUnit(${idx},'${field}',this.value)">
-    <option value="">--</option>
-    <option value="Pass" ${val==='Pass'?'selected':''}>Pass</option>
-    <option value="Fail" ${val==='Fail'?'selected':''}>Fail</option>
-  </select>`;
-}
-
-function resultClass(r){
-  if(r==='Pass') return 'status-pass';
-  if(r==='Fail') return 'status-fail';
-  return 'status-pending';
-}
-
-// ---------------- SERIAL VALIDATION ----------------
-function validateSerialFormat(serial){
-  if(!/^\d{15}$/.test(serial)){
-    return "Serial must be exactly 15 digits";
-  }
-  const modelPart = serial.substring(0,4);
-  const monthPart = serial.substring(4,8);
-  if(lotState.modelCode && modelPart !== lotState.modelCode){
-    return `Model code mismatch: expected ${lotState.modelCode} (${lotState.model}), got ${modelPart}`;
-  }
-  if(lotState.prodMonthCode && monthPart !== lotState.prodMonthCode){
-    return `Production month mismatch: expected ${lotState.prodMonthCode} (${codeToDisplay(lotState.prodMonthCode)}), got ${monthPart}`;
-  }
-  return "";
-}
-
-async function updateSerial(idx, inputEl){
-  const value = inputEl.value.trim();
-  lotState.units[idx].serial = value;
-  lotState.units[idx].dupError = false;
-  lotState.units[idx].serialError = "";
-
-  if(value){
-    lotState.units[idx].serialError = validateSerialFormat(value);
-
-    const dupInLot = lotState.units.some((u,i) => i!==idx && u.serial && u.serial === value);
-    if(dupInLot){
-      lotState.units[idx].dupError = true;
-    } else {
-      try{
-        const res = await api('checkSerial', {serial: value});
-        if(res.ok && res.exists){
-          lotState.units[idx].dupError = true;
-        }
-      } catch(e){ /* ignore network errors for dup check */ }
-    }
-  }
-  evaluateUnit(idx);
-  renderInspectionTable();
-}
-
-// ---------------- BLACK DOT EVALUATION (per detailed standard) ----------------
-// 1) Not visible from 2m -> acceptable regardless of quantity
-// 2) Visible, D<=1.28mm, N<=3, DS>=15mm -> acceptable (no area distinction)
-// 3) Visible, 1.28<D<=majorLimit(2.4), N<=3, DS>=15mm, AreaA<=1, AreaB<=3, AreaA+AreaB<=3 -> acceptable
-// Else / D>majorLimit -> Fail (Major)
-function evaluateBlackDot(u){
-  if(u.bdVisible === ""){
-    return {entered:false, pass:null, note:""};
-  }
-  if(u.bdVisible === "No"){
-    return {entered:true, pass:true, note:"Not visible @2m - OK (no black dot defect)"};
-  }
-  const D = parseFloat(u.bdD);
-  const N = parseInt(u.bdN);
-  const DS = parseFloat(u.bdDS);
-  if(u.bdD === "" || u.bdN === "" || u.bdDS === "" || isNaN(D) || isNaN(N) || isNaN(DS)){
-    return {entered:false, pass:null, note:""};
-  }
-  const majorLimit = (lotState && lotState.bdMax) ? lotState.bdMax : 2.4;
-
-  if(D > majorLimit){
-    return {entered:true, pass:false, note:`Black dot D=${D}mm > ${majorLimit}mm - FAIL`};
-  }
+// ============================================================
+// BLACK DOT EVALUATOR (exact logic from IS 2500)
+// ============================================================
+function evaluateBlackDot({visibleAt2m, D, N, DS, area}){
+  if(!visibleAt2m) return {ok:true, reason:'Not visible from 2m — Acceptable regardless of quantity.'};
+  D = parseFloat(D)||0; N = parseInt(N)||0; DS = parseFloat(DS)||0;
+  if(D > 2.4) return {ok:false, reason:`D=${D}mm > 2.4mm — FAIL (Major)`};
   if(D <= 1.28){
-    if(N <= 3 && DS >= 15){
-      return {entered:true, pass:true, note:`Black dot D=${D}mm, N=${N}, DS=${DS}mm - OK`};
-    }
-    return {entered:true, pass:false, note:`Black dot D=${D}mm, N=${N}, DS=${DS}mm - FAIL (need N<=3 and DS>=15mm)`};
+    if(N<=3 && DS>=15) return {ok:true, reason:`D=${D}mm ≤ 1.28mm, N=${N}, DS=${DS}mm — OK (no area distinction needed)`};
+    return {ok:false, reason:`D=${D}mm ≤ 1.28mm but N=${N}>3 or DS=${DS}<15mm — FAIL`};
   }
-  // 1.28 < D <= majorLimit : area distinction required
-  if(u.bdAreaA === "" || u.bdAreaB === ""){
-    return {entered:false, pass:null, note:""};
-  }
-  const areaA = parseInt(u.bdAreaA);
-  const areaB = parseInt(u.bdAreaB);
-  if(N <= 3 && DS >= 15 && areaA <= 1 && areaB <= 3 && (areaA+areaB) <= 3){
-    return {entered:true, pass:true, note:`Black dot D=${D}mm OK (N=${N}, DS=${DS}mm, AreaA=${areaA}, AreaB=${areaB})`};
-  }
-  return {entered:true, pass:false, note:`Black dot D=${D}mm FAIL (N=${N}, DS=${DS}mm, AreaA=${areaA}, AreaB=${areaB})`};
+  // 1.28 < D <= 2.4
+  if(N>3) return {ok:false, reason:`D=${D}mm, N=${N}>3 — FAIL`};
+  if(DS<15) return {ok:false, reason:`D=${D}mm, DS=${DS}mm<15mm — FAIL`};
+  if(area==='A'){ if(N<=1) return {ok:true, reason:`D=${D}mm in Area A, N=${N}≤1 — OK`}; return {ok:false, reason:`Area A: N=${N}>1 — FAIL`}; }
+  if(area==='B'){ if(N<=3) return {ok:true, reason:`D=${D}mm in Area B, N=${N}≤3 — OK`}; return {ok:false, reason:`Area B: N=${N}>3 — FAIL`}; }
+  if(area==='A+B'){ if(N<=3) return {ok:true, reason:`D=${D}mm in Area A+B, N=${N}≤3 — OK`}; return {ok:false, reason:`Area A+B: N=${N}>3 — FAIL`}; }
+  return {ok:false, reason:'Unknown area'};
 }
 
-// ---------------- UNIT UPDATE / EVALUATION ----------------
-function updateUnit(idx, field, value){
-  lotState.units[idx][field] = value;
-  evaluateUnit(idx);
-  renderInspectionTable();
+// ============================================================
+// SERIAL VALIDATION
+// ============================================================
+function validateSerial(serial, model, prodMonthCode, existingInBatch){
+  if(!serial||serial.trim().length!==15) return 'Must be exactly 15 digits';
+  const s = serial.trim().toUpperCase();
+  const expModel = MODEL_CODES[model]||'';
+  if(s.substring(0,4)!==expModel) return `Model code mismatch — expected ${expModel} for ${model}`;
+  if(s.substring(4,8)!==prodMonthCode) return `Month code mismatch — expected ${prodMonthCode} (${mmyyDisplay(prodMonthCode)})`;
+  const mm = parseInt(s.substring(4,6));
+  if(isNaN(mm)||mm<1||mm>12) return 'Invalid month digits (01-12)';
+  if(!/^\d{7}$/.test(s.substring(8))) return 'Last 7 characters must be numeric';
+  if(existingInBatch && existingInBatch.includes(s)) return 'Duplicate within current batch';
+  return ''; // valid
 }
 
-function evaluateUnit(idx){
-  const u = lotState.units[idx];
-  const bd = evaluateBlackDot(u);
-  u.bdNote = bd.note;
-
-  const coreTests = [u.aes, u.general, u.func, u.screen];
-  const serialOk = u.serial && !u.dupError && !u.serialError;
-  const allEntered = serialOk && bd.entered && coreTests.every(t => t === 'Pass' || t === 'Fail');
-
-  if(!allEntered){
-    u.result = "";
-    return;
-  }
-
-  const fails = [];
-  if(u.aes === 'Fail') fails.push("Aesthetic Fail (Minor)");
-  if(u.general === 'Fail') fails.push("General Fail (Major)");
-  if(u.func === 'Fail') fails.push("Functional Fail (Major)");
-  if(u.screen === 'Fail') fails.push("Screen Fail (Major)");
-  if(!bd.pass) fails.push(bd.note + " (Major)");
-
-  if(fails.length === 0){
-    u.result = "Pass";
-    if(!u.remark && bd.note) u.remark = bd.note;
-  } else {
-    u.result = "Fail";
-    if(!u.remark) u.remark = fails.join(", ");
-  }
-}
-
-function updateProgress(){
-  const total = lotState.units.length;
-  const completed = lotState.units.filter(u => u.result !== "").length;
-  document.getElementById('progressText').innerText = `Completed: ${completed}/${total}`;
-  document.getElementById('finishBtn').disabled = completed < total;
-}
-
-// ---------------- FINISH / SUMMARY ----------------
-function finishLot(){
-  let aestheticFails = 0, majorFails = 0, passCount = 0, failCount = 0;
-
-  lotState.units.forEach(u => {
-    if(u.result === 'Pass') passCount++; else failCount++;
-    if(u.aes === 'Fail') aestheticFails++;
-    const bd = evaluateBlackDot(u);
-    if(u.general === 'Fail' || u.func === 'Fail' || u.screen === 'Fail' || bd.pass === false) majorFails++;
-  });
-
-  const lotResult = (majorFails === 0 && aestheticFails <= 1) ? 'PASS' : 'FAIL';
-  const fgPassQty = (lotResult === 'PASS') ? lotState.lotSize : 0;
-
-  lotState.passCount = passCount;
-  lotState.failCount = failCount;
-  lotState.aestheticFails = aestheticFails;
-  lotState.majorFails = majorFails;
-  lotState.lotResult = lotResult;
-  lotState.fgPassQty = fgPassQty;
-
-  document.getElementById('inspectionScreen').classList.add('hidden');
-  document.getElementById('summaryScreen').classList.remove('hidden');
-  renderSummary();
-}
-
-function renderSummary(){
-  const badge = document.getElementById('summaryBadge');
-  const cls = lotState.lotResult === 'PASS' ? 'badge-pass' : 'badge-fail';
-  badge.innerHTML = `<span class="badge ${cls}">${lotState.kitName} - ${lotState.lotNumber}: ${lotState.lotResult}</span>`;
-
-  document.getElementById('summaryStats').innerHTML = `
-    <div><b>${lotState.units.length}</b>Samples Inspected</div>
-    <div><b style="color:var(--pass)">${lotState.passCount}</b>Sample Pass</div>
-    <div><b style="color:var(--fail)">${lotState.failCount}</b>Sample Fail</div>
-    <div><b>${lotState.lotSize}</b>Lot Size</div>
-    <div><b style="color:${lotState.lotResult==='PASS'?'var(--pass)':'var(--fail)'}">${lotState.fgPassQty}</b>FG Pass Quantity</div>
-  `;
-
-  document.getElementById('aqlDecision').innerHTML =
-    `<b>AQL Decision (IS 2500, Level G2):</b><br>
-     Minor (Aesthetic) defects: ${lotState.aestheticFails} (Accept &le; 1, Reject &ge; 2)<br>
-     Major defects (General/Functional/Screen/Black Dot): ${lotState.majorFails} (Accept = 0, Reject &ge; 1)<br>
-     <b>Lot Decision: <span class="${lotState.lotResult==='PASS'?'status-pass':'status-fail'}">${lotState.lotResult}</span> &nbsp;|&nbsp; FG Pass Quantity: ${lotState.fgPassQty} of ${lotState.lotSize}</b>`;
-
-  const body = document.getElementById('summaryBody');
-  body.innerHTML = '';
-  const failRows = [];
-  lotState.units.forEach((u, idx) => {
-    const bdDisplay = u.bdNote || '-';
-    u.bdDisplay = bdDisplay;
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${idx+1}</td><td>${u.serial}</td><td>${u.aes}</td><td>${u.general}</td>
-      <td>${u.func}</td><td>${u.screen}</td><td style="font-size:11px;">${bdDisplay}</td>
-      <td>${u.remark || '-'}</td><td><span class="${resultClass(u.result)}">${u.result}</span></td>
-    `;
-    body.appendChild(tr);
-    if(u.result === 'Fail'){
-      failRows.push(`#${idx+1} (SN ${u.serial}): ${u.remark}`);
+// ============================================================
+// LOT TALLY
+// ============================================================
+function tallyLot(){
+  let minors=0, majors=0;
+  sampleRows.forEach(s=>{
+    if(!s.aestheticPass) minors++;
+    if(!s.generalPass||!s.functionalPass||!s.screenPass) majors++;
+    if(!s.noBlackDot){
+      const bd = evaluateBlackDot({visibleAt2m:s.bdVisible, D:s.bdD, N:s.bdN, DS:s.bdDS, area:s.bdArea});
+      if(!bd.ok) majors++;
     }
   });
-
-  const failBox = document.getElementById('failRemarksBox');
-  if(failRows.length > 0){
-    failBox.classList.remove('hidden');
-    failBox.innerHTML = `<b>Fail Details:</b><br>${failRows.join('<br>')}`;
-  } else {
-    failBox.classList.remove('hidden');
-    failBox.innerHTML = `<b>Pass Details:</b><br>All ${lotState.units.length} samples passed Aesthetic, General, Functional, Screen and Black Dot checks.`;
-  }
+  return {minors, majors, passed: minors<=1 && majors===0};
 }
 
-async function saveResults(){
-  const statusEl = document.getElementById('saveStatus');
-  statusEl.innerText = "Saving...";
-  try{
-    const res = await api('submitInspection', {
-      inspector: currentUser.name,
-      kitName: lotState.kitName,
-      lotNumber: lotState.lotNumber,
-      lotResult: lotState.lotResult,
-      kitTotalQty: lotState.kitTotalQty,
-      totalLots: lotState.totalLots,
-      model: lotState.model,
-      prodMonthCode: lotState.prodMonthCode,
-      fgPassQty: lotState.fgPassQty,
-      units: lotState.units.map(u => ({
-        serial: u.serial, aes: u.aes, general: u.general, func: u.func, screen: u.screen,
-        bdDisplay: u.bdDisplay, remark: u.remark, result: u.result
-      }))
+function sampleResult(s){
+  let isMajor = !s.generalPass||!s.functionalPass||!s.screenPass;
+  if(!s.noBlackDot){
+    const bd = evaluateBlackDot({visibleAt2m:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
+    if(!bd.ok) isMajor=true;
+  }
+  const isMinor = !s.aestheticPass;
+  if(isMajor) return 'FAIL-MAJOR';
+  if(isMinor) return 'FAIL-MINOR';
+  return 'PASS';
+}
+
+// ============================================================
+// GROUP KITS
+// ============================================================
+function groupKits(kits){
+  const map={}, order=[];
+  kits.forEach(k=>{
+    if(!map[k.kitName]){map[k.kitName]=[]; order.push(k.kitName);}
+    map[k.kitName].push(k);
+  });
+  return order.map(name=>{
+    const lots = map[name];
+    const totalLots = Number(lots[0].totalLots)||lots.length;
+    const kitQty = Number(lots[0].kitTotalQty)||0;
+    const completed = lots.filter(l=>l.status==='Closed').length;
+    const pending = lots.filter(l=>l.status==='Open').length;
+    const passLots = lots.filter(l=>l.result==='PASS').length;
+    const failLots = lots.filter(l=>l.result==='FAIL').length;
+    const fgPass = lots.reduce((s,l)=>s+(Number(l.fgPassQty)||0),0);
+    return {name, lots, totalLots, kitQty, completed, pending, passLots, failLots, fgPass,
+            model:lots[0].model, prodMonthCode:lots[0].prodMonthCode};
+  });
+}
+
+// ============================================================
+// FRESH SAMPLE TEMPLATES
+// ============================================================
+function freshSamples(n){
+  return Array.from({length:n},(_,i)=>({
+    sampleNum:i+1, serial:'', serialError:'',
+    aestheticPass:true, generalPass:true, functionalPass:true, screenPass:true,
+    noBlackDot:true, bdVisible:false, bdD:'1.2', bdN:'1', bdDS:'20', bdArea:'A',
+    bdJudgement:{ok:true,reason:'No Black Dot detected.'}, remarks:''
+  }));
+}
+
+// ============================================================
+// RENDER ENGINE
+// ============================================================
+function render(){ document.getElementById('app').innerHTML = buildHTML(); bindEvents(); }
+
+function buildHTML(){
+  const sections = [];
+
+  // Toast
+  if(notification){
+    const col = notification.type==='error' ? 'bg-rose-500' : 'bg-emerald-500';
+    sections.push(`<div class="fixed top-5 right-5 z-50 ${col} text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-bold fadeIn">${notification.msg}</div>`);
+  }
+
+  // SETUP SCREEN
+  if(!API_URL){
+    sections.push(`
+    <div class="min-h-screen flex items-center justify-center p-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full space-y-6 shadow-2xl">
+        <div class="flex items-center gap-3">
+          <div class="bg-indigo-600 p-2.5 rounded-xl"><span class="font-mono font-black text-sm text-white">QC</span></div>
+          <div><h1 class="text-lg font-extrabold text-white tracking-wider">IS2500 OBA INSPECTION</h1>
+          <p class="text-[10px] text-slate-400 uppercase tracking-widest">One-time Backend Setup</p></div>
+        </div>
+        <div class="space-y-2">
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Apps Script Web App URL</label>
+          <input id="apiUrlInput" type="text" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-indigo-500 outline-none" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+        <button id="btnSaveUrl" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-sm uppercase tracking-wider">Connect</button>
+        <p class="text-xs text-slate-500">Paste your Google Apps Script Web App URL. This is stored locally in your browser.</p>
+      </div>
+    </div>`);
+    return sections.join('');
+  }
+
+  // LOGIN SCREEN
+  if(!currentUser){
+    sections.push(`
+    <div class="min-h-screen flex items-center justify-center p-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-sm w-full space-y-6 shadow-2xl">
+        <div class="flex items-center gap-3">
+          <div class="bg-indigo-600 p-2.5 rounded-xl"><span class="font-mono font-black text-sm text-white">QC</span></div>
+          <div><h1 class="text-lg font-extrabold text-white tracking-wider">IS2500 OBA HMI</h1>
+          <p class="text-[10px] text-slate-400 uppercase tracking-widest">Inspection Management System</p></div>
+        </div>
+        <div class="space-y-3">
+          <input id="loginUser" type="text" placeholder="Username" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
+          <input id="loginPass" type="password" placeholder="Password" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
+          <div id="loginErr" class="text-rose-400 text-xs hidden"></div>
+        </div>
+        <button id="btnLogin" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-sm uppercase tracking-wider">Login</button>
+        <button id="btnChangeUrl" class="w-full text-slate-500 hover:text-slate-300 text-xs py-1">Change backend URL</button>
+      </div>
+    </div>`);
+    return sections.join('');
+  }
+
+  // INSPECTION SCREEN (active lot)
+  if(lotState && sampleRows.length>0){
+    sections.push(buildInspectionScreen());
+    return sections.join('');
+  }
+
+  // MAIN DASHBOARD
+  sections.push(buildDashboard());
+  return sections.join('');
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function buildDashboard(){
+  const groups = groupKits(allKits);
+  const totalLots = allKits.length;
+  const completedLots = allKits.filter(k=>k.status==='Closed').length;
+  const passLots = allKits.filter(k=>k.result==='PASS').length;
+  const failLots = allKits.filter(k=>k.result==='FAIL').length;
+  const totalFG = allKits.reduce((s,k)=>s+(Number(k.fgPassQty)||0),0);
+  const totalKitQty = groups.reduce((s,g)=>s+g.kitQty,0);
+  const pct = totalLots>0 ? Math.round(completedLots/totalLots*100) : 0;
+
+  const isAdmin = currentUser.role==='admin';
+
+  let html = `
+  <div class="min-h-screen flex flex-col">
+    <!-- HEADER -->
+    <header class="bg-slate-950/90 border-b border-slate-900 sticky top-0 z-40 backdrop-blur-md">
+      <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div class="flex items-center gap-3">
+          <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
+            <span class="font-mono font-black text-sm text-white">QC</span>
+          </div>
+          <div>
+            <h1 class="text-lg font-extrabold tracking-wider text-white">IS2500 OBA INSPECTION
+              <span class="text-[10px] bg-indigo-500/10 text-indigo-400 font-normal px-2 py-0.5 rounded-full border border-indigo-500/30 ml-2">HMI v5.0</span>
+            </h1>
+            <p class="text-[10px] text-slate-400 uppercase tracking-widest">Sampling Plan: IS 2500 | Level G2 | Minor Ac≤1 | Major Ac=0</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-3 py-1.5 rounded-xl flex items-center gap-1.5 font-mono">
+            <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+            ${currentUser.name} (${currentUser.role})
+          </span>
+          <button id="btnLogout" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider">Logout</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+
+    <!-- STATS ROW -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 fadeIn">
+      <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Lots</p>
+        <p class="text-3xl font-black text-white mt-1">${totalLots}</p>
+        <p class="text-xs text-indigo-400 font-mono mt-1">Kit Qty: ${totalKitQty}</p>
+      </div>
+      <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Progress</p>
+        <p class="text-3xl font-black text-white mt-1">${completedLots}<span class="text-sm font-normal text-slate-500"> / ${totalLots}</span></p>
+        <div class="mt-2 w-full bg-slate-950 rounded-full h-1.5"><div class="bg-emerald-500 h-1.5 rounded-full" style="width:${pct}%"></div></div>
+      </div>
+      <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Yield Rate</p>
+        <p class="text-3xl font-black text-sky-400 mt-1">${completedLots>0?((passLots/completedLots)*100).toFixed(1):'0.0'}%</p>
+        <p class="text-[10px] font-mono mt-1"><span class="text-emerald-400 font-bold">${passLots} PASS</span> <span class="text-rose-400 font-bold ml-2">${failLots} FAIL</span></p>
+      </div>
+      <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">FG Released</p>
+        <p class="text-3xl font-black text-emerald-400 mt-1">${totalFG}</p>
+        <p class="text-[10px] font-mono text-slate-500 mt-1">Certified units</p>
+      </div>
+    </section>
+
+    <!-- STANDARD REFERENCE BANNER -->
+    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 flex items-start gap-3">
+      <div class="p-2 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0 font-mono font-bold text-sm">i</div>
+      <div>
+        <p class="text-xs font-bold text-white uppercase tracking-wider">IS2500 Standard Reference</p>
+        <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">Lot size: <strong class="text-indigo-400">90 units</strong> | Sample: <strong class="text-indigo-400">13 units</strong> | Minor (Aesthetic): <strong class="text-amber-400">≤1 allowed</strong> | Major (General/Functional/Screen/Black Dot): <strong class="text-rose-400">0 allowed</strong> | Black Dot: D≤1.28mm→OK if N≤3 & DS≥15mm; 1.28<D≤2.4mm→Area rules apply; D>2.4mm→FAIL</p>
+      </div>
+    </div>`;
+
+  // ADMIN CREATE KIT
+  if(isAdmin){
+    html += `
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-5">
+      <div class="border-b border-slate-800 pb-3">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Create New Kit</h2>
+        <p class="text-[10px] text-slate-500 mt-1">Lots auto-created = Kit Qty ÷ 90</p>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Kit Name</label>
+          <input id="newKitName" type="text" placeholder="e.g. LH1G-JUN26" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Kit Quantity (total units)</label>
+          <input id="newKitQty" type="number" placeholder="e.g. 2000" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Model</label>
+          <select id="newModel" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
+            <option value="LH1G">LH1G (Code: 1217)</option>
+            <option value="LH3G">LH3G (Code: 1218)</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Production Month</label>
+          <input id="newProdMonth" type="month" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
+        </div>
+        <button id="btnCreateKit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-sm uppercase tracking-wider">Create Kit</button>
+        <div id="createKitMsg" class="text-xs text-emerald-400 hidden"></div>
+      </div>
+    </div>
+
+    <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-5">
+      <div class="border-b border-slate-800 pb-3">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Add Inspector</h2>
+      </div>
+      <div class="space-y-3">
+        <input id="newInsUser" type="text" placeholder="Username" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
+        <input id="newInsPass" type="text" placeholder="Password" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
+        <input id="newInsName" type="text" placeholder="Full Name" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
+        <select id="newInsRole" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
+          <option value="inspector">Inspector</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button id="btnAddUser" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 rounded-xl text-sm uppercase tracking-wider">Add User</button>
+        <div id="addUserMsg" class="text-xs text-emerald-400 hidden"></div>
+      </div>
+    </div>
+
+    <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-4">
+      <div class="border-b border-slate-800 pb-3">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Quick Actions</h2>
+      </div>
+      <button id="btnDownloadCSV" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-sm uppercase tracking-wider">⬇ Download Master CSV</button>
+      <button id="btnRefresh" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 rounded-xl text-sm uppercase tracking-wider">↻ Refresh Data</button>
+    </div>
+    </div>`;
+  }
+
+  // KITS / LOTS LIST
+  html += `<div class="space-y-6">`;
+  if(groups.length===0){
+    html += `<div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-12 text-center text-slate-500 text-sm">No kits registered yet.</div>`;
+  } else {
+    groups.forEach((g,gi)=>{
+      const pct2 = g.totalLots>0?Math.round(g.completed/g.totalLots*100):0;
+      html += `
+      <div class="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden fadeIn">
+        <div class="p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="text-sm font-extrabold text-white uppercase tracking-wider font-mono">${g.name}</h3>
+              <span class="text-[10px] bg-slate-800 text-indigo-400 px-2 py-0.5 rounded font-mono">${g.model||'-'} • ${mmyyDisplay(g.prodMonthCode)}</span>
+            </div>
+            <p class="text-[10px] text-slate-500 font-mono mt-1">
+              Kit Qty: ${g.kitQty} | Total Lots: ${g.totalLots} | Completed: ${g.completed} | Pending: ${g.pending}
+              | <span class="text-emerald-400 font-bold">PASS: ${g.passLots}</span>
+              | <span class="text-rose-400 font-bold">FAIL: ${g.failLots}</span>
+              | <span class="text-emerald-300 font-bold">FG Released: ${g.fgPass}</span>
+            </p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <div class="bg-slate-950 rounded-full h-2 w-32 overflow-hidden"><div class="bg-indigo-500 h-full" style="width:${pct2}%"></div></div>
+            <span class="text-[10px] text-slate-400 font-mono">${pct2}%</span>
+          </div>
+        </div>
+        <div class="divide-y divide-slate-800/60">`;
+
+      g.lots.forEach((k,li)=>{
+        const kidx = allKits.indexOf(k);
+        const statusBadge = k.status==='Open'
+          ? `<span class="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded font-bold uppercase">Open</span>`
+          : `<span class="text-[9px] bg-slate-500/10 text-slate-400 border border-slate-500/20 px-2 py-0.5 rounded font-bold uppercase">Closed</span>`;
+        const resultBadge = k.result
+          ? (k.result==='PASS'
+            ? `<span class="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-bold uppercase">PASS</span>`
+            : `<span class="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded font-bold uppercase">FAIL</span>`)
+          : '';
+        const fgBadge = k.fgPassQty!=='' ? `<span class="text-[9px] text-emerald-400 font-mono">FG: ${k.fgPassQty}</span>` : '';
+
+        html += `<div class="flex items-center justify-between px-5 py-3 hover:bg-slate-800/30 transition-all flex-wrap gap-2">
+          <div>
+            <p class="text-xs font-bold text-white font-mono">${k.lotNumber}</p>
+            <p class="text-[10px] text-slate-500 font-mono">Size: ${k.lotSize} | Sample: ${k.sampleSize} | BD Limit: ≤${k.bdMax}mm</p>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            ${statusBadge} ${resultBadge} ${fgBadge}
+            ${k.status==='Open' && !isAdmin ? `<button class="startInspBtn bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-1.5 rounded-xl text-xs uppercase tracking-wider" data-idx="${kidx}">Start Inspection</button>` : ''}
+            ${isAdmin ? `<button class="editLotBtn text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-bold uppercase" data-idx="${kidx}">Edit</button>` : ''}
+          </div>
+        </div>
+        <div id="editLotArea${kidx}" class="hidden px-5 pb-4"></div>`;
+      });
+
+      html += `</div></div>`;
+    });
+  }
+  html += `</div></main>
+
+  <footer class="bg-slate-950 border-t border-slate-900 py-5 text-center text-[10px] text-slate-600 font-mono">
+    IS2500 Sampling Plan | Minor limit: 1 | Major limit: 0 | 13 samples per 90-unit lot | © 2026 Quality Assurance
+  </footer>
+  </div>`;
+  return html;
+}
+
+// ============================================================
+// INSPECTION SCREEN
+// ============================================================
+function buildInspectionScreen(){
+  const lot = lotState;
+  const {minors, majors, passed} = tallyLot();
+  const filledSamples = sampleRows.filter(s=>s.serial&&!s.serialError).length;
+  const allReady = filledSamples===sampleRows.length && sampleRows.every(s=>!s.serialError);
+
+  let html = `
+  <div class="min-h-screen flex flex-col">
+    <header class="bg-slate-950/90 border-b border-slate-900 sticky top-0 z-40 backdrop-blur-md">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div>
+          <h1 class="text-sm font-extrabold text-white uppercase font-mono">${lot.kitName} — ${lot.lotNumber}</h1>
+          <p class="text-[10px] text-slate-400 font-mono">Lot Size: ${lot.lotSize} | Sample: ${lot.sampleSize} | Model: ${lot.model} (${MODEL_CODES[lot.model]}) | Prod Month: ${mmyyDisplay(lot.prodMonthCode)} | BD Limit: ≤${lot.bdMax}mm</p>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-center">
+            <p class="text-[9px] text-slate-500 uppercase font-mono">Minor/Major</p>
+            <p class="text-sm font-black font-mono">
+              <span class="${minors<=1?'text-amber-400':'text-rose-500'}">${minors}</span>
+              <span class="text-slate-500">/</span>
+              <span class="${majors===0?'text-emerald-400':'text-rose-500'}">${majors}</span>
+            </p>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-center">
+            <p class="text-[9px] text-slate-500 uppercase font-mono">Running Status</p>
+            <p class="text-xs font-black font-mono ${passed?'text-emerald-400':'text-rose-400'}">${passed?'PASSING':'FAILING'}</p>
+          </div>
+          <button id="btnBackFromInsp" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-xs font-bold uppercase">← Back</button>
+        </div>
+      </div>
+    </header>
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 space-y-4">
+
+    <!-- SAMPLE ROWS -->
+    <div class="space-y-3">`;
+
+  sampleRows.forEach((s,i)=>{
+    const res = sampleResult(s);
+    const resCls = res==='PASS'?'text-emerald-400':res==='FAIL-MINOR'?'text-amber-400':'text-rose-400';
+    const resLabel = res==='PASS'?'PASS':res==='FAIL-MINOR'?'FAIL (Minor)':'FAIL (Major)';
+
+    const bdJudge = s.noBlackDot ? {ok:true,reason:'No Black Dot'} : evaluateBlackDot({visibleAt2m:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
+
+    html += `
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 fadeIn">
+      <div class="flex justify-between items-center">
+        <span class="text-xs font-bold text-slate-400 font-mono uppercase tracking-widest">Sample ${i+1}</span>
+        <span class="text-xs font-black font-mono ${resCls}">${resLabel}</span>
+      </div>
+
+      <!-- SERIAL -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Serial Number (15 digits)</label>
+          <input type="text" data-si="${i}" data-field="serial" placeholder="${MODEL_CODES[lot.model]||'????'}${lot.prodMonthCode||'????'}xxxxxxx"
+            class="sampField w-full bg-slate-950 border ${s.serialError?'border-rose-500':'border-slate-800'} rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 font-mono"
+            value="${s.serial}">
+          ${s.serialError ? `<p class="text-[10px] text-rose-400 mt-1">${s.serialError}</p>` : ''}
+        </div>
+
+        <!-- INSPECTION TOGGLES -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          ${buildToggle(i,'aestheticPass',s.aestheticPass,'Aesthetic','Minor')}
+          ${buildToggle(i,'generalPass',s.generalPass,'General','Major')}
+          ${buildToggle(i,'functionalPass',s.functionalPass,'Functional','Major')}
+          ${buildToggle(i,'screenPass',s.screenPass,'Screen','Major')}
+        </div>
+      </div>
+
+      <!-- BLACK DOT -->
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+        <div class="flex items-center gap-4 flex-wrap">
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Black Dot</label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" data-si="${i}" data-field="noBlackDot" class="sampToggle accent-emerald-400 w-4 h-4" ${s.noBlackDot?'checked':''}>
+            <span class="text-xs text-slate-300">No Black Dot</span>
+          </label>
+          ${!s.noBlackDot ? `
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" data-si="${i}" data-field="bdVisible" class="sampToggle accent-indigo-400 w-4 h-4" ${s.bdVisible?'checked':''}>
+            <span class="text-xs text-slate-300">Visible at 2m</span>
+          </label>` : ''}
+        </div>
+        ${!s.noBlackDot ? `
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">D (mm)</label>
+            <input type="number" step="0.01" data-si="${i}" data-field="bdD" value="${s.bdD}" class="sampField w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-indigo-500 font-mono"></div>
+          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">N (spots)</label>
+            <input type="number" data-si="${i}" data-field="bdN" value="${s.bdN}" class="sampField w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-indigo-500 font-mono"></div>
+          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">DS (mm)</label>
+            <input type="number" step="0.1" data-si="${i}" data-field="bdDS" value="${s.bdDS}" class="sampField w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-indigo-500 font-mono"></div>
+          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Area</label>
+            <select data-si="${i}" data-field="bdArea" class="sampField w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-indigo-500 font-mono">
+              <option value="A" ${s.bdArea==='A'?'selected':''}>Area A (Inner)</option>
+              <option value="B" ${s.bdArea==='B'?'selected':''}>Area B (Outer)</option>
+              <option value="A+B" ${s.bdArea==='A+B'?'selected':''}>Area A+B</option>
+            </select></div>
+          <div class="flex items-end">
+            <div class="w-full bg-slate-900 border ${bdJudge.ok?'border-emerald-800':'border-rose-800'} rounded-lg px-2 py-1.5">
+              <p class="text-[9px] font-mono ${bdJudge.ok?'text-emerald-400':'text-rose-400'}">${bdJudge.ok?'✓ OK':'✗ FAIL'}</p>
+              <p class="text-[9px] text-slate-400 leading-tight mt-0.5">${bdJudge.reason.substring(0,50)}</p>
+            </div>
+          </div>
+        </div>` : `<p class="text-[10px] text-emerald-400 font-mono">✓ No Black Dot — Acceptable</p>`}
+      </div>
+
+      <!-- REMARK -->
+      <div>
+        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Remark</label>
+        <input type="text" data-si="${i}" data-field="remarks" value="${s.remarks||''}" placeholder="Optional remark" class="sampField w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+      </div>
+    </div>`;
+  });
+
+  html += `</div>
+
+    <!-- SUBMIT -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+      <div>
+        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">General Lot Remarks</label>
+        <input type="text" id="lotGeneralRemarks" placeholder="Overall lot inspection remarks..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
+      </div>
+      <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div class="text-xs font-mono space-y-1">
+          <p>Samples ready: <span class="text-indigo-400 font-bold">${filledSamples}/${sampleRows.length}</span></p>
+          <p>Minor defects: <span class="${minors<=1?'text-amber-400 font-bold':'text-rose-400 font-bold'}">${minors} / 1 allowed</span></p>
+          <p>Major defects: <span class="${majors===0?'text-emerald-400 font-bold':'text-rose-400 font-bold'}">${majors} / 0 allowed</span></p>
+        </div>
+        <button id="btnSubmitLot" ${allReady?'':'disabled'} class="bg-${allReady?(passed?'emerald':'rose')}-600 hover:bg-${allReady?(passed?'emerald':'rose')}-500 disabled:bg-slate-700 text-white font-bold px-8 py-3 rounded-xl text-sm uppercase tracking-wider">
+          Submit Lot — ${passed?'PASS':'FAIL'}
+        </button>
+      </div>
+    </div>
+
+    </main>
+  </div>`;
+  return html;
+}
+
+function buildToggle(i, field, val, label, type){
+  return `
+  <div>
+    <label class="text-[9px] font-bold ${type==='Minor'?'text-amber-500':'text-rose-500'} uppercase tracking-widest block mb-1">${label} <span class="text-slate-600">(${type})</span></label>
+    <button class="sampToggleBtn w-full py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${val?'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30':'bg-rose-500/20 text-rose-400 border border-rose-500/30'}"
+      data-si="${i}" data-field="${field}" data-val="${val?'1':''}">
+      ${val?'PASS':'FAIL'}
+    </button>
+  </div>`;
+}
+
+// ============================================================
+// EVENT BINDING
+// ============================================================
+function bindEvents(){
+  // SETUP
+  const btnSaveUrl = document.getElementById('btnSaveUrl');
+  if(btnSaveUrl) btnSaveUrl.onclick = ()=>{
+    const v = document.getElementById('apiUrlInput').value.trim();
+    if(!v){ toast('Enter the Apps Script URL','error'); return; }
+    API_URL = v;
+    localStorage.setItem('oba_api_url', v);
+    render();
+  };
+
+  const btnChangeUrl = document.getElementById('btnChangeUrl');
+  if(btnChangeUrl) btnChangeUrl.onclick = ()=>{ API_URL=''; localStorage.removeItem('oba_api_url'); render(); };
+
+  // LOGIN
+  const btnLogin = document.getElementById('btnLogin');
+  if(btnLogin) btnLogin.onclick = async()=>{
+    const u = document.getElementById('loginUser').value.trim();
+    const p = document.getElementById('loginPass').value.trim();
+    const errEl = document.getElementById('loginErr');
+    errEl.classList.add('hidden');
+    try{
+      const res = await api('login',{username:u, password:p});
+      if(res.ok){
+        currentUser = {username:res.username, role:res.role, name:res.name};
+        await refreshKits();
+        render();
+      } else {
+        errEl.textContent = res.error||'Login failed';
+        errEl.classList.remove('hidden');
+      }
+    }catch(e){ errEl.textContent='Network error: '+e.message; errEl.classList.remove('hidden'); }
+  };
+
+  // LOGOUT
+  const btnLogout = document.getElementById('btnLogout');
+  if(btnLogout) btnLogout.onclick = ()=>{ currentUser=null; lotState=null; sampleRows=[]; render(); };
+
+  // REFRESH
+  const btnRefresh = document.getElementById('btnRefresh');
+  if(btnRefresh) btnRefresh.onclick = async()=>{ await refreshKits(); render(); toast('Data refreshed'); };
+
+  // CREATE KIT
+  const btnCreateKit = document.getElementById('btnCreateKit');
+  if(btnCreateKit) btnCreateKit.onclick = async()=>{
+    const kitName = document.getElementById('newKitName').value.trim();
+    const kitQty = parseInt(document.getElementById('newKitQty').value)||0;
+    const model = document.getElementById('newModel').value;
+    const prodMonth = document.getElementById('newProdMonth').value;
+    const msgEl = document.getElementById('createKitMsg');
+    if(!kitName||!kitQty||!prodMonth){ toast('Fill all kit fields','error'); return; }
+    const prodMonthCode = mmyy(prodMonth);
+    const res = await api('createKit',{kitName, kitSize:kitQty, lotSize:90, sampleSize:13, bdMax:2.4, model, prodMonthCode, createdBy:currentUser.username});
+    if(res.ok){
+      msgEl.textContent=`Created ${res.lotsCreated} lots (Lot 1 – Lot ${res.lotsCreated}), all Open.`;
+      msgEl.classList.remove('hidden');
+      document.getElementById('newKitName').value='';
+      document.getElementById('newKitQty').value='';
+      await refreshKits(); render();
+      toast(`Kit created: ${res.lotsCreated} lots`);
+    } else { toast(res.error||'Error','error'); }
+  };
+
+  // ADD USER
+  const btnAddUser = document.getElementById('btnAddUser');
+  if(btnAddUser) btnAddUser.onclick = async()=>{
+    const username = document.getElementById('newInsUser').value.trim();
+    const password = document.getElementById('newInsPass').value.trim();
+    const name = document.getElementById('newInsName').value.trim();
+    const role = document.getElementById('newInsRole').value;
+    if(!username||!password||!name){ toast('Fill all user fields','error'); return; }
+    const res = await api('addUser',{username,password,name,role});
+    if(res.ok){
+      document.getElementById('newInsUser').value='';
+      document.getElementById('newInsPass').value='';
+      document.getElementById('newInsName').value='';
+      const msgEl = document.getElementById('addUserMsg');
+      msgEl.textContent=`User "${username}" added as ${role}.`;
+      msgEl.classList.remove('hidden');
+      toast(`User ${username} added`);
+    } else { toast(res.error||'Error','error'); }
+  };
+
+  // DOWNLOAD CSV
+  const btnCSV = document.getElementById('btnDownloadCSV');
+  if(btnCSV) btnCSV.onclick = downloadCSV;
+
+  // START INSPECTION
+  document.querySelectorAll('.startInspBtn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const idx = parseInt(btn.getAttribute('data-idx'));
+      const k = allKits[idx];
+      lotState = {...k, sampleSize:parseInt(k.sampleSize)||13, bdMax:parseFloat(k.bdMax)||2.4};
+      sampleRows = freshSamples(lotState.sampleSize);
+      render();
+    };
+  });
+
+  // EDIT LOT
+  document.querySelectorAll('.editLotBtn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const idx = parseInt(btn.getAttribute('data-idx'));
+      const k = allKits[idx];
+      const areaId = `editLotArea${idx}`;
+      const area = document.getElementById(areaId);
+      if(!area.classList.contains('hidden')){ area.classList.add('hidden'); area.innerHTML=''; return; }
+      area.classList.remove('hidden');
+      area.innerHTML = `
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Lot Size</label><input id="eLS${idx}" type="number" value="${k.lotSize}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"></div>
+          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Sample Size</label><input id="eSS${idx}" type="number" value="${k.sampleSize}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"></div>
+          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">BD Max (mm)</label><input id="eBD${idx}" type="number" step="0.01" value="${k.bdMax}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"></div>
+          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Status</label><select id="eST${idx}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"><option value="Open" ${k.status==='Open'?'selected':''}>Open</option><option value="Closed" ${k.status==='Closed'?'selected':''}>Closed</option></select></div>
+          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Model</label><select id="eMD${idx}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"><option value="LH1G" ${k.model==='LH1G'?'selected':''}>LH1G (1217)</option><option value="LH3G" ${k.model==='LH3G'?'selected':''}>LH3G (1218)</option></select></div>
+          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Prod Month</label><input id="ePM${idx}" type="month" value="${mmyyToInput(k.prodMonthCode)}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"></div>
+        </div>
+        <button class="saveLotEditBtn bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-5 py-2 rounded-xl text-xs uppercase tracking-wider" data-idx="${idx}">Save Changes</button>`;
+
+      area.querySelector('.saveLotEditBtn').onclick = async()=>{
+        const lotSize = parseInt(document.getElementById('eLS'+idx).value);
+        const sampleSize = parseInt(document.getElementById('eSS'+idx).value);
+        const bdMax = parseFloat(document.getElementById('eBD'+idx).value);
+        const status = document.getElementById('eST'+idx).value;
+        const model = document.getElementById('eMD'+idx).value;
+        const pm = document.getElementById('ePM'+idx).value;
+        const prodMonthCode = pm ? mmyy(pm) : k.prodMonthCode;
+        const res = await api('updateKit',{kitName:k.kitName,lotNumber:k.lotNumber,lotSize,sampleSize,bdMax,status,model,prodMonthCode});
+        if(res.ok){ await refreshKits(); render(); toast('Lot updated'); }
+        else { toast(res.error||'Error','error'); }
+      };
+    };
+  });
+
+  // BACK FROM INSPECTION
+  const btnBack = document.getElementById('btnBackFromInsp');
+  if(btnBack) btnBack.onclick = ()=>{ if(confirm('Go back? Unsaved data will be lost.')){ lotState=null; sampleRows=[]; render(); } };
+
+  // INSPECTION SAMPLE FIELDS
+  document.querySelectorAll('.sampField').forEach(el=>{
+    el.onchange = ()=>{
+      const i = parseInt(el.getAttribute('data-si'));
+      const field = el.getAttribute('data-field');
+      sampleRows[i][field] = el.value;
+      if(field==='serial'){
+        const used = sampleRows.filter((_,idx)=>idx!==i).map(s=>s.serial.toUpperCase()).filter(Boolean);
+        sampleRows[i].serialError = validateSerial(el.value, lotState.model, lotState.prodMonthCode, used);
+      }
+      render();
+    };
+  });
+
+  document.querySelectorAll('.sampToggle').forEach(el=>{
+    el.onchange = ()=>{
+      const i = parseInt(el.getAttribute('data-si'));
+      const field = el.getAttribute('data-field');
+      sampleRows[i][field] = el.checked;
+      render();
+    };
+  });
+
+  document.querySelectorAll('.sampToggleBtn').forEach(el=>{
+    el.onclick = ()=>{
+      const i = parseInt(el.getAttribute('data-si'));
+      const field = el.getAttribute('data-field');
+      sampleRows[i][field] = !sampleRows[i][field];
+      render();
+    };
+  });
+
+  // SUBMIT LOT
+  const btnSubmit = document.getElementById('btnSubmitLot');
+  if(btnSubmit) btnSubmit.onclick = async()=>{
+    const {minors, majors, passed} = tallyLot();
+    const fgPassQty = passed ? lotState.lotSize : 0;
+    const lotResult = passed ? 'PASS' : 'FAIL';
+    const remarks = document.getElementById('lotGeneralRemarks')?.value || '';
+
+    const units = sampleRows.map(s=>{
+      const bd = s.noBlackDot ? {ok:true,reason:'No Black Dot'} : evaluateBlackDot({visibleAt2m:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
+      const res = sampleResult(s);
+      const fails = [];
+      if(!s.aestheticPass) fails.push('Aesthetic Fail (Minor)');
+      if(!s.generalPass) fails.push('General Fail (Major)');
+      if(!s.functionalPass) fails.push('Functional Fail (Major)');
+      if(!s.screenPass) fails.push('Screen Fail (Major)');
+      if(!s.noBlackDot&&!bd.ok) fails.push('Black Dot Fail (Major): '+bd.reason);
+      return {
+        serial:s.serial, aes:s.aestheticPass?'Pass':'Fail', general:s.generalPass?'Pass':'Fail',
+        func:s.functionalPass?'Pass':'Fail', screen:s.screenPass?'Pass':'Fail',
+        bdDisplay:s.noBlackDot?'No Black Dot':bd.reason,
+        remark:fails.length?fails.join(', '):(s.remarks||'OK'), result:res==='PASS'?'Pass':'Fail'
+      };
+    });
+
+    const res = await api('submitInspection',{
+      inspector:currentUser.name, kitName:lotState.kitName, lotNumber:lotState.lotNumber,
+      lotResult, kitTotalQty:lotState.kitTotalQty, totalLots:lotState.totalLots,
+      model:lotState.model, prodMonthCode:lotState.prodMonthCode, fgPassQty,
+      generalRemarks:remarks, units
     });
     if(res.ok){
-      statusEl.innerText = "Saved to master file successfully. Lot marked as Closed.";
-    } else {
-      statusEl.innerText = "Error: " + (res.error || "unknown");
-    }
-  } catch(err){
-    statusEl.innerText = "Error saving: " + err.message;
-  }
+      toast(`${lotState.lotNumber} submitted: ${lotResult} | FG Pass: ${fgPassQty}`);
+      lotState=null; sampleRows=[];
+      await refreshKits();
+      render();
+    } else { toast(res.error||'Save error','error'); }
+  };
 }
+
+// ============================================================
+// DATA
+// ============================================================
+async function refreshKits(){
+  const res = await api('getKits',{});
+  if(res.ok) allKits = res.kits;
+}
+
+function downloadCSV(){
+  let csv = 'IS2500 OBA MASTER COMPLIANCE REPORT\n';
+  csv += `Generated: ${new Date().toLocaleString()}\n\n`;
+  csv += 'Lot Name,Kit Name,Model,Prod Month,Lot Size,Samples,Status,Result,Minor Count,Major Count,FG Pass Qty,Completed\n';
+  const groups = groupKits(allKits);
+  groups.forEach(g=>{
+    g.lots.forEach(k=>{
+      csv += `"${k.lotNumber}","${k.kitName}","${k.model||'-'}","${mmyyDisplay(k.prodMonthCode)}",${k.lotSize},${k.sampleSize},"${k.status}","${k.result||'Pending'}","","",${k.fgPassQty||0},""\n`;
+    });
+  });
+  const link = document.createElement('a');
+  link.href = 'data:text/csv;charset=utf-8,' + encodeURI(csv);
+  link.download = `IS2500_Report_${Date.now()}.csv`;
+  document.body.appendChild(link); link.click(); document.body.removeChild(link);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+render();
 </script>
 </body>
 </html>
