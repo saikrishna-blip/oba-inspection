@@ -3,826 +3,803 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IS2500 OBA Inspection HMI</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<title>IS2500 OBA Inspection</title>
 <style>
-  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-  .fadeIn{animation:fadeIn 0.3s cubic-bezier(.16,1,.3,1) forwards}
-  ::-webkit-scrollbar{width:5px;height:5px}
-  ::-webkit-scrollbar-track{background:#020617}
-  ::-webkit-scrollbar-thumb{background:#1e293b;border-radius:9999px}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;}
+body{background:#020617;color:#e2e8f0;min-height:100vh;}
+a{color:#818cf8;}
+input,select,button,textarea{font-family:inherit;}
+/* LAYOUT */
+.container{max-width:1300px;margin:0 auto;padding:20px;}
+.card{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:20px;margin-bottom:16px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+@media(max-width:900px){.grid4{grid-template-columns:1fr 1fr;}.grid3{grid-template-columns:1fr 1fr;}}
+@media(max-width:600px){.grid2,.grid3,.grid4{grid-template-columns:1fr;}}
+/* HEADER */
+header{background:#020617;border-bottom:1px solid #1e293b;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:40;}
+.logo{display:flex;align-items:center;gap:12px;}
+.logo-icon{background:linear-gradient(135deg,#4f46e5,#6366f1);padding:8px 10px;border-radius:10px;font-weight:900;font-size:13px;color:#fff;font-family:monospace;}
+.logo-title{font-size:16px;font-weight:800;color:#fff;letter-spacing:.05em;}
+.logo-sub{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.1em;}
+/* BADGES */
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;}
+.badge-pass{background:#052e16;color:#4ade80;border:1px solid #14532d;}
+.badge-fail{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d;}
+.badge-open{background:#0c1a4e;color:#818cf8;border:1px solid #1e3a8a;}
+.badge-closed{background:#1e293b;color:#94a3b8;border:1px solid #334155;}
+.badge-minor{background:#3b1d08;color:#fbbf24;border:1px solid #78350f;}
+/* BUTTONS */
+.btn{display:inline-block;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;border:none;cursor:pointer;text-transform:uppercase;letter-spacing:.05em;transition:opacity .15s;}
+.btn:hover{opacity:.85;} .btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-primary{background:#4f46e5;color:#fff;}
+.btn-success{background:#16a34a;color:#fff;}
+.btn-danger{background:#dc2626;color:#fff;}
+.btn-ghost{background:#1e293b;color:#94a3b8;border:1px solid #334155;}
+.btn-sm{padding:6px 14px;font-size:11px;border-radius:8px;}
+.btn-full{width:100%;}
+/* INPUTS */
+.field{width:100%;background:#020617;border:1px solid #334155;border-radius:10px;padding:10px 14px;color:#e2e8f0;font-size:13px;outline:none;}
+.field:focus{border-color:#4f46e5;}
+.field.err-field{border-color:#ef4444;}
+label.lbl{display:block;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
+.form-group{margin-bottom:14px;}
+/* STATS */
+.stat-card{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:18px;}
+.stat-label{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.1em;}
+.stat-value{font-size:32px;font-weight:900;color:#fff;margin-top:4px;font-family:monospace;}
+.stat-sub{font-size:11px;color:#4f46e5;margin-top:4px;font-family:monospace;}
+/* PROGRESS */
+.progress-bar{background:#1e293b;border-radius:999px;height:6px;overflow:hidden;width:100%;}
+.progress-fill{background:#4f46e5;height:100%;transition:width .3s;}
+/* KIT GROUP */
+.kit-group{background:#0f172a;border:1px solid #1e293b;border-radius:14px;margin-bottom:16px;overflow:hidden;}
+.kit-group-header{padding:16px 20px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;}
+.kit-name{font-size:14px;font-weight:800;color:#fff;font-family:monospace;text-transform:uppercase;}
+.kit-meta{font-size:10px;color:#64748b;font-family:monospace;margin-top:4px;}
+.lot-row{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid #1e293b;flex-wrap:wrap;gap:8px;}
+.lot-row:last-child{border-bottom:none;}
+.lot-name{font-size:12px;font-weight:700;color:#c7d2fe;font-family:monospace;}
+.lot-meta{font-size:10px;color:#475569;font-family:monospace;margin-top:2px;}
+.lot-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+/* EDIT LOT PANEL */
+.edit-panel{background:#020617;border-top:1px solid #1e293b;padding:16px 20px;}
+.edit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
+@media(max-width:700px){.edit-grid{grid-template-columns:1fr 1fr;}}
+/* TOAST */
+#toast{position:fixed;top:20px;right:20px;z-index:100;padding:14px 22px;border-radius:12px;font-size:13px;font-weight:700;display:none;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+#toast.show{display:block;}
+#toast.success{background:#16a34a;color:#fff;}
+#toast.error{background:#dc2626;color:#fff;}
+/* INSPECTION SCREEN */
+.insp-header{background:#020617;border-bottom:1px solid #1e293b;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:40;}
+.insp-meta{font-size:10px;color:#64748b;font-family:monospace;margin-top:2px;}
+.tally-box{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:10px 16px;text-align:center;}
+.tally-label{font-size:9px;color:#64748b;text-transform:uppercase;font-family:monospace;}
+.tally-value{font-size:18px;font-weight:900;font-family:monospace;}
+/* SAMPLE CARD */
+.sample-card{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:16px;margin-bottom:12px;}
+.sample-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.sample-num{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;font-family:monospace;}
+.sample-result{font-size:12px;font-weight:900;font-family:monospace;}
+.result-pass{color:#4ade80;}
+.result-minor{color:#fbbf24;}
+.result-major{color:#f87171;}
+.result-pending{color:#475569;}
+/* TOGGLE BUTTONS */
+.toggle-group{display:flex;flex-direction:column;gap:4px;}
+.toggle-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;}
+.toggle-btn{padding:8px 6px;border-radius:8px;border:none;cursor:pointer;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;width:100%;transition:all .15s;}
+.toggle-pass{background:#052e16;color:#4ade80;border:1px solid #14532d;}
+.toggle-fail{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d;}
+/* BD SECTION */
+.bd-box{background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-top:10px;}
+.bd-result-ok{color:#4ade80;font-size:11px;font-family:monospace;}
+.bd-result-fail{color:#f87171;font-size:11px;font-family:monospace;}
+.bd-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px;}
+@media(max-width:600px){.bd-row{grid-template-columns:1fr 1fr 1fr;}}
+/* ERR */
+.err-msg{color:#f87171;font-size:10px;margin-top:4px;font-family:monospace;}
+/* SUBMIT SECTION */
+.submit-section{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:20px;margin-top:16px;}
+.submit-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-top:16px;}
+.tally-summary{font-size:12px;font-family:monospace;}
+/* BANNER */
+.banner{background:#0c1445;border:1px solid #1e3a8a;border-radius:12px;padding:14px 18px;display:flex;gap:12px;align-items:flex-start;}
+.banner-icon{background:#312e81;border-radius:8px;padding:6px 10px;font-family:monospace;font-weight:900;color:#818cf8;font-size:12px;flex-shrink:0;}
+.banner-text{font-size:11px;color:#94a3b8;line-height:1.6;}
+.banner-text strong{color:#c7d2fe;}
+/* DIVIDER */
+.divider{height:1px;background:#1e293b;margin:20px 0;}
+/* FLEX */
+.flex{display:flex;} .items-center{align-items:center;} .justify-between{justify-content:space-between;}
+.gap-2{gap:8px;} .gap-3{gap:12px;} .flex-wrap{flex-wrap:wrap;}
+.mt-1{margin-top:4px;} .mt-2{margin-top:8px;} .mt-3{margin-top:12px;}
+.text-sm{font-size:12px;} .text-xs{font-size:10px;} .mono{font-family:monospace;}
+.text-muted{color:#64748b;} .text-white{color:#fff;} .text-pass{color:#4ade80;} .text-fail{color:#f87171;} .text-warn{color:#fbbf24;}
+.bold{font-weight:700;} .hidden{display:none;}
+footer{text-align:center;padding:20px;font-size:10px;color:#334155;font-family:monospace;border-top:1px solid #1e293b;margin-top:40px;}
 </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
-
+<body>
+<div id="toast"></div>
 <div id="app"></div>
 
 <script>
 // ============================================================
 // STATE
 // ============================================================
-let API_URL = localStorage.getItem('oba_api_url') || '';
-let currentUser = null; // {username, role, name}
+let API_URL = localStorage.getItem('oba_api_url')||'';
+let currentUser = null;
 let allKits = [];
-let lotState = null;      // active inspection lot
-let sampleRows = [];      // 13 sample row objects
-let notification = null;
-let notifTimer = null;
+let lotState = null;
+let sampleRows = [];
 
-const MODEL_CODES = { 'LH1G':'1217', 'LH3G':'1218' };
+const MODEL_CODES = {'LH1G':'1217','LH3G':'1218'};
 
 // ============================================================
-// UTILITY
+// UTILS
 // ============================================================
-function mmyy(str){ // "2026-06" -> "0626"
-  if(!str) return '';
-  const [y,m] = str.split('-');
-  return m + y.slice(2);
-}
-function mmyyDisplay(code){ // "0626" -> "06/2026"
-  if(!code||code.length!==4) return '-';
-  return code.slice(0,2)+'/20'+code.slice(2);
-}
-function mmyyToInput(code){ // "0626" -> "2026-06"
-  if(!code||code.length!==4) return '';
-  return '20'+code.slice(2)+'-'+code.slice(0,2);
+function mmyy(str){ if(!str)return''; const[y,m]=str.split('-'); return m+y.slice(2); }
+function mmyyDisplay(c){ if(!c||c.length!==4)return'-'; return c.slice(0,2)+'/20'+c.slice(2); }
+function mmyyToInput(c){ if(!c||c.length!==4)return''; return'20'+c.slice(2)+'-'+c.slice(0,2); }
+
+let toastTimer=null;
+function toast(msg,type='success'){
+  clearTimeout(toastTimer);
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='show '+(type==='error'?'error':'success');
+  toastTimer=setTimeout(()=>el.className='',3500);
 }
 
-function toast(msg, type='success'){
-  clearTimeout(notifTimer);
-  notification = {msg, type};
-  render();
-  notifTimer = setTimeout(()=>{ notification=null; render(); }, 3500);
-}
-
-async function api(action, payload){
-  payload = payload||{};
-  payload.action = action;
-  const r = await fetch(API_URL,{
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify(payload)
-  });
+async function api(action,payload){
+  payload=payload||{}; payload.action=action;
+  const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
   return r.json();
 }
 
 // ============================================================
-// BLACK DOT EVALUATOR (exact logic from IS 2500)
+// BLACK DOT EVALUATOR
 // ============================================================
-function evaluateBlackDot({visibleAt2m, D, N, DS, area}){
-  if(!visibleAt2m) return {ok:true, reason:'Not visible from 2m — Acceptable regardless of quantity.'};
-  D = parseFloat(D)||0; N = parseInt(N)||0; DS = parseFloat(DS)||0;
-  if(D > 2.4) return {ok:false, reason:`D=${D}mm > 2.4mm — FAIL (Major)`};
-  if(D <= 1.28){
-    if(N<=3 && DS>=15) return {ok:true, reason:`D=${D}mm ≤ 1.28mm, N=${N}, DS=${DS}mm — OK (no area distinction needed)`};
-    return {ok:false, reason:`D=${D}mm ≤ 1.28mm but N=${N}>3 or DS=${DS}<15mm — FAIL`};
+function evalBD({visible,D,N,DS,area}){
+  if(!visible) return{ok:true,reason:'Not visible at 2m — Acceptable.'};
+  D=parseFloat(D)||0; N=parseInt(N)||0; DS=parseFloat(DS)||0;
+  if(D>2.4) return{ok:false,reason:`D=${D}mm > 2.4mm — FAIL (Major)`};
+  if(D<=1.28){
+    if(N<=3&&DS>=15) return{ok:true,reason:`D=${D}mm ≤ 1.28mm, N=${N}, DS=${DS}mm — OK`};
+    return{ok:false,reason:`D=${D}mm ≤ 1.28mm but N=${N}>3 or DS=${DS}<15mm — FAIL`};
   }
-  // 1.28 < D <= 2.4
-  if(N>3) return {ok:false, reason:`D=${D}mm, N=${N}>3 — FAIL`};
-  if(DS<15) return {ok:false, reason:`D=${D}mm, DS=${DS}mm<15mm — FAIL`};
-  if(area==='A'){ if(N<=1) return {ok:true, reason:`D=${D}mm in Area A, N=${N}≤1 — OK`}; return {ok:false, reason:`Area A: N=${N}>1 — FAIL`}; }
-  if(area==='B'){ if(N<=3) return {ok:true, reason:`D=${D}mm in Area B, N=${N}≤3 — OK`}; return {ok:false, reason:`Area B: N=${N}>3 — FAIL`}; }
-  if(area==='A+B'){ if(N<=3) return {ok:true, reason:`D=${D}mm in Area A+B, N=${N}≤3 — OK`}; return {ok:false, reason:`Area A+B: N=${N}>3 — FAIL`}; }
-  return {ok:false, reason:'Unknown area'};
+  if(N>3) return{ok:false,reason:`D=${D}mm, N=${N}>3 — FAIL`};
+  if(DS<15) return{ok:false,reason:`D=${D}mm, DS=${DS}mm<15 — FAIL`};
+  if(area==='A'){ return N<=1?{ok:true,reason:`Area A: D=${D}mm, N=${N}≤1 — OK`}:{ok:false,reason:`Area A: N=${N}>1 — FAIL`}; }
+  if(area==='B'){ return N<=3?{ok:true,reason:`Area B: D=${D}mm, N=${N}≤3 — OK`}:{ok:false,reason:`Area B: N=${N}>3 — FAIL`}; }
+  if(area==='A+B'){ return N<=3?{ok:true,reason:`Area A+B: D=${D}mm, N=${N}≤3 — OK`}:{ok:false,reason:`Area A+B: N=${N}>3 — FAIL`}; }
+  return{ok:false,reason:'Unknown area'};
 }
 
 // ============================================================
 // SERIAL VALIDATION
 // ============================================================
-function validateSerial(serial, model, prodMonthCode, existingInBatch){
+function validateSerial(serial,model,prodMonthCode,batchUsed){
   if(!serial||serial.trim().length!==15) return 'Must be exactly 15 digits';
-  const s = serial.trim().toUpperCase();
-  const expModel = MODEL_CODES[model]||'';
-  if(s.substring(0,4)!==expModel) return `Model code mismatch — expected ${expModel} for ${model}`;
+  const s=serial.trim().toUpperCase();
+  const em=MODEL_CODES[model]||'';
+  if(s.substring(0,4)!==em) return `Model prefix mismatch — expected ${em} for ${model}`;
   if(s.substring(4,8)!==prodMonthCode) return `Month code mismatch — expected ${prodMonthCode} (${mmyyDisplay(prodMonthCode)})`;
-  const mm = parseInt(s.substring(4,6));
-  if(isNaN(mm)||mm<1||mm>12) return 'Invalid month digits (01-12)';
-  if(!/^\d{7}$/.test(s.substring(8))) return 'Last 7 characters must be numeric';
-  if(existingInBatch && existingInBatch.includes(s)) return 'Duplicate within current batch';
-  return ''; // valid
+  const mm=parseInt(s.substring(4,6));
+  if(isNaN(mm)||mm<1||mm>12) return 'Invalid month digits (01–12)';
+  if(!/^\d{7}$/.test(s.substring(8))) return 'Last 7 chars must be numeric';
+  if(batchUsed&&batchUsed.includes(s)) return 'Duplicate within current batch';
+  return '';
 }
 
 // ============================================================
-// LOT TALLY
+// TALLY
 // ============================================================
 function tallyLot(){
-  let minors=0, majors=0;
+  let minors=0,majors=0;
   sampleRows.forEach(s=>{
     if(!s.aestheticPass) minors++;
     if(!s.generalPass||!s.functionalPass||!s.screenPass) majors++;
     if(!s.noBlackDot){
-      const bd = evaluateBlackDot({visibleAt2m:s.bdVisible, D:s.bdD, N:s.bdN, DS:s.bdDS, area:s.bdArea});
+      const bd=evalBD({visible:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
       if(!bd.ok) majors++;
     }
   });
-  return {minors, majors, passed: minors<=1 && majors===0};
+  return{minors,majors,passed:minors<=1&&majors===0};
 }
 
-function sampleResult(s){
-  let isMajor = !s.generalPass||!s.functionalPass||!s.screenPass;
-  if(!s.noBlackDot){
-    const bd = evaluateBlackDot({visibleAt2m:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
-    if(!bd.ok) isMajor=true;
-  }
-  const isMinor = !s.aestheticPass;
-  if(isMajor) return 'FAIL-MAJOR';
-  if(isMinor) return 'FAIL-MINOR';
-  return 'PASS';
+function sampleStatus(s){
+  let major=!s.generalPass||!s.functionalPass||!s.screenPass;
+  if(!s.noBlackDot){const bd=evalBD({visible:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});if(!bd.ok)major=true;}
+  if(major) return'FAIL-MAJOR';
+  if(!s.aestheticPass) return'FAIL-MINOR';
+  if(!s.serial||s.serialError) return'PENDING';
+  return'PASS';
 }
 
 // ============================================================
 // GROUP KITS
 // ============================================================
 function groupKits(kits){
-  const map={}, order=[];
-  kits.forEach(k=>{
-    if(!map[k.kitName]){map[k.kitName]=[]; order.push(k.kitName);}
-    map[k.kitName].push(k);
-  });
+  const map={},order=[];
+  kits.forEach(k=>{ if(!map[k.kitName]){map[k.kitName]=[];order.push(k.kitName);} map[k.kitName].push(k); });
   return order.map(name=>{
-    const lots = map[name];
-    const totalLots = Number(lots[0].totalLots)||lots.length;
-    const kitQty = Number(lots[0].kitTotalQty)||0;
-    const completed = lots.filter(l=>l.status==='Closed').length;
-    const pending = lots.filter(l=>l.status==='Open').length;
-    const passLots = lots.filter(l=>l.result==='PASS').length;
-    const failLots = lots.filter(l=>l.result==='FAIL').length;
-    const fgPass = lots.reduce((s,l)=>s+(Number(l.fgPassQty)||0),0);
-    return {name, lots, totalLots, kitQty, completed, pending, passLots, failLots, fgPass,
-            model:lots[0].model, prodMonthCode:lots[0].prodMonthCode};
+    const lots=map[name];
+    lots.sort((a,b)=>{
+      const na=parseInt((a.lotNumber||'').replace(/\D+/g,''))||0;
+      const nb=parseInt((b.lotNumber||'').replace(/\D+/g,''))||0;
+      return na-nb;
+    });
+    const storedTotal=Number(lots[0].totalLots);
+    const totalLots=(storedTotal>0)?storedTotal:lots.length;
+    const storedQty=Number(lots[0].kitTotalQty);
+    const kitQty=(storedQty>0)?storedQty:lots.reduce((s,l)=>s+(Number(l.lotSize)||0),0);
+    const completed=lots.filter(l=>l.status==='Closed').length;
+    const pending=lots.filter(l=>l.status==='Open').length;
+    const passLots=lots.filter(l=>l.result==='PASS').length;
+    const failLots=lots.filter(l=>l.result==='FAIL').length;
+    const fgPass=lots.reduce((s,l)=>s+(isNaN(Number(l.fgPassQty))?0:Number(l.fgPassQty)),0);
+    return{name,lots,totalLots,kitQty,completed,pending,passLots,failLots,fgPass,
+      model:lots[0].model||'-',prodMonthCode:lots[0].prodMonthCode||''};
   });
 }
 
 // ============================================================
-// FRESH SAMPLE TEMPLATES
+// FRESH SAMPLES
 // ============================================================
 function freshSamples(n){
   return Array.from({length:n},(_,i)=>({
-    sampleNum:i+1, serial:'', serialError:'',
-    aestheticPass:true, generalPass:true, functionalPass:true, screenPass:true,
-    noBlackDot:true, bdVisible:false, bdD:'1.2', bdN:'1', bdDS:'20', bdArea:'A',
-    bdJudgement:{ok:true,reason:'No Black Dot detected.'}, remarks:''
+    sampleNum:i+1,serial:'',serialError:'',
+    aestheticPass:true,generalPass:true,functionalPass:true,screenPass:true,
+    noBlackDot:true,bdVisible:false,bdD:'1.2',bdN:'1',bdDS:'20',bdArea:'A',remarks:''
   }));
 }
 
 // ============================================================
-// RENDER ENGINE
+// RENDER ROUTER
 // ============================================================
-function render(){ document.getElementById('app').innerHTML = buildHTML(); bindEvents(); }
+function render(){
+  const app=document.getElementById('app');
+  if(!API_URL){ app.innerHTML=renderSetup(); bindSetup(); return; }
+  if(!currentUser){ app.innerHTML=renderLogin(); bindLogin(); return; }
+  if(lotState&&sampleRows.length){ app.innerHTML=renderInspection(); bindInspection(); return; }
+  app.innerHTML=renderDashboard(); bindDashboard();
+}
 
-function buildHTML(){
-  const sections = [];
+// ============================================================
+// SETUP SCREEN
+// ============================================================
+function renderSetup(){
+  return`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;">
+  <div class="card" style="max-width:480px;width:100%;">
+    <div class="logo" style="margin-bottom:24px;">
+      <div class="logo-icon">QC</div>
+      <div><div class="logo-title">IS2500 OBA INSPECTION</div><div class="logo-sub">One-time Backend Setup</div></div>
+    </div>
+    <div class="form-group">
+      <label class="lbl">Apps Script Web App URL</label>
+      <input id="apiUrlInput" class="field" placeholder="https://script.google.com/macros/s/.../exec" type="text">
+    </div>
+    <button id="btnSaveUrl" class="btn btn-primary btn-full">Connect Backend</button>
+    <p class="text-xs text-muted mt-2">Paste your Google Apps Script Web App URL. Stored in your browser for future visits.</p>
+  </div></div>`;
+}
+function bindSetup(){
+  document.getElementById('btnSaveUrl').onclick=()=>{
+    const v=document.getElementById('apiUrlInput').value.trim();
+    if(!v){toast('Enter the Apps Script URL','error');return;}
+    API_URL=v; localStorage.setItem('oba_api_url',v); render();
+  };
+}
 
-  // Toast
-  if(notification){
-    const col = notification.type==='error' ? 'bg-rose-500' : 'bg-emerald-500';
-    sections.push(`<div class="fixed top-5 right-5 z-50 ${col} text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-bold fadeIn">${notification.msg}</div>`);
-  }
-
-  // SETUP SCREEN
-  if(!API_URL){
-    sections.push(`
-    <div class="min-h-screen flex items-center justify-center p-6">
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full space-y-6 shadow-2xl">
-        <div class="flex items-center gap-3">
-          <div class="bg-indigo-600 p-2.5 rounded-xl"><span class="font-mono font-black text-sm text-white">QC</span></div>
-          <div><h1 class="text-lg font-extrabold text-white tracking-wider">IS2500 OBA INSPECTION</h1>
-          <p class="text-[10px] text-slate-400 uppercase tracking-widest">One-time Backend Setup</p></div>
-        </div>
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Apps Script Web App URL</label>
-          <input id="apiUrlInput" type="text" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-indigo-500 outline-none" placeholder="https://script.google.com/macros/s/.../exec">
-        </div>
-        <button id="btnSaveUrl" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-sm uppercase tracking-wider">Connect</button>
-        <p class="text-xs text-slate-500">Paste your Google Apps Script Web App URL. This is stored locally in your browser.</p>
-      </div>
-    </div>`);
-    return sections.join('');
-  }
-
-  // LOGIN SCREEN
-  if(!currentUser){
-    sections.push(`
-    <div class="min-h-screen flex items-center justify-center p-6">
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-sm w-full space-y-6 shadow-2xl">
-        <div class="flex items-center gap-3">
-          <div class="bg-indigo-600 p-2.5 rounded-xl"><span class="font-mono font-black text-sm text-white">QC</span></div>
-          <div><h1 class="text-lg font-extrabold text-white tracking-wider">IS2500 OBA HMI</h1>
-          <p class="text-[10px] text-slate-400 uppercase tracking-widest">Inspection Management System</p></div>
-        </div>
-        <div class="space-y-3">
-          <input id="loginUser" type="text" placeholder="Username" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
-          <input id="loginPass" type="password" placeholder="Password" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
-          <div id="loginErr" class="text-rose-400 text-xs hidden"></div>
-        </div>
-        <button id="btnLogin" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-sm uppercase tracking-wider">Login</button>
-        <button id="btnChangeUrl" class="w-full text-slate-500 hover:text-slate-300 text-xs py-1">Change backend URL</button>
-      </div>
-    </div>`);
-    return sections.join('');
-  }
-
-  // INSPECTION SCREEN (active lot)
-  if(lotState && sampleRows.length>0){
-    sections.push(buildInspectionScreen());
-    return sections.join('');
-  }
-
-  // MAIN DASHBOARD
-  sections.push(buildDashboard());
-  return sections.join('');
+// ============================================================
+// LOGIN SCREEN
+// ============================================================
+function renderLogin(){
+  return`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;">
+  <div class="card" style="max-width:380px;width:100%;">
+    <div class="logo" style="margin-bottom:24px;">
+      <div class="logo-icon">QC</div>
+      <div><div class="logo-title">IS2500 OBA HMI</div><div class="logo-sub">Inspection Management System</div></div>
+    </div>
+    <div class="form-group"><label class="lbl">Username</label><input id="loginUser" class="field" type="text" autocomplete="username"></div>
+    <div class="form-group"><label class="lbl">Password</label><input id="loginPass" class="field" type="password" autocomplete="current-password"></div>
+    <div id="loginErr" class="err-msg hidden"></div>
+    <button id="btnLogin" class="btn btn-primary btn-full" style="margin-top:8px;">Login</button>
+    <div class="mt-2 text-center"><button id="btnChangeUrl" class="btn btn-ghost btn-sm" style="margin-top:8px;">Change Backend URL</button></div>
+  </div></div>`;
+}
+function bindLogin(){
+  document.getElementById('loginPass').onkeydown=e=>{ if(e.key==='Enter') document.getElementById('btnLogin').click(); };
+  document.getElementById('btnLogin').onclick=async()=>{
+    const u=document.getElementById('loginUser').value.trim();
+    const p=document.getElementById('loginPass').value.trim();
+    const errEl=document.getElementById('loginErr');
+    errEl.classList.add('hidden');
+    try{
+      const res=await api('login',{username:u,password:p});
+      if(res.ok){ currentUser={username:res.username,role:res.role,name:res.name}; await refreshKits(); render(); }
+      else{ errEl.textContent=res.error||'Login failed'; errEl.classList.remove('hidden'); }
+    }catch(e){ errEl.textContent='Network error: '+e.message; errEl.classList.remove('hidden'); }
+  };
+  document.getElementById('btnChangeUrl').onclick=()=>{ API_URL=''; localStorage.removeItem('oba_api_url'); render(); };
 }
 
 // ============================================================
 // DASHBOARD
 // ============================================================
-function buildDashboard(){
-  const groups = groupKits(allKits);
-  const totalLots = allKits.length;
-  const completedLots = allKits.filter(k=>k.status==='Closed').length;
-  const passLots = allKits.filter(k=>k.result==='PASS').length;
-  const failLots = allKits.filter(k=>k.result==='FAIL').length;
-  const totalFG = allKits.reduce((s,k)=>s+(Number(k.fgPassQty)||0),0);
-  const totalKitQty = groups.reduce((s,g)=>s+g.kitQty,0);
-  const pct = totalLots>0 ? Math.round(completedLots/totalLots*100) : 0;
+function renderDashboard(){
+  const groups=groupKits(allKits);
+  const totalLots=allKits.length;
+  const completedLots=allKits.filter(k=>k.status==='Closed').length;
+  const passLots=allKits.filter(k=>k.result==='PASS').length;
+  const failLots=allKits.filter(k=>k.result==='FAIL').length;
+  const totalFG=allKits.reduce((s,k)=>s+(isNaN(Number(k.fgPassQty))?0:Number(k.fgPassQty)),0);
+  const totalKitQty=groups.reduce((s,g)=>s+g.kitQty,0);
+  const pct=totalLots>0?Math.round(completedLots/totalLots*100):0;
+  const isAdmin=currentUser.role==='admin';
 
-  const isAdmin = currentUser.role==='admin';
+  let h=`
+  <header>
+    <div class="logo">
+      <div class="logo-icon">QC</div>
+      <div><div class="logo-title">IS2500 OBA INSPECTION <span style="font-size:10px;background:#1e1b4b;color:#818cf8;padding:2px 8px;border-radius:20px;font-weight:400;vertical-align:middle;">HMI v5</span></div>
+      <div class="logo-sub">IS 2500 | Level G2 | Minor Ac≤1 | Major Ac=0</div></div>
+    </div>
+    <div class="flex gap-2 items-center flex-wrap">
+      <span style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:6px 14px;font-size:11px;font-family:monospace;color:#94a3b8;">
+        <span style="display:inline-block;width:7px;height:7px;background:#4ade80;border-radius:50%;margin-right:6px;animation:pulse 2s infinite;"></span>
+        ${currentUser.name} (${currentUser.role})
+      </span>
+      <button id="btnLogout" class="btn btn-ghost btn-sm">Logout</button>
+    </div>
+  </header>
+  <div class="container">
 
-  let html = `
-  <div class="min-h-screen flex flex-col">
-    <!-- HEADER -->
-    <header class="bg-slate-950/90 border-b border-slate-900 sticky top-0 z-40 backdrop-blur-md">
-      <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
-        <div class="flex items-center gap-3">
-          <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
-            <span class="font-mono font-black text-sm text-white">QC</span>
-          </div>
-          <div>
-            <h1 class="text-lg font-extrabold tracking-wider text-white">IS2500 OBA INSPECTION
-              <span class="text-[10px] bg-indigo-500/10 text-indigo-400 font-normal px-2 py-0.5 rounded-full border border-indigo-500/30 ml-2">HMI v5.0</span>
-            </h1>
-            <p class="text-[10px] text-slate-400 uppercase tracking-widest">Sampling Plan: IS 2500 | Level G2 | Minor Ac≤1 | Major Ac=0</p>
-          </div>
-        </div>
-        <div class="flex items-center gap-3">
-          <span class="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-3 py-1.5 rounded-xl flex items-center gap-1.5 font-mono">
-            <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
-            ${currentUser.name} (${currentUser.role})
-          </span>
-          <button id="btnLogout" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider">Logout</button>
-        </div>
-      </div>
-    </header>
+  <!-- STATS -->
+  <div class="grid4" style="margin-bottom:20px;">
+    <div class="stat-card"><div class="stat-label">Total Lots</div><div class="stat-value">${totalLots}</div><div class="stat-sub">Kit Qty: ${totalKitQty}</div></div>
+    <div class="stat-card">
+      <div class="stat-label">Progress</div>
+      <div class="stat-value">${completedLots}<span style="font-size:14px;color:#475569;"> / ${totalLots}</span></div>
+      <div class="progress-bar mt-2"><div class="progress-fill" style="width:${pct}%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Yield Rate</div>
+      <div class="stat-value" style="color:#38bdf8;">${completedLots>0?((passLots/completedLots)*100).toFixed(1):'0.0'}%</div>
+      <div class="stat-sub"><span class="text-pass">${passLots} PASS</span> &nbsp; <span class="text-fail">${failLots} FAIL</span></div>
+    </div>
+    <div class="stat-card"><div class="stat-label">FG Released</div><div class="stat-value text-pass">${totalFG}</div><div class="stat-sub">Certified units</div></div>
+  </div>
 
-    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+  <!-- BANNER -->
+  <div class="banner" style="margin-bottom:20px;">
+    <div class="banner-icon">i</div>
+    <div class="banner-text">
+      <strong>IS2500 Standard:</strong> Lot size <strong>90 units</strong> | Sample <strong>13 units</strong> | Minor (Aesthetic): <strong class="text-warn">≤1 allowed</strong> | Major (General/Functional/Screen/Black Dot): <strong class="text-fail">0 allowed</strong><br>
+      Serial: 15 digits = Model(4) + MMYY(4) + Unique(7) | Black Dot: D≤1.28→N≤3,DS≥15mm; 1.28&lt;D≤2.4→Area rules; D>2.4→FAIL
+    </div>
+  </div>`;
 
-    <!-- STATS ROW -->
-    <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 fadeIn">
-      <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
-        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Lots</p>
-        <p class="text-3xl font-black text-white mt-1">${totalLots}</p>
-        <p class="text-xs text-indigo-400 font-mono mt-1">Kit Qty: ${totalKitQty}</p>
-      </div>
-      <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
-        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Progress</p>
-        <p class="text-3xl font-black text-white mt-1">${completedLots}<span class="text-sm font-normal text-slate-500"> / ${totalLots}</span></p>
-        <div class="mt-2 w-full bg-slate-950 rounded-full h-1.5"><div class="bg-emerald-500 h-1.5 rounded-full" style="width:${pct}%"></div></div>
-      </div>
-      <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
-        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Yield Rate</p>
-        <p class="text-3xl font-black text-sky-400 mt-1">${completedLots>0?((passLots/completedLots)*100).toFixed(1):'0.0'}%</p>
-        <p class="text-[10px] font-mono mt-1"><span class="text-emerald-400 font-bold">${passLots} PASS</span> <span class="text-rose-400 font-bold ml-2">${failLots} FAIL</span></p>
-      </div>
-      <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
-        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">FG Released</p>
-        <p class="text-3xl font-black text-emerald-400 mt-1">${totalFG}</p>
-        <p class="text-[10px] font-mono text-slate-500 mt-1">Certified units</p>
-      </div>
-    </section>
-
-    <!-- STANDARD REFERENCE BANNER -->
-    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 flex items-start gap-3">
-      <div class="p-2 bg-indigo-500/10 rounded-xl text-indigo-400 shrink-0 font-mono font-bold text-sm">i</div>
-      <div>
-        <p class="text-xs font-bold text-white uppercase tracking-wider">IS2500 Standard Reference</p>
-        <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">Lot size: <strong class="text-indigo-400">90 units</strong> | Sample: <strong class="text-indigo-400">13 units</strong> | Minor (Aesthetic): <strong class="text-amber-400">≤1 allowed</strong> | Major (General/Functional/Screen/Black Dot): <strong class="text-rose-400">0 allowed</strong> | Black Dot: D≤1.28mm→OK if N≤3 & DS≥15mm; 1.28<D≤2.4mm→Area rules apply; D>2.4mm→FAIL</p>
-      </div>
-    </div>`;
-
-  // ADMIN CREATE KIT
+  // ADMIN FORMS
   if(isAdmin){
-    html += `
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-    <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-5">
-      <div class="border-b border-slate-800 pb-3">
-        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Create New Kit</h2>
-        <p class="text-[10px] text-slate-500 mt-1">Lots auto-created = Kit Qty ÷ 90</p>
-      </div>
-      <div class="space-y-3">
-        <div>
-          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Kit Name</label>
-          <input id="newKitName" type="text" placeholder="e.g. LH1G-JUN26" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
-        </div>
-        <div>
-          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Kit Quantity (total units)</label>
-          <input id="newKitQty" type="number" placeholder="e.g. 2000" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
-        </div>
-        <div>
-          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Model</label>
-          <select id="newModel" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
-            <option value="LH1G">LH1G (Code: 1217)</option>
-            <option value="LH3G">LH3G (Code: 1218)</option>
-          </select>
-        </div>
-        <div>
-          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Production Month</label>
-          <input id="newProdMonth" type="month" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
-        </div>
-        <button id="btnCreateKit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-sm uppercase tracking-wider">Create Kit</button>
-        <div id="createKitMsg" class="text-xs text-emerald-400 hidden"></div>
-      </div>
+    h+=`
+    <div class="grid3" style="margin-bottom:20px;">
+    <!-- CREATE KIT -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e293b;">Create New Kit</div>
+      <div class="form-group"><label class="lbl">Kit Name</label><input id="newKitName" class="field" placeholder="e.g. LH1G-JUN26" type="text"></div>
+      <div class="form-group"><label class="lbl">Kit Quantity (total units)</label><input id="newKitQty" class="field" placeholder="e.g. 2000" type="number"></div>
+      <div class="form-group"><label class="lbl">Model</label>
+        <select id="newModel" class="field"><option value="LH1G">LH1G (Code: 1217)</option><option value="LH3G">LH3G (Code: 1218)</option></select></div>
+      <div class="form-group"><label class="lbl">Production Month</label><input id="newProdMonth" class="field" type="month"></div>
+      <button id="btnCreateKit" class="btn btn-primary btn-full">Create Kit</button>
+      <div id="createKitMsg" class="text-xs text-pass mt-2 hidden"></div>
+      <div class="text-xs text-muted mt-2">Number of lots = Kit Qty ÷ 90. Remainder becomes last lot (same 13-sample inspection applies).</div>
     </div>
 
-    <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-5">
-      <div class="border-b border-slate-800 pb-3">
-        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Add Inspector</h2>
-      </div>
-      <div class="space-y-3">
-        <input id="newInsUser" type="text" placeholder="Username" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
-        <input id="newInsPass" type="text" placeholder="Password" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
-        <input id="newInsName" type="text" placeholder="Full Name" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
-        <select id="newInsRole" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
-          <option value="inspector">Inspector</option>
-          <option value="admin">Admin</option>
-        </select>
-        <button id="btnAddUser" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 rounded-xl text-sm uppercase tracking-wider">Add User</button>
-        <div id="addUserMsg" class="text-xs text-emerald-400 hidden"></div>
-      </div>
+    <!-- ADD USER -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e293b;">Add Inspector / Admin</div>
+      <div class="form-group"><label class="lbl">Username</label><input id="newInsUser" class="field" type="text"></div>
+      <div class="form-group"><label class="lbl">Password</label><input id="newInsPass" class="field" type="text"></div>
+      <div class="form-group"><label class="lbl">Full Name</label><input id="newInsName" class="field" type="text"></div>
+      <div class="form-group"><label class="lbl">Role</label>
+        <select id="newInsRole" class="field"><option value="inspector">Inspector</option><option value="admin">Admin</option></select></div>
+      <button id="btnAddUser" class="btn btn-ghost btn-full">Add User</button>
+      <div id="addUserMsg" class="text-xs text-pass mt-2 hidden"></div>
     </div>
 
-    <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-4">
-      <div class="border-b border-slate-800 pb-3">
-        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Quick Actions</h2>
-      </div>
-      <button id="btnDownloadCSV" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-sm uppercase tracking-wider">⬇ Download Master CSV</button>
-      <button id="btnRefresh" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 rounded-xl text-sm uppercase tracking-wider">↻ Refresh Data</button>
+    <!-- ACTIONS -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e293b;">Quick Actions</div>
+      <button id="btnRefresh" class="btn btn-ghost btn-full" style="margin-bottom:10px;">↻ Refresh Data</button>
+      <button id="btnDownloadCSV" class="btn btn-success btn-full">⬇ Download Master CSV</button>
     </div>
     </div>`;
   }
 
-  // KITS / LOTS LIST
-  html += `<div class="space-y-6">`;
+  // KITS LIST
+  h+=`<div id="kitsList">`;
   if(groups.length===0){
-    html += `<div class="bg-slate-900/60 rounded-2xl border border-slate-800 p-12 text-center text-slate-500 text-sm">No kits registered yet.</div>`;
+    h+=`<div class="card" style="text-align:center;color:#475569;padding:60px;">No kits registered yet.</div>`;
   } else {
     groups.forEach((g,gi)=>{
-      const pct2 = g.totalLots>0?Math.round(g.completed/g.totalLots*100):0;
-      html += `
-      <div class="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden fadeIn">
-        <div class="p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      const pct2=g.totalLots>0?Math.round(g.completed/g.totalLots*100):0;
+      h+=`
+      <div class="kit-group">
+        <div class="kit-group-header">
           <div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <h3 class="text-sm font-extrabold text-white uppercase tracking-wider font-mono">${g.name}</h3>
-              <span class="text-[10px] bg-slate-800 text-indigo-400 px-2 py-0.5 rounded font-mono">${g.model||'-'} • ${mmyyDisplay(g.prodMonthCode)}</span>
+            <div class="kit-name">${g.name}</div>
+            <div class="kit-meta">
+              Model: ${g.model} &nbsp;|&nbsp; Prod Month: ${mmyyDisplay(g.prodMonthCode)} &nbsp;|&nbsp;
+              Kit Qty: ${g.kitQty} &nbsp;|&nbsp; Total Lots: ${g.totalLots} &nbsp;|&nbsp;
+              Completed: ${g.completed}/${g.totalLots} &nbsp;|&nbsp; Pending: ${g.pending} &nbsp;|&nbsp;
+              <span class="text-pass bold">PASS: ${g.passLots}</span> &nbsp;
+              <span class="text-fail bold">FAIL: ${g.failLots}</span> &nbsp;|&nbsp;
+              <span class="text-pass bold">FG Released: ${g.fgPass}</span>
             </div>
-            <p class="text-[10px] text-slate-500 font-mono mt-1">
-              Kit Qty: ${g.kitQty} | Total Lots: ${g.totalLots} | Completed: ${g.completed} | Pending: ${g.pending}
-              | <span class="text-emerald-400 font-bold">PASS: ${g.passLots}</span>
-              | <span class="text-rose-400 font-bold">FAIL: ${g.failLots}</span>
-              | <span class="text-emerald-300 font-bold">FG Released: ${g.fgPass}</span>
-            </p>
           </div>
-          <div class="flex items-center gap-2 shrink-0">
-            <div class="bg-slate-950 rounded-full h-2 w-32 overflow-hidden"><div class="bg-indigo-500 h-full" style="width:${pct2}%"></div></div>
-            <span class="text-[10px] text-slate-400 font-mono">${pct2}%</span>
+          <div style="min-width:120px;">
+            <div class="text-xs text-muted mono" style="margin-bottom:4px;">${pct2}% done</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct2}%"></div></div>
           </div>
-        </div>
-        <div class="divide-y divide-slate-800/60">`;
+        </div>`;
 
-      g.lots.forEach((k,li)=>{
-        const kidx = allKits.indexOf(k);
-        const statusBadge = k.status==='Open'
-          ? `<span class="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded font-bold uppercase">Open</span>`
-          : `<span class="text-[9px] bg-slate-500/10 text-slate-400 border border-slate-500/20 px-2 py-0.5 rounded font-bold uppercase">Closed</span>`;
-        const resultBadge = k.result
-          ? (k.result==='PASS'
-            ? `<span class="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-bold uppercase">PASS</span>`
-            : `<span class="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded font-bold uppercase">FAIL</span>`)
-          : '';
-        const fgBadge = k.fgPassQty!=='' ? `<span class="text-[9px] text-emerald-400 font-mono">FG: ${k.fgPassQty}</span>` : '';
-
-        html += `<div class="flex items-center justify-between px-5 py-3 hover:bg-slate-800/30 transition-all flex-wrap gap-2">
+      g.lots.forEach(k=>{
+        const kidx=allKits.indexOf(k);
+        const statusBadge=k.status==='Open'?`<span class="badge badge-open">Open</span>`:`<span class="badge badge-closed">Closed</span>`;
+        const resultBadge=k.result?(k.result==='PASS'?`<span class="badge badge-pass">PASS</span>`:`<span class="badge badge-fail">FAIL</span>`):'';
+        const fgTxt=k.fgPassQty!==''&&k.fgPassQty!==undefined?`<span class="text-xs text-pass mono">FG: ${k.fgPassQty}</span>`:'';
+        h+=`
+        <div class="lot-row">
           <div>
-            <p class="text-xs font-bold text-white font-mono">${k.lotNumber}</p>
-            <p class="text-[10px] text-slate-500 font-mono">Size: ${k.lotSize} | Sample: ${k.sampleSize} | BD Limit: ≤${k.bdMax}mm</p>
+            <div class="lot-name">${k.lotNumber}</div>
+            <div class="lot-meta">Size: ${k.lotSize} | Sample: ${k.sampleSize} | BD Major &gt; ${k.bdMax}mm</div>
           </div>
-          <div class="flex items-center gap-2 flex-wrap">
-            ${statusBadge} ${resultBadge} ${fgBadge}
-            ${k.status==='Open' && !isAdmin ? `<button class="startInspBtn bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-1.5 rounded-xl text-xs uppercase tracking-wider" data-idx="${kidx}">Start Inspection</button>` : ''}
-            ${isAdmin ? `<button class="editLotBtn text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-bold uppercase" data-idx="${kidx}">Edit</button>` : ''}
+          <div class="lot-actions">
+            ${statusBadge} ${resultBadge} ${fgTxt}
+            ${!isAdmin&&k.status==='Open'?`<button class="btn btn-primary btn-sm startInspBtn" data-idx="${kidx}">Start Inspection</button>`:''}
+            ${isAdmin?`<button class="btn btn-ghost btn-sm editLotBtn" data-idx="${kidx}">Edit</button>`:''}
           </div>
         </div>
-        <div id="editLotArea${kidx}" class="hidden px-5 pb-4"></div>`;
+        <div id="editPanel${kidx}" class="hidden"></div>`;
       });
 
-      html += `</div></div>`;
+      h+=`</div>`;
     });
   }
-  html += `</div></main>
+  h+=`</div>`;
 
-  <footer class="bg-slate-950 border-t border-slate-900 py-5 text-center text-[10px] text-slate-600 font-mono">
-    IS2500 Sampling Plan | Minor limit: 1 | Major limit: 0 | 13 samples per 90-unit lot | © 2026 Quality Assurance
-  </footer>
-  </div>`;
-  return html;
+  if(!isAdmin){
+    h+=`<button id="btnRefreshInsp" class="btn btn-ghost btn-sm" style="margin-top:12px;">↻ Refresh</button>`;
+  }
+
+  h+=`</div>
+  <footer>IS2500 Sampling Plan | Minor limit: ≤1 | Major limit: 0 | 13 samples per 90-unit lot | © 2026 Quality Assurance</footer>`;
+  return h;
+}
+
+function bindDashboard(){
+  const btnLogout=document.getElementById('btnLogout');
+  if(btnLogout) btnLogout.onclick=()=>{ currentUser=null; lotState=null; sampleRows=[]; render(); };
+
+  const btnRefresh=document.getElementById('btnRefresh');
+  if(btnRefresh) btnRefresh.onclick=async()=>{ await refreshKits(); render(); toast('Data refreshed'); };
+
+  const btnRefreshInsp=document.getElementById('btnRefreshInsp');
+  if(btnRefreshInsp) btnRefreshInsp.onclick=async()=>{ await refreshKits(); render(); toast('Data refreshed'); };
+
+  const btnCreateKit=document.getElementById('btnCreateKit');
+  if(btnCreateKit) btnCreateKit.onclick=async()=>{
+    const kitName=document.getElementById('newKitName').value.trim();
+    const kitQty=parseInt(document.getElementById('newKitQty').value)||0;
+    const model=document.getElementById('newModel').value;
+    const prodMonth=document.getElementById('newProdMonth').value;
+    const msgEl=document.getElementById('createKitMsg');
+    if(!kitName||kitQty<=0||!prodMonth){ toast('Fill all kit fields','error'); return; }
+    const prodMonthCode=mmyy(prodMonth);
+    const res=await api('createKit',{kitName,kitSize:kitQty,lotSize:90,sampleSize:13,bdMax:2.4,model,prodMonthCode,createdBy:currentUser.username});
+    if(res.ok){ msgEl.textContent=`Created ${res.lotsCreated} lot(s): ${kitName} Lot 1 – Lot ${res.lotsCreated}, all Open.`; msgEl.classList.remove('hidden'); document.getElementById('newKitName').value=''; document.getElementById('newKitQty').value=''; await refreshKits(); render(); toast(`Kit created: ${res.lotsCreated} lots`); }
+    else{ toast(res.error||'Error','error'); }
+  };
+
+  const btnAddUser=document.getElementById('btnAddUser');
+  if(btnAddUser) btnAddUser.onclick=async()=>{
+    const username=document.getElementById('newInsUser').value.trim();
+    const password=document.getElementById('newInsPass').value.trim();
+    const name=document.getElementById('newInsName').value.trim();
+    const role=document.getElementById('newInsRole').value;
+    if(!username||!password||!name){ toast('Fill all user fields','error'); return; }
+    const res=await api('addUser',{username,password,name,role});
+    if(res.ok){ document.getElementById('newInsUser').value=''; document.getElementById('newInsPass').value=''; document.getElementById('newInsName').value=''; const m=document.getElementById('addUserMsg'); m.textContent=`User "${username}" added.`; m.classList.remove('hidden'); toast(`User ${username} added`); }
+    else{ toast(res.error||'Error','error'); }
+  };
+
+  const btnCSV=document.getElementById('btnDownloadCSV');
+  if(btnCSV) btnCSV.onclick=downloadCSV;
+
+  // Start inspection
+  document.querySelectorAll('.startInspBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const idx=parseInt(btn.getAttribute('data-idx'));
+      const k=allKits[idx];
+      lotState={...k,sampleSize:parseInt(k.sampleSize)||13,bdMax:parseFloat(k.bdMax)||2.4};
+      sampleRows=freshSamples(lotState.sampleSize);
+      render();
+    };
+  });
+
+  // Edit lot
+  document.querySelectorAll('.editLotBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const idx=parseInt(btn.getAttribute('data-idx'));
+      const k=allKits[idx];
+      const panel=document.getElementById('editPanel'+idx);
+      if(!panel.classList.contains('hidden')){ panel.classList.add('hidden'); panel.innerHTML=''; return; }
+      panel.classList.remove('hidden');
+      panel.innerHTML=`
+      <div class="edit-panel">
+        <div class="edit-grid">
+          <div><label class="lbl">Lot Size</label><input id="eLS${idx}" class="field" type="number" value="${k.lotSize}"></div>
+          <div><label class="lbl">Sample Size</label><input id="eSS${idx}" class="field" type="number" value="${k.sampleSize}"></div>
+          <div><label class="lbl">BD Max (mm)</label><input id="eBD${idx}" class="field" type="number" step="0.01" value="${k.bdMax}"></div>
+          <div><label class="lbl">Status</label><select id="eST${idx}" class="field"><option value="Open" ${k.status==='Open'?'selected':''}>Open</option><option value="Closed" ${k.status==='Closed'?'selected':''}>Closed</option></select></div>
+          <div><label class="lbl">Model</label><select id="eMD${idx}" class="field"><option value="LH1G" ${k.model==='LH1G'?'selected':''}>LH1G (1217)</option><option value="LH3G" ${k.model==='LH3G'?'selected':''}>LH3G (1218)</option></select></div>
+          <div><label class="lbl">Production Month</label><input id="ePM${idx}" class="field" type="month" value="${mmyyToInput(k.prodMonthCode)}"></div>
+        </div>
+        <button class="btn btn-primary btn-sm saveLotEdit" data-idx="${idx}">Save Changes</button>
+        <button class="btn btn-ghost btn-sm cancelLotEdit" data-idx="${idx}" style="margin-left:8px;">Cancel</button>
+      </div>`;
+      panel.querySelector('.saveLotEdit').onclick=async()=>{
+        const lotSize=parseInt(document.getElementById('eLS'+idx).value);
+        const sampleSize=parseInt(document.getElementById('eSS'+idx).value);
+        const bdMax=parseFloat(document.getElementById('eBD'+idx).value);
+        const status=document.getElementById('eST'+idx).value;
+        const model=document.getElementById('eMD'+idx).value;
+        const pm=document.getElementById('ePM'+idx).value;
+        const prodMonthCode=pm?mmyy(pm):k.prodMonthCode;
+        const res=await api('updateKit',{kitName:k.kitName,lotNumber:k.lotNumber,lotSize,sampleSize,bdMax,status,model,prodMonthCode});
+        if(res.ok){ await refreshKits(); render(); toast('Lot updated'); }
+        else{ toast(res.error||'Error','error'); }
+      };
+      panel.querySelector('.cancelLotEdit').onclick=()=>{ panel.classList.add('hidden'); panel.innerHTML=''; };
+    };
+  });
 }
 
 // ============================================================
 // INSPECTION SCREEN
 // ============================================================
-function buildInspectionScreen(){
-  const lot = lotState;
-  const {minors, majors, passed} = tallyLot();
-  const filledSamples = sampleRows.filter(s=>s.serial&&!s.serialError).length;
-  const allReady = filledSamples===sampleRows.length && sampleRows.every(s=>!s.serialError);
+function renderInspection(){
+  const lot=lotState;
+  const{minors,majors,passed}=tallyLot();
+  const filledOk=sampleRows.filter(s=>s.serial&&!s.serialError).length;
+  const allReady=filledOk===sampleRows.length&&sampleRows.every(s=>!s.serialError&&s.serial);
 
-  let html = `
-  <div class="min-h-screen flex flex-col">
-    <header class="bg-slate-950/90 border-b border-slate-900 sticky top-0 z-40 backdrop-blur-md">
-      <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
-        <div>
-          <h1 class="text-sm font-extrabold text-white uppercase font-mono">${lot.kitName} — ${lot.lotNumber}</h1>
-          <p class="text-[10px] text-slate-400 font-mono">Lot Size: ${lot.lotSize} | Sample: ${lot.sampleSize} | Model: ${lot.model} (${MODEL_CODES[lot.model]}) | Prod Month: ${mmyyDisplay(lot.prodMonthCode)} | BD Limit: ≤${lot.bdMax}mm</p>
-        </div>
-        <div class="flex items-center gap-3 shrink-0">
-          <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-center">
-            <p class="text-[9px] text-slate-500 uppercase font-mono">Minor/Major</p>
-            <p class="text-sm font-black font-mono">
-              <span class="${minors<=1?'text-amber-400':'text-rose-500'}">${minors}</span>
-              <span class="text-slate-500">/</span>
-              <span class="${majors===0?'text-emerald-400':'text-rose-500'}">${majors}</span>
-            </p>
-          </div>
-          <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-center">
-            <p class="text-[9px] text-slate-500 uppercase font-mono">Running Status</p>
-            <p class="text-xs font-black font-mono ${passed?'text-emerald-400':'text-rose-400'}">${passed?'PASSING':'FAILING'}</p>
-          </div>
-          <button id="btnBackFromInsp" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-xs font-bold uppercase">← Back</button>
+  let h=`
+  <div class="insp-header">
+    <div>
+      <div style="font-size:14px;font-weight:800;color:#fff;font-family:monospace;text-transform:uppercase;">${lot.kitName} — ${lot.lotNumber}</div>
+      <div class="insp-meta">Lot Size: ${lot.lotSize} | Sample: ${lot.sampleSize} | Model: ${lot.model} (${MODEL_CODES[lot.model]||'?'}) | Prod Month: ${mmyyDisplay(lot.prodMonthCode)} | BD Major > ${lot.bdMax}mm = FAIL</div>
+    </div>
+    <div class="flex gap-2 items-center flex-wrap">
+      <div class="tally-box">
+        <div class="tally-label">Minor / Major</div>
+        <div class="tally-value">
+          <span style="color:${minors<=1?'#fbbf24':'#f87171'}">${minors}</span>
+          <span style="color:#475569;"> / </span>
+          <span style="color:${majors===0?'#4ade80':'#f87171'}">${majors}</span>
         </div>
       </div>
-    </header>
-    <main class="flex-1 max-w-7xl w-full mx-auto p-4 space-y-4">
-
-    <!-- SAMPLE ROWS -->
-    <div class="space-y-3">`;
+      <div class="tally-box">
+        <div class="tally-label">Running Status</div>
+        <div class="tally-value" style="font-size:14px;color:${passed?'#4ade80':'#f87171'}">${passed?'PASSING':'FAILING'}</div>
+      </div>
+      <div class="tally-box">
+        <div class="tally-label">Ready</div>
+        <div class="tally-value" style="font-size:14px;">${filledOk}/${sampleRows.length}</div>
+      </div>
+      <button id="btnBackInsp" class="btn btn-ghost btn-sm">← Back</button>
+    </div>
+  </div>
+  <div class="container">`;
 
   sampleRows.forEach((s,i)=>{
-    const res = sampleResult(s);
-    const resCls = res==='PASS'?'text-emerald-400':res==='FAIL-MINOR'?'text-amber-400':'text-rose-400';
-    const resLabel = res==='PASS'?'PASS':res==='FAIL-MINOR'?'FAIL (Minor)':'FAIL (Major)';
+    const st=sampleStatus(s);
+    const stCls=st==='PASS'?'result-pass':st==='FAIL-MINOR'?'result-minor':st==='FAIL-MAJOR'?'result-major':'result-pending';
+    const stLbl=st==='PASS'?'PASS':st==='FAIL-MINOR'?'FAIL (Minor)':st==='FAIL-MAJOR'?'FAIL (Major)':'—';
+    const bdJudge=s.noBlackDot?{ok:true,reason:'No Black Dot'}:evalBD({visible:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
 
-    const bdJudge = s.noBlackDot ? {ok:true,reason:'No Black Dot'} : evaluateBlackDot({visibleAt2m:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
-
-    html += `
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 fadeIn">
-      <div class="flex justify-between items-center">
-        <span class="text-xs font-bold text-slate-400 font-mono uppercase tracking-widest">Sample ${i+1}</span>
-        <span class="text-xs font-black font-mono ${resCls}">${resLabel}</span>
+    h+=`
+    <div class="sample-card">
+      <div class="sample-header">
+        <div class="sample-num">Sample ${i+1}</div>
+        <div class="sample-result ${stCls}">${stLbl}</div>
       </div>
 
-      <!-- SERIAL -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="grid2" style="gap:12px;margin-bottom:12px;">
         <div>
-          <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Serial Number (15 digits)</label>
-          <input type="text" data-si="${i}" data-field="serial" placeholder="${MODEL_CODES[lot.model]||'????'}${lot.prodMonthCode||'????'}xxxxxxx"
-            class="sampField w-full bg-slate-950 border ${s.serialError?'border-rose-500':'border-slate-800'} rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 font-mono"
-            value="${s.serial}">
-          ${s.serialError ? `<p class="text-[10px] text-rose-400 mt-1">${s.serialError}</p>` : ''}
+          <label class="lbl">Serial Number (15 digits)</label>
+          <input type="text" id="sSerial${i}" class="field mono ${s.serialError?'err-field':''}" placeholder="${MODEL_CODES[lot.model]||'????'}${lot.prodMonthCode||'????'}xxxxxxx" value="${s.serial}">
+          ${s.serialError?`<div class="err-msg">${s.serialError}</div>`:''}
         </div>
-
-        <!-- INSPECTION TOGGLES -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          ${buildToggle(i,'aestheticPass',s.aestheticPass,'Aesthetic','Minor')}
-          ${buildToggle(i,'generalPass',s.generalPass,'General','Major')}
-          ${buildToggle(i,'functionalPass',s.functionalPass,'Functional','Major')}
-          ${buildToggle(i,'screenPass',s.screenPass,'Screen','Major')}
+        <div>
+          <label class="lbl">Remark</label>
+          <input type="text" id="sRemark${i}" class="field" placeholder="Optional remark" value="${s.remarks||''}">
         </div>
       </div>
 
-      <!-- BLACK DOT -->
-      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
-        <div class="flex items-center gap-4 flex-wrap">
-          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Black Dot</label>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" data-si="${i}" data-field="noBlackDot" class="sampToggle accent-emerald-400 w-4 h-4" ${s.noBlackDot?'checked':''}>
-            <span class="text-xs text-slate-300">No Black Dot</span>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;">
+        ${buildToggle2(i,'aestheticPass',s.aestheticPass,'Aesthetic','Minor')}
+        ${buildToggle2(i,'generalPass',s.generalPass,'General','Major')}
+        ${buildToggle2(i,'functionalPass',s.functionalPass,'Functional','Major')}
+        ${buildToggle2(i,'screenPass',s.screenPass,'Screen','Major')}
+      </div>
+
+      <div class="bd-box">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="lbl" style="margin-bottom:0;">Black Dot</span>
+          <label class="flex items-center gap-2" style="cursor:pointer;font-size:12px;">
+            <input type="checkbox" id="sNoBD${i}" ${s.noBlackDot?'checked':''} style="accent-color:#4ade80;width:14px;height:14px;">
+            No Black Dot
           </label>
-          ${!s.noBlackDot ? `
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" data-si="${i}" data-field="bdVisible" class="sampToggle accent-indigo-400 w-4 h-4" ${s.bdVisible?'checked':''}>
-            <span class="text-xs text-slate-300">Visible at 2m</span>
-          </label>` : ''}
+          ${!s.noBlackDot?`
+          <label class="flex items-center gap-2" style="cursor:pointer;font-size:12px;">
+            <input type="checkbox" id="sBDVis${i}" ${s.bdVisible?'checked':''} style="accent-color:#818cf8;width:14px;height:14px;">
+            Visible at 2m
+          </label>`:''}
         </div>
-        ${!s.noBlackDot ? `
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">D (mm)</label>
-            <input type="number" step="0.01" data-si="${i}" data-field="bdD" value="${s.bdD}" class="sampField w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-indigo-500 font-mono"></div>
-          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">N (spots)</label>
-            <input type="number" data-si="${i}" data-field="bdN" value="${s.bdN}" class="sampField w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-indigo-500 font-mono"></div>
-          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">DS (mm)</label>
-            <input type="number" step="0.1" data-si="${i}" data-field="bdDS" value="${s.bdDS}" class="sampField w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-indigo-500 font-mono"></div>
-          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Area</label>
-            <select data-si="${i}" data-field="bdArea" class="sampField w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs outline-none focus:border-indigo-500 font-mono">
+
+        ${!s.noBlackDot?`
+        <div class="bd-row">
+          <div><label class="lbl">D (mm)</label><input type="number" step="0.01" id="sBDD${i}" value="${s.bdD}" class="field mono"></div>
+          <div><label class="lbl">N (spots)</label><input type="number" id="sBDN${i}" value="${s.bdN}" class="field mono"></div>
+          <div><label class="lbl">DS (mm)</label><input type="number" step="0.1" id="sBDDS${i}" value="${s.bdDS}" class="field mono"></div>
+          <div><label class="lbl">Area</label>
+            <select id="sBDA${i}" class="field mono">
               <option value="A" ${s.bdArea==='A'?'selected':''}>Area A (Inner)</option>
               <option value="B" ${s.bdArea==='B'?'selected':''}>Area B (Outer)</option>
               <option value="A+B" ${s.bdArea==='A+B'?'selected':''}>Area A+B</option>
             </select></div>
-          <div class="flex items-end">
-            <div class="w-full bg-slate-900 border ${bdJudge.ok?'border-emerald-800':'border-rose-800'} rounded-lg px-2 py-1.5">
-              <p class="text-[9px] font-mono ${bdJudge.ok?'text-emerald-400':'text-rose-400'}">${bdJudge.ok?'✓ OK':'✗ FAIL'}</p>
-              <p class="text-[9px] text-slate-400 leading-tight mt-0.5">${bdJudge.reason.substring(0,50)}</p>
+          <div style="display:flex;align-items:flex-end;">
+            <div style="background:#020617;border:1px solid ${bdJudge.ok?'#14532d':'#7f1d1d'};border-radius:8px;padding:8px;width:100%;">
+              <div class="${bdJudge.ok?'bd-result-ok':'bd-result-fail'}">${bdJudge.ok?'✓ OK':'✗ FAIL'}</div>
+              <div style="font-size:9px;color:#64748b;margin-top:2px;font-family:monospace;">${bdJudge.reason.substring(0,55)}</div>
             </div>
           </div>
-        </div>` : `<p class="text-[10px] text-emerald-400 font-mono">✓ No Black Dot — Acceptable</p>`}
-      </div>
-
-      <!-- REMARK -->
-      <div>
-        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Remark</label>
-        <input type="text" data-si="${i}" data-field="remarks" value="${s.remarks||''}" placeholder="Optional remark" class="sampField w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+        </div>`:`<div class="bd-result-ok mt-2">✓ No Black Dot — Acceptable</div>`}
       </div>
     </div>`;
   });
 
-  html += `</div>
-
-    <!-- SUBMIT -->
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-      <div>
-        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">General Lot Remarks</label>
-        <input type="text" id="lotGeneralRemarks" placeholder="Overall lot inspection remarks..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500">
-      </div>
-      <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
-        <div class="text-xs font-mono space-y-1">
-          <p>Samples ready: <span class="text-indigo-400 font-bold">${filledSamples}/${sampleRows.length}</span></p>
-          <p>Minor defects: <span class="${minors<=1?'text-amber-400 font-bold':'text-rose-400 font-bold'}">${minors} / 1 allowed</span></p>
-          <p>Major defects: <span class="${majors===0?'text-emerald-400 font-bold':'text-rose-400 font-bold'}">${majors} / 0 allowed</span></p>
-        </div>
-        <button id="btnSubmitLot" ${allReady?'':'disabled'} class="bg-${allReady?(passed?'emerald':'rose')}-600 hover:bg-${allReady?(passed?'emerald':'rose')}-500 disabled:bg-slate-700 text-white font-bold px-8 py-3 rounded-xl text-sm uppercase tracking-wider">
-          Submit Lot — ${passed?'PASS':'FAIL'}
-        </button>
-      </div>
+  h+=`
+  <div class="submit-section">
+    <div class="form-group">
+      <label class="lbl">General Lot Remarks</label>
+      <input type="text" id="lotRemarks" class="field" placeholder="Overall inspection remarks for this lot...">
     </div>
-
-    </main>
-  </div>`;
-  return html;
+    <div class="submit-row">
+      <div class="tally-summary">
+        <div>Samples ready: <span style="color:#818cf8;font-weight:700;">${filledOk}/${sampleRows.length}</span></div>
+        <div style="margin-top:4px;">Minor defects: <span class="${minors<=1?'text-warn':'text-fail'} bold">${minors} / 1 allowed</span></div>
+        <div style="margin-top:4px;">Major defects: <span class="${majors===0?'text-pass':'text-fail'} bold">${majors} / 0 allowed</span></div>
+        <div style="margin-top:4px;">Lot decision: <span class="${passed?'text-pass':'text-fail'} bold" style="font-size:14px;">${passed?'PASS':'FAIL'}</span> | FG Pass Qty: <span class="text-pass bold">${passed?lot.lotSize:0}</span></div>
+      </div>
+      <button id="btnSubmitLot" ${allReady?'':'disabled'} class="btn ${allReady?(passed?'btn-success':'btn-danger'):'btn-ghost'}" style="padding:14px 32px;font-size:14px;">
+        Submit Lot — ${passed?'PASS':'FAIL'}
+      </button>
+    </div>
+  </div>
+  </div>
+  <footer>IS2500 Sampling Plan | Minor limit: ≤1 | Major limit: 0 | 13 samples per 90-unit lot | © 2026 Quality Assurance</footer>`;
+  return h;
 }
 
-function buildToggle(i, field, val, label, type){
-  return `
-  <div>
-    <label class="text-[9px] font-bold ${type==='Minor'?'text-amber-500':'text-rose-500'} uppercase tracking-widest block mb-1">${label} <span class="text-slate-600">(${type})</span></label>
-    <button class="sampToggleBtn w-full py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${val?'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30':'bg-rose-500/20 text-rose-400 border border-rose-500/30'}"
-      data-si="${i}" data-field="${field}" data-val="${val?'1':''}">
-      ${val?'PASS':'FAIL'}
-    </button>
+function buildToggle2(i,field,val,label,type){
+  const typeCls=type==='Minor'?'text-warn':'text-fail';
+  return`<div class="toggle-group">
+    <div class="toggle-lbl ${typeCls}">${label} <span class="text-muted">(${type})</span></div>
+    <button class="toggle-btn ${val?'toggle-pass':'toggle-fail'} sToggle" data-si="${i}" data-field="${field}">${val?'PASS':'FAIL'}</button>
   </div>`;
 }
 
-// ============================================================
-// EVENT BINDING
-// ============================================================
-function bindEvents(){
-  // SETUP
-  const btnSaveUrl = document.getElementById('btnSaveUrl');
-  if(btnSaveUrl) btnSaveUrl.onclick = ()=>{
-    const v = document.getElementById('apiUrlInput').value.trim();
-    if(!v){ toast('Enter the Apps Script URL','error'); return; }
-    API_URL = v;
-    localStorage.setItem('oba_api_url', v);
-    render();
-  };
+function bindInspection(){
+  document.getElementById('btnBackInsp').onclick=()=>{ if(confirm('Go back? Unsaved data will be lost.')){ lotState=null; sampleRows=[]; render(); } };
 
-  const btnChangeUrl = document.getElementById('btnChangeUrl');
-  if(btnChangeUrl) btnChangeUrl.onclick = ()=>{ API_URL=''; localStorage.removeItem('oba_api_url'); render(); };
+  // Serial inputs
+  sampleRows.forEach((_,i)=>{
+    const el=document.getElementById('sSerial'+i);
+    if(el) el.onchange=()=>{
+      sampleRows[i].serial=el.value;
+      const used=sampleRows.filter((_,idx)=>idx!==i).map(s=>s.serial.toUpperCase()).filter(Boolean);
+      sampleRows[i].serialError=validateSerial(el.value,lotState.model,lotState.prodMonthCode,used);
+      render();
+    };
+    const rem=document.getElementById('sRemark'+i);
+    if(rem) rem.onchange=()=>{ sampleRows[i].remarks=rem.value; };
 
-  // LOGIN
-  const btnLogin = document.getElementById('btnLogin');
-  if(btnLogin) btnLogin.onclick = async()=>{
-    const u = document.getElementById('loginUser').value.trim();
-    const p = document.getElementById('loginPass').value.trim();
-    const errEl = document.getElementById('loginErr');
-    errEl.classList.add('hidden');
-    try{
-      const res = await api('login',{username:u, password:p});
-      if(res.ok){
-        currentUser = {username:res.username, role:res.role, name:res.name};
-        await refreshKits();
+    const noBD=document.getElementById('sNoBD'+i);
+    if(noBD) noBD.onchange=()=>{ sampleRows[i].noBlackDot=noBD.checked; render(); };
+
+    const bdVis=document.getElementById('sBDVis'+i);
+    if(bdVis) bdVis.onchange=()=>{ sampleRows[i].bdVisible=bdVis.checked; render(); };
+
+    ['D','N','DS','A'].forEach(x=>{
+      const el2=document.getElementById('sBD'+x+i);
+      if(el2) el2.onchange=()=>{
+        if(x==='D') sampleRows[i].bdD=el2.value;
+        else if(x==='N') sampleRows[i].bdN=el2.value;
+        else if(x==='DS') sampleRows[i].bdDS=el2.value;
+        else if(x==='A') sampleRows[i].bdArea=el2.value;
         render();
-      } else {
-        errEl.textContent = res.error||'Login failed';
-        errEl.classList.remove('hidden');
-      }
-    }catch(e){ errEl.textContent='Network error: '+e.message; errEl.classList.remove('hidden'); }
-  };
-
-  // LOGOUT
-  const btnLogout = document.getElementById('btnLogout');
-  if(btnLogout) btnLogout.onclick = ()=>{ currentUser=null; lotState=null; sampleRows=[]; render(); };
-
-  // REFRESH
-  const btnRefresh = document.getElementById('btnRefresh');
-  if(btnRefresh) btnRefresh.onclick = async()=>{ await refreshKits(); render(); toast('Data refreshed'); };
-
-  // CREATE KIT
-  const btnCreateKit = document.getElementById('btnCreateKit');
-  if(btnCreateKit) btnCreateKit.onclick = async()=>{
-    const kitName = document.getElementById('newKitName').value.trim();
-    const kitQty = parseInt(document.getElementById('newKitQty').value)||0;
-    const model = document.getElementById('newModel').value;
-    const prodMonth = document.getElementById('newProdMonth').value;
-    const msgEl = document.getElementById('createKitMsg');
-    if(!kitName||!kitQty||!prodMonth){ toast('Fill all kit fields','error'); return; }
-    const prodMonthCode = mmyy(prodMonth);
-    const res = await api('createKit',{kitName, kitSize:kitQty, lotSize:90, sampleSize:13, bdMax:2.4, model, prodMonthCode, createdBy:currentUser.username});
-    if(res.ok){
-      msgEl.textContent=`Created ${res.lotsCreated} lots (Lot 1 – Lot ${res.lotsCreated}), all Open.`;
-      msgEl.classList.remove('hidden');
-      document.getElementById('newKitName').value='';
-      document.getElementById('newKitQty').value='';
-      await refreshKits(); render();
-      toast(`Kit created: ${res.lotsCreated} lots`);
-    } else { toast(res.error||'Error','error'); }
-  };
-
-  // ADD USER
-  const btnAddUser = document.getElementById('btnAddUser');
-  if(btnAddUser) btnAddUser.onclick = async()=>{
-    const username = document.getElementById('newInsUser').value.trim();
-    const password = document.getElementById('newInsPass').value.trim();
-    const name = document.getElementById('newInsName').value.trim();
-    const role = document.getElementById('newInsRole').value;
-    if(!username||!password||!name){ toast('Fill all user fields','error'); return; }
-    const res = await api('addUser',{username,password,name,role});
-    if(res.ok){
-      document.getElementById('newInsUser').value='';
-      document.getElementById('newInsPass').value='';
-      document.getElementById('newInsName').value='';
-      const msgEl = document.getElementById('addUserMsg');
-      msgEl.textContent=`User "${username}" added as ${role}.`;
-      msgEl.classList.remove('hidden');
-      toast(`User ${username} added`);
-    } else { toast(res.error||'Error','error'); }
-  };
-
-  // DOWNLOAD CSV
-  const btnCSV = document.getElementById('btnDownloadCSV');
-  if(btnCSV) btnCSV.onclick = downloadCSV;
-
-  // START INSPECTION
-  document.querySelectorAll('.startInspBtn').forEach(btn=>{
-    btn.onclick = ()=>{
-      const idx = parseInt(btn.getAttribute('data-idx'));
-      const k = allKits[idx];
-      lotState = {...k, sampleSize:parseInt(k.sampleSize)||13, bdMax:parseFloat(k.bdMax)||2.4};
-      sampleRows = freshSamples(lotState.sampleSize);
-      render();
-    };
-  });
-
-  // EDIT LOT
-  document.querySelectorAll('.editLotBtn').forEach(btn=>{
-    btn.onclick = ()=>{
-      const idx = parseInt(btn.getAttribute('data-idx'));
-      const k = allKits[idx];
-      const areaId = `editLotArea${idx}`;
-      const area = document.getElementById(areaId);
-      if(!area.classList.contains('hidden')){ area.classList.add('hidden'); area.innerHTML=''; return; }
-      area.classList.remove('hidden');
-      area.innerHTML = `
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Lot Size</label><input id="eLS${idx}" type="number" value="${k.lotSize}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"></div>
-          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Sample Size</label><input id="eSS${idx}" type="number" value="${k.sampleSize}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"></div>
-          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">BD Max (mm)</label><input id="eBD${idx}" type="number" step="0.01" value="${k.bdMax}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"></div>
-          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Status</label><select id="eST${idx}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"><option value="Open" ${k.status==='Open'?'selected':''}>Open</option><option value="Closed" ${k.status==='Closed'?'selected':''}>Closed</option></select></div>
-          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Model</label><select id="eMD${idx}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"><option value="LH1G" ${k.model==='LH1G'?'selected':''}>LH1G (1217)</option><option value="LH3G" ${k.model==='LH3G'?'selected':''}>LH3G (1218)</option></select></div>
-          <div><label class="text-[9px] text-slate-500 uppercase font-mono block mb-1">Prod Month</label><input id="ePM${idx}" type="month" value="${mmyyToInput(k.prodMonthCode)}" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none"></div>
-        </div>
-        <button class="saveLotEditBtn bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-5 py-2 rounded-xl text-xs uppercase tracking-wider" data-idx="${idx}">Save Changes</button>`;
-
-      area.querySelector('.saveLotEditBtn').onclick = async()=>{
-        const lotSize = parseInt(document.getElementById('eLS'+idx).value);
-        const sampleSize = parseInt(document.getElementById('eSS'+idx).value);
-        const bdMax = parseFloat(document.getElementById('eBD'+idx).value);
-        const status = document.getElementById('eST'+idx).value;
-        const model = document.getElementById('eMD'+idx).value;
-        const pm = document.getElementById('ePM'+idx).value;
-        const prodMonthCode = pm ? mmyy(pm) : k.prodMonthCode;
-        const res = await api('updateKit',{kitName:k.kitName,lotNumber:k.lotNumber,lotSize,sampleSize,bdMax,status,model,prodMonthCode});
-        if(res.ok){ await refreshKits(); render(); toast('Lot updated'); }
-        else { toast(res.error||'Error','error'); }
       };
-    };
+    });
   });
 
-  // BACK FROM INSPECTION
-  const btnBack = document.getElementById('btnBackFromInsp');
-  if(btnBack) btnBack.onclick = ()=>{ if(confirm('Go back? Unsaved data will be lost.')){ lotState=null; sampleRows=[]; render(); } };
-
-  // INSPECTION SAMPLE FIELDS
-  document.querySelectorAll('.sampField').forEach(el=>{
-    el.onchange = ()=>{
-      const i = parseInt(el.getAttribute('data-si'));
-      const field = el.getAttribute('data-field');
-      sampleRows[i][field] = el.value;
-      if(field==='serial'){
-        const used = sampleRows.filter((_,idx)=>idx!==i).map(s=>s.serial.toUpperCase()).filter(Boolean);
-        sampleRows[i].serialError = validateSerial(el.value, lotState.model, lotState.prodMonthCode, used);
-      }
+  // Toggle pass/fail buttons
+  document.querySelectorAll('.sToggle').forEach(btn=>{
+    btn.onclick=()=>{
+      const i=parseInt(btn.getAttribute('data-si'));
+      const field=btn.getAttribute('data-field');
+      sampleRows[i][field]=!sampleRows[i][field];
       render();
     };
   });
 
-  document.querySelectorAll('.sampToggle').forEach(el=>{
-    el.onchange = ()=>{
-      const i = parseInt(el.getAttribute('data-si'));
-      const field = el.getAttribute('data-field');
-      sampleRows[i][field] = el.checked;
-      render();
-    };
-  });
+  // Submit
+  const btnSubmit=document.getElementById('btnSubmitLot');
+  if(btnSubmit) btnSubmit.onclick=async()=>{
+    const{minors,majors,passed}=tallyLot();
+    const fgPassQty=passed?lotState.lotSize:0;
+    const lotResult=passed?'PASS':'FAIL';
+    const remarks=document.getElementById('lotRemarks')?.value||'';
 
-  document.querySelectorAll('.sampToggleBtn').forEach(el=>{
-    el.onclick = ()=>{
-      const i = parseInt(el.getAttribute('data-si'));
-      const field = el.getAttribute('data-field');
-      sampleRows[i][field] = !sampleRows[i][field];
-      render();
-    };
-  });
-
-  // SUBMIT LOT
-  const btnSubmit = document.getElementById('btnSubmitLot');
-  if(btnSubmit) btnSubmit.onclick = async()=>{
-    const {minors, majors, passed} = tallyLot();
-    const fgPassQty = passed ? lotState.lotSize : 0;
-    const lotResult = passed ? 'PASS' : 'FAIL';
-    const remarks = document.getElementById('lotGeneralRemarks')?.value || '';
-
-    const units = sampleRows.map(s=>{
-      const bd = s.noBlackDot ? {ok:true,reason:'No Black Dot'} : evaluateBlackDot({visibleAt2m:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
-      const res = sampleResult(s);
-      const fails = [];
+    const units=sampleRows.map(s=>{
+      const bd=s.noBlackDot?{ok:true,reason:'No Black Dot'}:evalBD({visible:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
+      const fails=[];
       if(!s.aestheticPass) fails.push('Aesthetic Fail (Minor)');
       if(!s.generalPass) fails.push('General Fail (Major)');
       if(!s.functionalPass) fails.push('Functional Fail (Major)');
       if(!s.screenPass) fails.push('Screen Fail (Major)');
-      if(!s.noBlackDot&&!bd.ok) fails.push('Black Dot Fail (Major): '+bd.reason);
-      return {
-        serial:s.serial, aes:s.aestheticPass?'Pass':'Fail', general:s.generalPass?'Pass':'Fail',
-        func:s.functionalPass?'Pass':'Fail', screen:s.screenPass?'Pass':'Fail',
-        bdDisplay:s.noBlackDot?'No Black Dot':bd.reason,
-        remark:fails.length?fails.join(', '):(s.remarks||'OK'), result:res==='PASS'?'Pass':'Fail'
-      };
+      if(!s.noBlackDot&&!bd.ok) fails.push('Black Dot Fail: '+bd.reason);
+      const res=sampleStatus(s);
+      return{serial:s.serial,aes:s.aestheticPass?'Pass':'Fail',general:s.generalPass?'Pass':'Fail',func:s.functionalPass?'Pass':'Fail',screen:s.screenPass?'Pass':'Fail',bdDisplay:s.noBlackDot?'No Black Dot':bd.reason,remark:fails.length?fails.join(', '):(s.remarks||'OK'),result:res==='PASS'?'Pass':'Fail'};
     });
 
-    const res = await api('submitInspection',{
-      inspector:currentUser.name, kitName:lotState.kitName, lotNumber:lotState.lotNumber,
-      lotResult, kitTotalQty:lotState.kitTotalQty, totalLots:lotState.totalLots,
-      model:lotState.model, prodMonthCode:lotState.prodMonthCode, fgPassQty,
-      generalRemarks:remarks, units
+    const res=await api('submitInspection',{
+      inspector:currentUser.name,kitName:lotState.kitName,lotNumber:lotState.lotNumber,
+      lotResult,kitTotalQty:lotState.kitTotalQty,totalLots:lotState.totalLots,
+      model:lotState.model,prodMonthCode:lotState.prodMonthCode,fgPassQty,
+      generalRemarks:remarks,units
     });
-    if(res.ok){
-      toast(`${lotState.lotNumber} submitted: ${lotResult} | FG Pass: ${fgPassQty}`);
-      lotState=null; sampleRows=[];
-      await refreshKits();
-      render();
-    } else { toast(res.error||'Save error','error'); }
+    if(res.ok){ toast(`${lotState.lotNumber}: ${lotResult} | FG Pass: ${fgPassQty}`); lotState=null; sampleRows=[]; await refreshKits(); render(); }
+    else{ toast(res.error||'Save error','error'); }
   };
 }
 
 // ============================================================
-// DATA
+// DATA & CSV
 // ============================================================
 async function refreshKits(){
-  const res = await api('getKits',{});
-  if(res.ok) allKits = res.kits;
+  try{ const res=await api('getKits',{}); if(res.ok) allKits=res.kits; }catch(e){ console.error(e); }
 }
 
 function downloadCSV(){
-  let csv = 'IS2500 OBA MASTER COMPLIANCE REPORT\n';
-  csv += `Generated: ${new Date().toLocaleString()}\n\n`;
-  csv += 'Lot Name,Kit Name,Model,Prod Month,Lot Size,Samples,Status,Result,Minor Count,Major Count,FG Pass Qty,Completed\n';
-  const groups = groupKits(allKits);
+  const groups=groupKits(allKits);
+  let csv='IS2500 OBA MASTER COMPLIANCE REPORT\n';
+  csv+=`Generated: ${new Date().toLocaleString()}\n\n`;
+  csv+='Lot Name,Kit Name,Model,Prod Month,Lot Size,Sample Size,Status,Result,FG Pass Qty,Kit Total Qty\n';
   groups.forEach(g=>{
     g.lots.forEach(k=>{
-      csv += `"${k.lotNumber}","${k.kitName}","${k.model||'-'}","${mmyyDisplay(k.prodMonthCode)}",${k.lotSize},${k.sampleSize},"${k.status}","${k.result||'Pending'}","","",${k.fgPassQty||0},""\n`;
+      csv+=`"${k.lotNumber}","${k.kitName}","${k.model||'-'}","${mmyyDisplay(k.prodMonthCode)}",${k.lotSize},${k.sampleSize},"${k.status}","${k.result||'Pending'}",${k.fgPassQty||0},${k.kitTotalQty||''}\n`;
     });
   });
-  const link = document.createElement('a');
-  link.href = 'data:text/csv;charset=utf-8,' + encodeURI(csv);
-  link.download = `IS2500_Report_${Date.now()}.csv`;
+  const link=document.createElement('a');
+  link.href='data:text/csv;charset=utf-8,'+encodeURI(csv);
+  link.download=`IS2500_Report_${Date.now()}.csv`;
   document.body.appendChild(link); link.click(); document.body.removeChild(link);
 }
 
