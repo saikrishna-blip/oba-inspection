@@ -228,8 +228,8 @@ function groupKits(kits){
   return order.map(name=>{
     const lots=map[name];
     lots.sort((a,b)=>{
-      const na=parseInt((a.lotNumber||'').replace(/\D+/g,''))||0;
-      const nb=parseInt((b.lotNumber||'').replace(/\D+/g,''))||0;
+      const na=parseInt((String(a.lotNumber||'')).replace(/\D+/g,''))||0;
+      const nb=parseInt((String(b.lotNumber||'')).replace(/\D+/g,''))||0;
       return na-nb;
     });
     const storedTotal=Number(lots[0].totalLots);
