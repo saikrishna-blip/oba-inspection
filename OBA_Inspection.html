@@ -234,8 +234,9 @@ function groupKits(kits){
     });
     const storedTotal=Number(lots[0].totalLots);
     const totalLots=(storedTotal>0)?storedTotal:lots.length;
+    // kitTotalQty is set by admin when creating — use it directly, never sum lot sizes
     const storedQty=Number(lots[0].kitTotalQty);
-    const kitQty=(storedQty>0)?storedQty:lots.reduce((s,l)=>s+(Number(l.lotSize)||0),0);
+    const kitQty=(storedQty>0)?storedQty:'?';
     const completed=lots.filter(l=>l.status==='Closed').length;
     const pending=lots.filter(l=>l.status==='Open').length;
     const passLots=lots.filter(l=>l.result==='PASS').length;
@@ -442,9 +443,10 @@ function renderDashboard(){
               <span class="text-pass bold">FG Released: ${g.fgPass}</span>
             </div>
           </div>
-          <div style="min-width:120px;">
+          <div style="min-width:120px;text-align:right;">
             <div class="text-xs text-muted mono" style="margin-bottom:4px;">${pct2}% done</div>
             <div class="progress-bar"><div class="progress-fill" style="width:${pct2}%"></div></div>
+            ${isAdmin?`<button class="btn btn-danger btn-sm deleteKitBtn" data-kitname="${g.name}" style="margin-top:8px;font-size:10px;padding:4px 10px;">🗑 Delete Kit</button>`:''}
           </div>
         </div>`;
 
@@ -463,6 +465,7 @@ function renderDashboard(){
             ${statusBadge} ${resultBadge} ${fgTxt}
             ${!isAdmin&&k.status==='Open'?`<button class="btn btn-primary btn-sm startInspBtn" data-idx="${kidx}">Start Inspection</button>`:''}
             ${isAdmin?`<button class="btn btn-ghost btn-sm editLotBtn" data-idx="${kidx}">Edit</button>`:''}
+            ${isAdmin?`<button class="btn btn-danger btn-sm deleteLotBtn" data-idx="${kidx}" style="font-size:10px;padding:4px 10px;">🗑 Delete Lot</button>`:''}
           </div>
         </div>
         <div id="editPanel${kidx}" class="hidden"></div>`;
@@ -521,8 +524,28 @@ function bindDashboard(){
   const btnCSV=document.getElementById('btnDownloadCSV');
   if(btnCSV) btnCSV.onclick=downloadCSV;
 
-  // Start inspection
-  document.querySelectorAll('.startInspBtn').forEach(btn=>{
+  // Delete Kit (all lots under kit name)
+  document.querySelectorAll('.deleteKitBtn').forEach(btn=>{
+    btn.onclick=async()=>{
+      const kitName=btn.getAttribute('data-kitname');
+      if(!confirm(`Delete ALL lots under kit "${kitName}"? This cannot be undone.`)) return;
+      const res=await api('deleteKit',{kitName});
+      if(res.ok){ await refreshKits(); render(); toast(`Kit "${kitName}" deleted`); }
+      else toast(res.error||'Delete failed','error');
+    };
+  });
+
+  // Delete single Lot
+  document.querySelectorAll('.deleteLotBtn').forEach(btn=>{
+    btn.onclick=async()=>{
+      const idx=parseInt(btn.getAttribute('data-idx'));
+      const k=allKits[idx];
+      if(!confirm(`Delete "${k.lotNumber}" from kit "${k.kitName}"? This cannot be undone.`)) return;
+      const res=await api('deleteLot',{kitName:k.kitName,lotNumber:k.lotNumber});
+      if(res.ok){ await refreshKits(); render(); toast(`Lot deleted`); }
+      else toast(res.error||'Delete failed','error');
+    };
+  });
     btn.onclick=()=>{
       const idx=parseInt(btn.getAttribute('data-idx'));
       const k=allKits[idx];
