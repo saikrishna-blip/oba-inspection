@@ -546,6 +546,9 @@ function bindDashboard(){
       else toast(res.error||'Delete failed','error');
     };
   });
+
+  // Start inspection
+  document.querySelectorAll('.startInspBtn').forEach(btn=>{
     btn.onclick=()=>{
       const idx=parseInt(btn.getAttribute('data-idx'));
       const k=allKits[idx];
