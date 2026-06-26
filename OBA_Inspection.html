@@ -504,7 +504,7 @@ function bindDashboard(){
     const msgEl=document.getElementById('createKitMsg');
     if(!kitName||kitQty<=0||!prodMonth){ toast('Fill all kit fields','error'); return; }
     const prodMonthCode=mmyy(prodMonth);
-    const res=await api('createKit',{kitName,kitSize:kitQty,lotSize:90,sampleSize:13,bdMax:2.4,model,prodMonthCode,createdBy:currentUser.username});
+    const res=await api('createKit',{kitName,kitSize:kitQty,sampleSize:13,bdMax:2.4,model,prodMonthCode,createdBy:currentUser.username});
     if(res.ok){ msgEl.textContent=`Created ${res.lotsCreated} lot(s): ${kitName} Lot 1 – Lot ${res.lotsCreated}, all Open.`; msgEl.classList.remove('hidden'); document.getElementById('newKitName').value=''; document.getElementById('newKitQty').value=''; await refreshKits(); render(); toast(`Kit created: ${res.lotsCreated} lots`); }
     else{ toast(res.error||'Error','error'); }
   };
