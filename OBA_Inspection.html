@@ -502,11 +502,24 @@ function bindDashboard(){
     const model=document.getElementById('newModel').value;
     const prodMonth=document.getElementById('newProdMonth').value;
     const msgEl=document.getElementById('createKitMsg');
-    if(!kitName||kitQty<=0||!prodMonth){ toast('Fill all kit fields','error'); return; }
-    const prodMonthCode=mmyy(prodMonth);
-    const res=await api('createKit',{kitName,kitSize:kitQty,sampleSize:13,bdMax:2.4,model,prodMonthCode,createdBy:currentUser.username});
-    if(res.ok){ msgEl.textContent=`Created ${res.lotsCreated} lot(s): ${kitName} Lot 1 – Lot ${res.lotsCreated}, all Open.`; msgEl.classList.remove('hidden'); document.getElementById('newKitName').value=''; document.getElementById('newKitQty').value=''; await refreshKits(); render(); toast(`Kit created: ${res.lotsCreated} lots`); }
-    else{ toast(res.error||'Error','error'); }
+    if(!kitName){ toast('Enter Kit Name','error'); return; }
+    if(kitQty<=0){ toast('Enter Kit Quantity > 0','error'); return; }
+    const prodMonthCode=prodMonth?mmyy(prodMonth):'';
+    console.log('Creating kit:', {kitName, kitQty, kitSize:kitQty, model, prodMonthCode});
+    msgEl.textContent='Creating...'; msgEl.classList.remove('hidden');
+    const res=await api('createKit',{kitName,kitSize:kitQty,lotSize:90,sampleSize:13,bdMax:2.4,model,prodMonthCode,createdBy:currentUser.username});
+    console.log('Create kit response:', res);
+    if(res.ok){
+      msgEl.textContent=`✓ Created ${res.lotsCreated} lot(s): ${kitName} Lot 1 – Lot ${res.lotsCreated} | Kit Qty: ${res.kitSize} | Lot Size: ${res.lotSize}`;
+      msgEl.classList.remove('hidden');
+      document.getElementById('newKitName').value='';
+      document.getElementById('newKitQty').value='';
+      await refreshKits(); render();
+      toast(`Kit created: ${res.lotsCreated} lots`);
+    } else {
+      msgEl.textContent='Error: '+(res.error||'unknown');
+      toast(res.error||'Error','error');
+    }
   };
 
   const btnAddUser=document.getElementById('btnAddUser');
