@@ -5,121 +5,111 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IS2500 OBA Inspection</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;}
-body{background:#020617;color:#e2e8f0;min-height:100vh;}
-a{color:#818cf8;}
-input,select,button,textarea{font-family:inherit;}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Roboto,Arial,sans-serif}
+body{background:#020617;color:#e2e8f0;min-height:100vh}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:#1e293b;border-radius:4px}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.fade{animation:fadeIn .25s ease forwards}
+
 /* LAYOUT */
-.container{max-width:1300px;margin:0 auto;padding:20px;}
-.card{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:20px;margin-bottom:16px;}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
-.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
-@media(max-width:900px){.grid4{grid-template-columns:1fr 1fr;}.grid3{grid-template-columns:1fr 1fr;}}
-@media(max-width:600px){.grid2,.grid3,.grid4{grid-template-columns:1fr;}}
-/* HEADER */
-header{background:#020617;border-bottom:1px solid #1e293b;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:40;}
-.logo{display:flex;align-items:center;gap:12px;}
-.logo-icon{background:linear-gradient(135deg,#4f46e5,#6366f1);padding:8px 10px;border-radius:10px;font-weight:900;font-size:13px;color:#fff;font-family:monospace;}
-.logo-title{font-size:16px;font-weight:800;color:#fff;letter-spacing:.05em;}
-.logo-sub{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.1em;}
-/* BADGES */
-.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;}
-.badge-pass{background:#052e16;color:#4ade80;border:1px solid #14532d;}
-.badge-fail{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d;}
-.badge-open{background:#0c1a4e;color:#818cf8;border:1px solid #1e3a8a;}
-.badge-closed{background:#1e293b;color:#94a3b8;border:1px solid #334155;}
-.badge-minor{background:#3b1d08;color:#fbbf24;border:1px solid #78350f;}
+.page{min-height:100vh;display:flex;flex-direction:column}
+.hdr{background:#0a0f1e;border-bottom:1px solid #1e293b;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:40}
+.hdr-left{display:flex;align-items:center;gap:12px}
+.logo{background:linear-gradient(135deg,#4f46e5,#6366f1);border-radius:10px;padding:8px 10px;font-mono:monospace;font-weight:900;font-size:13px;color:#fff;letter-spacing:.05em}
+.hdr-title{font-size:15px;font-weight:800;color:#fff;letter-spacing:.05em}
+.hdr-sub{font-size:10px;color:#64748b;margin-top:2px;letter-spacing:.04em}
+.hdr-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.main{flex:1;max-width:1400px;width:100%;margin:0 auto;padding:20px}
+
+/* CARDS */
+.card{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:20px;margin-bottom:16px}
+.card-title{font-size:11px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e293b}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px}
+.grid-4{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+
+/* FORM */
+.fg{margin-bottom:12px}
+.lbl{display:block;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.field{width:100%;background:#020617;border:1px solid #1e293b;border-radius:9px;padding:9px 12px;font-size:13px;color:#e2e8f0;outline:none;transition:border-color .2s}
+.field:focus{border-color:#6366f1}
+.field.err-field{border-color:#ef4444}
+select.field{cursor:pointer}
+
 /* BUTTONS */
-.btn{display:inline-block;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;border:none;cursor:pointer;text-transform:uppercase;letter-spacing:.05em;transition:opacity .15s;}
-.btn:hover{opacity:.85;} .btn:disabled{opacity:.4;cursor:not-allowed;}
-.btn-primary{background:#4f46e5;color:#fff;}
-.btn-success{background:#16a34a;color:#fff;}
-.btn-danger{background:#dc2626;color:#fff;}
-.btn-ghost{background:#1e293b;color:#94a3b8;border:1px solid #334155;}
-.btn-sm{padding:6px 14px;font-size:11px;border-radius:8px;}
-.btn-full{width:100%;}
-/* INPUTS */
-.field{width:100%;background:#020617;border:1px solid #334155;border-radius:10px;padding:10px 14px;color:#e2e8f0;font-size:13px;outline:none;}
-.field:focus{border-color:#4f46e5;}
-.field.err-field{border-color:#ef4444;}
-label.lbl{display:block;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
-.form-group{margin-bottom:14px;}
+.btn{border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;padding:9px 18px;letter-spacing:.04em;text-transform:uppercase;transition:all .15s}
+.btn-primary{background:#4f46e5;color:#fff}.btn-primary:hover{background:#6366f1}
+.btn-danger{background:#dc2626;color:#fff}.btn-danger:hover{background:#ef4444}
+.btn-ghost{background:#1e293b;color:#94a3b8;border:1px solid #334155}.btn-ghost:hover{background:#334155;color:#fff}
+.btn-sm{padding:5px 12px;font-size:10px}
+.btn-full{width:100%;padding:11px}
+.btn:disabled{background:#1e293b;color:#475569;cursor:not-allowed}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.05em}
+.badge-open{background:#1e3a5f;color:#60a5fa;border:1px solid #1d4ed8}
+.badge-closed{background:#1e293b;color:#64748b;border:1px solid #334155}
+.badge-pass{background:#052e16;color:#4ade80;border:1px solid #166534}
+.badge-fail{background:#2d0a0a;color:#f87171;border:1px solid #991b1b}
+
 /* STATS */
-.stat-card{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:18px;}
-.stat-label{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.1em;}
-.stat-value{font-size:32px;font-weight:900;color:#fff;margin-top:4px;font-family:monospace;}
-.stat-sub{font-size:11px;color:#4f46e5;margin-top:4px;font-family:monospace;}
-/* PROGRESS */
-.progress-bar{background:#1e293b;border-radius:999px;height:6px;overflow:hidden;width:100%;}
-.progress-fill{background:#4f46e5;height:100%;transition:width .3s;}
-/* KIT GROUP */
-.kit-group{background:#0f172a;border:1px solid #1e293b;border-radius:14px;margin-bottom:16px;overflow:hidden;}
-.kit-group-header{padding:16px 20px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;}
-.kit-name{font-size:14px;font-weight:800;color:#fff;font-family:monospace;text-transform:uppercase;}
-.kit-meta{font-size:10px;color:#64748b;font-family:monospace;margin-top:4px;}
-.lot-row{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid #1e293b;flex-wrap:wrap;gap:8px;}
-.lot-row:last-child{border-bottom:none;}
-.lot-name{font-size:12px;font-weight:700;color:#c7d2fe;font-family:monospace;}
-.lot-meta{font-size:10px;color:#475569;font-family:monospace;margin-top:2px;}
-.lot-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-/* EDIT LOT PANEL */
-.edit-panel{background:#020617;border-top:1px solid #1e293b;padding:16px 20px;}
-.edit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
-@media(max-width:700px){.edit-grid{grid-template-columns:1fr 1fr;}}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+.stat{background:#0a0f1e;border:1px solid #1e293b;border-radius:12px;padding:14px 16px}
+.stat-label{font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.07em}
+.stat-val{font-size:24px;font-weight:900;color:#fff;margin-top:4px;font-variant-numeric:tabular-nums}
+.stat-sub{font-size:10px;color:#475569;margin-top:3px;font-family:monospace}
+
+/* BATCH GROUP */
+.batch-group{background:#0a0f1e;border:1px solid #1e293b;border-radius:14px;overflow:hidden;margin-bottom:14px}
+.batch-hdr{padding:14px 18px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px}
+.batch-name{font-size:14px;font-weight:800;color:#fff;font-family:monospace;letter-spacing:.04em}
+.batch-meta{font-size:10px;color:#475569;margin-top:3px;font-family:monospace;line-height:1.6}
+.batch-meta b{color:#94a3b8}
+.lot-row{padding:12px 18px;border-bottom:1px solid #0f172a;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;transition:background .15s}
+.lot-row:last-child{border-bottom:none}
+.lot-row:hover{background:#0f172a}
+.lot-name{font-size:12px;font-weight:700;color:#e2e8f0;font-family:monospace}
+.lot-meta{font-size:10px;color:#475569;font-family:monospace;margin-top:2px}
+.lot-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.progress-bar{background:#0f172a;border-radius:6px;height:5px;overflow:hidden;min-width:80px}
+.progress-fill{background:#4f46e5;height:100%;transition:width .4s}
+
+/* INSPECTION */
+.insp-header{background:#0a0f1e;border:1px solid #1e293b;border-radius:14px;padding:16px 20px;margin-bottom:16px}
+.insp-title{font-size:14px;font-weight:800;color:#fff;font-family:monospace}
+.insp-meta{font-size:10px;color:#64748b;font-family:monospace;margin-top:4px;line-height:1.7}
+.sample-card{background:#0a0f1e;border:1px solid #1e293b;border-radius:12px;padding:16px;margin-bottom:12px}
+.sample-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.sample-num{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em;font-family:monospace}
+.sample-result{font-size:12px;font-weight:800;font-family:monospace}
+.res-pass{color:#4ade80}.res-minor{color:#fbbf24}.res-major{color:#f87171}.res-pending{color:#475569}
+.test-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.toggle-btn{width:100%;padding:8px 6px;border:1px solid;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;transition:all .15s}
+.t-pass{background:#052e16;color:#4ade80;border-color:#166534}
+.t-fail{background:#2d0a0a;color:#f87171;border-color:#991b1b}
+.toggle-lbl{font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.bd-box{background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-top:10px}
+.bd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-top:8px}
+.bd-result{padding:8px 10px;border-radius:8px;font-size:10px;font-family:monospace;line-height:1.5}
+.bd-ok{background:#052e16;border:1px solid #166534;color:#4ade80}
+.bd-fail{background:#2d0a0a;border:1px solid #991b1b;color:#f87171}
+.insp-footer{background:#0a0f1e;border:1px solid #1e293b;border-radius:12px;padding:16px;margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.insp-tally{font-size:11px;font-family:monospace;line-height:1.8;color:#64748b}
+.insp-tally b{color:#e2e8f0}
+.insp-tally .t-ok{color:#4ade80}.insp-tally .t-warn{color:#fbbf24}.insp-tally .t-fail{color:#f87171}
+
 /* TOAST */
-#toast{position:fixed;top:20px;right:20px;z-index:100;padding:14px 22px;border-radius:12px;font-size:13px;font-weight:700;display:none;box-shadow:0 8px 32px rgba(0,0,0,.5);}
-#toast.show{display:block;}
-#toast.success{background:#16a34a;color:#fff;}
-#toast.error{background:#dc2626;color:#fff;}
-/* INSPECTION SCREEN */
-.insp-header{background:#020617;border-bottom:1px solid #1e293b;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:40;}
-.insp-meta{font-size:10px;color:#64748b;font-family:monospace;margin-top:2px;}
-.tally-box{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:10px 16px;text-align:center;}
-.tally-label{font-size:9px;color:#64748b;text-transform:uppercase;font-family:monospace;}
-.tally-value{font-size:18px;font-weight:900;font-family:monospace;}
-/* SAMPLE CARD */
-.sample-card{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:16px;margin-bottom:12px;}
-.sample-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
-.sample-num{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;font-family:monospace;}
-.sample-result{font-size:12px;font-weight:900;font-family:monospace;}
-.result-pass{color:#4ade80;}
-.result-minor{color:#fbbf24;}
-.result-major{color:#f87171;}
-.result-pending{color:#475569;}
-/* TOGGLE BUTTONS */
-.toggle-group{display:flex;flex-direction:column;gap:4px;}
-.toggle-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;}
-.toggle-btn{padding:8px 6px;border-radius:8px;border:none;cursor:pointer;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;width:100%;transition:all .15s;}
-.toggle-pass{background:#052e16;color:#4ade80;border:1px solid #14532d;}
-.toggle-fail{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d;}
-/* BD SECTION */
-.bd-box{background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-top:10px;}
-.bd-result-ok{color:#4ade80;font-size:11px;font-family:monospace;}
-.bd-result-fail{color:#f87171;font-size:11px;font-family:monospace;}
-.bd-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px;}
-@media(max-width:600px){.bd-row{grid-template-columns:1fr 1fr 1fr;}}
-/* ERR */
-.err-msg{color:#f87171;font-size:10px;margin-top:4px;font-family:monospace;}
-/* SUBMIT SECTION */
-.submit-section{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:20px;margin-top:16px;}
-.submit-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-top:16px;}
-.tally-summary{font-size:12px;font-family:monospace;}
-/* BANNER */
-.banner{background:#0c1445;border:1px solid #1e3a8a;border-radius:12px;padding:14px 18px;display:flex;gap:12px;align-items:flex-start;}
-.banner-icon{background:#312e81;border-radius:8px;padding:6px 10px;font-family:monospace;font-weight:900;color:#818cf8;font-size:12px;flex-shrink:0;}
-.banner-text{font-size:11px;color:#94a3b8;line-height:1.6;}
-.banner-text strong{color:#c7d2fe;}
-/* DIVIDER */
-.divider{height:1px;background:#1e293b;margin:20px 0;}
-/* FLEX */
-.flex{display:flex;} .items-center{align-items:center;} .justify-between{justify-content:space-between;}
-.gap-2{gap:8px;} .gap-3{gap:12px;} .flex-wrap{flex-wrap:wrap;}
-.mt-1{margin-top:4px;} .mt-2{margin-top:8px;} .mt-3{margin-top:12px;}
-.text-sm{font-size:12px;} .text-xs{font-size:10px;} .mono{font-family:monospace;}
-.text-muted{color:#64748b;} .text-white{color:#fff;} .text-pass{color:#4ade80;} .text-fail{color:#f87171;} .text-warn{color:#fbbf24;}
-.bold{font-weight:700;} .hidden{display:none;}
-footer{text-align:center;padding:20px;font-size:10px;color:#334155;font-family:monospace;border-top:1px solid #1e293b;margin-top:40px;}
+.toast{position:fixed;top:16px;right:16px;z-index:9999;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:700;color:#fff;animation:fadeIn .3s ease;pointer-events:none}
+.toast-ok{background:#166534}.toast-err{background:#991b1b}
+
+/* UTIL */
+.hidden{display:none!important}
+.text-muted{color:#64748b;font-size:11px}
+.text-pass{color:#4ade80}.text-fail{color:#f87171}.text-warn{color:#fbbf24}
+.mono{font-family:monospace}
+.err{color:#f87171;font-size:10px;margin-top:4px}
+.info-banner{background:#0d1f3c;border:1px solid #1d4ed8;border-radius:10px;padding:12px 16px;font-size:11px;color:#93c5fd;line-height:1.7;margin-bottom:16px}
+footer.pg-footer{padding:16px;text-align:center;font-size:10px;color:#1e293b;font-family:monospace;border-top:1px solid #0f172a;margin-top:20px}
 </style>
 </head>
 <body>
@@ -127,724 +117,715 @@ footer{text-align:center;padding:20px;font-size:10px;color:#334155;font-family:m
 <div id="app"></div>
 
 <script>
-// ============================================================
+'use strict';
+// ═══════════════════════════════════════════════════════════
 // STATE
-// ============================================================
-let API_URL = localStorage.getItem('oba_api_url')||'';
-let currentUser = null;
-let allKits = [];
-let lotState = null;
-let sampleRows = [];
+// ═══════════════════════════════════════════════════════════
+let API = localStorage.getItem('oba_api')||'';
+let user = null;          // {username,role,name}
+let batches = [];         // all batch/lot rows from backend
+let activeLot = null;     // lot object being inspected
+let samples = [];         // array of sample state objects
+let toastTimer = null;
 
-const MODEL_CODES = {'LH1G':'1217','LH3G':'1218'};
+const MODEL_CODE = {LH1G:'1217',LH3G:'1218'};
+const LOT_SIZE   = 90;
+const SAMPLE_N   = 13;
 
-// ============================================================
-// UTILS
-// ============================================================
-function mmyy(str){ if(!str)return''; const[y,m]=str.split('-'); return m+y.slice(2); }
-function mmyyDisplay(c){ if(!c||c.length!==4)return'-'; return c.slice(0,2)+'/20'+c.slice(2); }
-function mmyyToInput(c){ if(!c||c.length!==4)return''; return'20'+c.slice(2)+'-'+c.slice(0,2); }
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+function mmyy(s){ if(!s)return''; const[y,m]=s.split('-'); return m+y.slice(2); }
+function mmyyDisp(c){ if(!c||c.length!==4)return'-'; return c.slice(0,2)+'/20'+c.slice(2); }
+function mmyyInp(c){ if(!c||c.length!==4)return''; return'20'+c.slice(2)+'-'+c.slice(0,2); }
 
-let toastTimer=null;
-function toast(msg,type='success'){
+function toast(msg,type='ok'){
   clearTimeout(toastTimer);
   const el=document.getElementById('toast');
-  el.textContent=msg; el.className='show '+(type==='error'?'error':'success');
-  toastTimer=setTimeout(()=>el.className='',3500);
+  el.className=`toast toast-${type}`;
+  el.textContent=msg;
+  el.style.display='block';
+  toastTimer=setTimeout(()=>{ el.style.display='none'; },3500);
 }
 
-async function api(action,payload){
-  payload=payload||{}; payload.action=action;
-  const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+async function api(action,data={}){
+  data.action=action;
+  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(data)});
   return r.json();
 }
 
-// ============================================================
-// BLACK DOT EVALUATOR
-// ============================================================
-function evalBD({visible,D,N,DS,area}){
-  if(!visible) return{ok:true,reason:'Not visible at 2m — Acceptable.'};
-  D=parseFloat(D)||0; N=parseInt(N)||0; DS=parseFloat(DS)||0;
-  if(D>2.4) return{ok:false,reason:`D=${D}mm > 2.4mm — FAIL (Major)`};
-  if(D<=1.28){
-    if(N<=3&&DS>=15) return{ok:true,reason:`D=${D}mm ≤ 1.28mm, N=${N}, DS=${DS}mm — OK`};
-    return{ok:false,reason:`D=${D}mm ≤ 1.28mm but N=${N}>3 or DS=${DS}<15mm — FAIL`};
-  }
-  if(N>3) return{ok:false,reason:`D=${D}mm, N=${N}>3 — FAIL`};
-  if(DS<15) return{ok:false,reason:`D=${D}mm, DS=${DS}mm<15 — FAIL`};
-  if(area==='A'){ return N<=1?{ok:true,reason:`Area A: D=${D}mm, N=${N}≤1 — OK`}:{ok:false,reason:`Area A: N=${N}>1 — FAIL`}; }
-  if(area==='B'){ return N<=3?{ok:true,reason:`Area B: D=${D}mm, N=${N}≤3 — OK`}:{ok:false,reason:`Area B: N=${N}>3 — FAIL`}; }
-  if(area==='A+B'){ return N<=3?{ok:true,reason:`Area A+B: D=${D}mm, N=${N}≤3 — OK`}:{ok:false,reason:`Area A+B: N=${N}>3 — FAIL`}; }
-  return{ok:false,reason:'Unknown area'};
+async function loadBatches(){
+  const r=await api('getBatches');
+  if(r.ok) batches=r.batches||[];
 }
 
-// ============================================================
-// SERIAL VALIDATION
-// ============================================================
-function validateSerial(serial,model,prodMonthCode,batchUsed){
-  if(!serial||serial.trim().length!==15) return 'Must be exactly 15 digits';
-  const s=serial.trim().toUpperCase();
-  const em=MODEL_CODES[model]||'';
-  if(s.substring(0,4)!==em) return `Model prefix mismatch — expected ${em} for ${model}`;
-  if(s.substring(4,8)!==prodMonthCode) return `Month code mismatch — expected ${prodMonthCode} (${mmyyDisplay(prodMonthCode)})`;
-  const mm=parseInt(s.substring(4,6));
-  if(isNaN(mm)||mm<1||mm>12) return 'Invalid month digits (01–12)';
-  if(!/^\d{7}$/.test(s.substring(8))) return 'Last 7 chars must be numeric';
-  if(batchUsed&&batchUsed.includes(s)) return 'Duplicate within current batch';
-  return '';
-}
-
-// ============================================================
-// TALLY
-// ============================================================
-function tallyLot(){
-  let minors=0,majors=0;
-  sampleRows.forEach(s=>{
-    if(!s.aestheticPass) minors++;
-    if(!s.generalPass||!s.functionalPass||!s.screenPass) majors++;
-    if(!s.noBlackDot){
-      const bd=evalBD({visible:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
-      if(!bd.ok) majors++;
-    }
-  });
-  return{minors,majors,passed:minors<=1&&majors===0};
-}
-
-function sampleStatus(s){
-  let major=!s.generalPass||!s.functionalPass||!s.screenPass;
-  if(!s.noBlackDot){const bd=evalBD({visible:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});if(!bd.ok)major=true;}
-  if(major) return'FAIL-MAJOR';
-  if(!s.aestheticPass) return'FAIL-MINOR';
-  if(!s.serial||s.serialError) return'PENDING';
-  return'PASS';
-}
-
-// ============================================================
-// GROUP KITS
-// ============================================================
-function groupKits(kits){
+// ═══════════════════════════════════════════════════════════
+// GROUPING
+// ═══════════════════════════════════════════════════════════
+function groupBatches(){
   const map={},order=[];
-  kits.forEach(k=>{ if(!map[k.kitName]){map[k.kitName]=[];order.push(k.kitName);} map[k.kitName].push(k); });
+  batches.forEach(b=>{
+    if(!map[b.batchName]){map[b.batchName]=[];order.push(b.batchName);}
+    map[b.batchName].push(b);
+  });
   return order.map(name=>{
     const lots=map[name];
     lots.sort((a,b)=>{
-      const na=parseInt((String(a.lotNumber||'')).replace(/\D+/g,''))||0;
-      const nb=parseInt((String(b.lotNumber||'')).replace(/\D+/g,''))||0;
+      const na=parseInt(String(a.lotNumber).replace(/\D+/g,''))||0;
+      const nb=parseInt(String(b.lotNumber).replace(/\D+/g,''))||0;
       return na-nb;
     });
-    const storedTotal=Number(lots[0].totalLots);
-    const totalLots=(storedTotal>0)?storedTotal:lots.length;
-    // kitTotalQty is set by admin when creating — use it directly, never sum lot sizes
-    const storedQty=Number(lots[0].kitTotalQty);
-    const kitQty=(storedQty>0)?storedQty:'?';
-    const completed=lots.filter(l=>l.status==='Closed').length;
-    const pending=lots.filter(l=>l.status==='Open').length;
-    const passLots=lots.filter(l=>l.result==='PASS').length;
-    const failLots=lots.filter(l=>l.result==='FAIL').length;
-    const fgPass=lots.reduce((s,l)=>s+(isNaN(Number(l.fgPassQty))?0:Number(l.fgPassQty)),0);
-    return{name,lots,totalLots,kitQty,completed,pending,passLots,failLots,fgPass,
-      model:lots[0].model||'-',prodMonthCode:lots[0].prodMonthCode||''};
+    const batchQty   = Number(lots[0].batchQty)||0;
+    const totalLots  = Number(lots[0].totalLots)||lots.length;
+    const completed  = lots.filter(l=>l.status==='Closed').length;
+    const pending    = lots.filter(l=>l.status==='Open').length;
+    const passLots   = lots.filter(l=>l.result==='PASS').length;
+    const failLots   = lots.filter(l=>l.result==='FAIL').length;
+    const fgTotal    = lots.reduce((s,l)=>s+Number(l.fgPassQty||0),0);
+    return{name,lots,batchQty,totalLots,completed,pending,passLots,failLots,fgTotal,
+           model:lots[0].model||'',prodMonthCode:lots[0].prodMonthCode||''};
   });
 }
 
-// ============================================================
-// FRESH SAMPLES
-// ============================================================
+// ═══════════════════════════════════════════════════════════
+// SERIAL VALIDATION
+// ═══════════════════════════════════════════════════════════
+function validateSerial(serial,model,prodMonthCode,batchUsed){
+  const s=(serial||'').trim().toUpperCase();
+  if(!/^\d{15}$/.test(s)) return 'Must be exactly 15 digits';
+  const exp=MODEL_CODE[model]||'';
+  if(exp && s.substring(0,4)!==exp) return `Model prefix must be ${exp} for ${model}`;
+  if(prodMonthCode && s.substring(4,8)!==prodMonthCode) return `Month code must be ${prodMonthCode} (${mmyyDisp(prodMonthCode)})`;
+  const mm=parseInt(s.substring(4,6));
+  if(isNaN(mm)||mm<1||mm>12) return 'Month digits invalid (01-12)';
+  if(!/^\d{7}$/.test(s.substring(8))) return 'Last 7 chars must be numeric';
+  if((batchUsed||[]).includes(s)) return 'Duplicate serial in this batch';
+  return '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// BLACK DOT LOGIC (per IS2500 standard)
+// ═══════════════════════════════════════════════════════════
+function evalBD(s){
+  if(s.bdNoDot) return {ok:true,reason:'No Black Dot — Acceptable'};
+  if(!s.bdVisible) return {ok:true,reason:'Not visible at 2m — Acceptable (any quantity)'};
+  const D=parseFloat(s.bdD)||0, N=parseInt(s.bdN)||0, DS=parseFloat(s.bdDS)||0;
+  if(D>2.4) return {ok:false,reason:`D=${D}mm > 2.4mm — FAIL (Major)`};
+  if(N>3)   return {ok:false,reason:`N=${N} > 3 — FAIL`};
+  if(DS<15) return {ok:false,reason:`DS=${DS}mm < 15mm — FAIL`};
+  if(D<=1.28) return {ok:true,reason:`D=${D}mm ≤ 1.28mm, N=${N}, DS=${DS}mm — OK`};
+  // 1.28 < D <= 2.4: area rules
+  const area=s.bdArea||'A';
+  if(area==='A'){ if(N<=1) return {ok:true,reason:`D=${D}mm in Area A, N=${N}≤1 — OK`}; return {ok:false,reason:`Area A: N=${N}>1 — FAIL`}; }
+  if(area==='B'){ if(N<=3) return {ok:true,reason:`D=${D}mm in Area B, N=${N}≤3 — OK`}; return {ok:false,reason:`Area B: N=${N}>3 — FAIL`}; }
+  if(N<=3) return {ok:true,reason:`D=${D}mm in Area A+B, N=${N}≤3 — OK`};
+  return {ok:false,reason:`Area A+B: N=${N}>3 — FAIL`};
+}
+
+// ═══════════════════════════════════════════════════════════
+// SAMPLE RESULT
+// ═══════════════════════════════════════════════════════════
+function sampleRes(s){
+  if(!s.serial||s.serialError) return 'PENDING';
+  const bd=evalBD(s);
+  const major=!s.generalPass||!s.funcPass||!s.screenPass||!bd.ok;
+  const minor=!s.aestheticPass;
+  if(major) return 'FAIL-MAJOR';
+  if(minor) return 'FAIL-MINOR';
+  return 'PASS';
+}
+
 function freshSamples(n){
   return Array.from({length:n},(_,i)=>({
-    sampleNum:i+1,serial:'',serialError:'',
-    aestheticPass:true,generalPass:true,functionalPass:true,screenPass:true,
-    noBlackDot:true,bdVisible:false,bdD:'1.2',bdN:'1',bdDS:'20',bdArea:'A',remarks:''
+    num:i+1,serial:'',serialError:'',
+    aestheticPass:true,generalPass:true,funcPass:true,screenPass:true,
+    bdNoDot:true,bdVisible:false,bdD:'',bdN:'',bdDS:'',bdArea:'A',
+    remark:''
   }));
 }
 
-// ============================================================
-// RENDER ROUTER
-// ============================================================
-function render(){
-  const app=document.getElementById('app');
-  if(!API_URL){ app.innerHTML=renderSetup(); bindSetup(); return; }
-  if(!currentUser){ app.innerHTML=renderLogin(); bindLogin(); return; }
-  if(lotState&&sampleRows.length){ app.innerHTML=renderInspection(); bindInspection(); return; }
-  app.innerHTML=renderDashboard(); bindDashboard();
+function tallyLot(){
+  let minor=0,major=0;
+  samples.forEach(s=>{
+    const r=sampleRes(s);
+    if(r==='FAIL-MINOR') minor++;
+    if(r==='FAIL-MAJOR') major++;
+  });
+  return{minor,major,passed:minor<=1&&major===0,filled:samples.filter(s=>sampleRes(s)!=='PENDING').length};
 }
 
-// ============================================================
-// SETUP SCREEN
-// ============================================================
-function renderSetup(){
-  return`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;">
-  <div class="card" style="max-width:480px;width:100%;">
-    <div class="logo" style="margin-bottom:24px;">
-      <div class="logo-icon">QC</div>
-      <div><div class="logo-title">IS2500 OBA INSPECTION</div><div class="logo-sub">One-time Backend Setup</div></div>
+// ═══════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════
+function render(){ document.getElementById('app').innerHTML=buildPage(); bindEvents(); }
+
+function buildPage(){
+  if(!API)          return buildSetup();
+  if(!user)         return buildLogin();
+  if(activeLot)     return buildInspection();
+  return buildDashboard();
+}
+
+// ─── SETUP ────────────────────────────────────────────────
+function buildSetup(){
+  return `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div class="card" style="max-width:440px;width:100%">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div class="logo">QC</div>
+      <div><div class="hdr-title">IS2500 OBA HMI</div><div class="hdr-sub">BATCH INSPECTION SYSTEM — SETUP</div></div>
     </div>
-    <div class="form-group">
-      <label class="lbl">Apps Script Web App URL</label>
-      <input id="apiUrlInput" class="field" placeholder="https://script.google.com/macros/s/.../exec" type="text">
+    <div class="fg"><label class="lbl">Apps Script Web App URL</label>
+      <input id="apiInput" class="field" type="text" placeholder="https://script.google.com/macros/s/…/exec">
     </div>
-    <button id="btnSaveUrl" class="btn btn-primary btn-full">Connect Backend</button>
-    <p class="text-xs text-muted mt-2">Paste your Google Apps Script Web App URL. Stored in your browser for future visits.</p>
+    <button id="btnSetup" class="btn btn-primary btn-full">Connect Backend</button>
+    <p class="text-muted" style="margin-top:10px">Paste your deployed Google Apps Script URL. Saved in browser.</p>
   </div></div>`;
 }
-function bindSetup(){
-  document.getElementById('btnSaveUrl').onclick=()=>{
-    const v=document.getElementById('apiUrlInput').value.trim();
-    if(!v){toast('Enter the Apps Script URL','error');return;}
-    API_URL=v; localStorage.setItem('oba_api_url',v); render();
-  };
-}
 
-// ============================================================
-// LOGIN SCREEN
-// ============================================================
-function renderLogin(){
-  return`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;">
-  <div class="card" style="max-width:380px;width:100%;">
-    <div class="logo" style="margin-bottom:24px;">
-      <div class="logo-icon">QC</div>
-      <div><div class="logo-title">IS2500 OBA HMI</div><div class="logo-sub">Inspection Management System</div></div>
+// ─── LOGIN ─────────────────────────────────────────────────
+function buildLogin(){
+  return `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div class="card" style="max-width:380px;width:100%">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div class="logo">QC</div>
+      <div><div class="hdr-title">IS2500 OBA HMI</div><div class="hdr-sub">BATCH INSPECTION MANAGEMENT</div></div>
     </div>
-    <div class="form-group"><label class="lbl">Username</label><input id="loginUser" class="field" type="text" autocomplete="username"></div>
-    <div class="form-group"><label class="lbl">Password</label><input id="loginPass" class="field" type="password" autocomplete="current-password"></div>
-    <div id="loginErr" class="err-msg hidden"></div>
-    <button id="btnLogin" class="btn btn-primary btn-full" style="margin-top:8px;">Login</button>
-    <div class="mt-2 text-center"><button id="btnChangeUrl" class="btn btn-ghost btn-sm" style="margin-top:8px;">Change Backend URL</button></div>
+    <div class="fg"><label class="lbl">Username</label><input id="lUser" class="field" type="text" placeholder="Username"></div>
+    <div class="fg"><label class="lbl">Password</label><input id="lPass" class="field" type="password" placeholder="Password"></div>
+    <div id="lErr" class="err hidden"></div>
+    <button id="btnLogin" class="btn btn-primary btn-full" style="margin-top:6px">Login</button>
+    <button id="btnChgUrl" class="btn btn-ghost btn-full" style="margin-top:8px;font-size:10px">Change Backend URL</button>
   </div></div>`;
 }
-function bindLogin(){
-  document.getElementById('loginPass').onkeydown=e=>{ if(e.key==='Enter') document.getElementById('btnLogin').click(); };
-  document.getElementById('btnLogin').onclick=async()=>{
-    const u=document.getElementById('loginUser').value.trim();
-    const p=document.getElementById('loginPass').value.trim();
-    const errEl=document.getElementById('loginErr');
-    errEl.classList.add('hidden');
-    try{
-      const res=await api('login',{username:u,password:p});
-      if(res.ok){ currentUser={username:res.username,role:res.role,name:res.name}; await refreshKits(); render(); }
-      else{ errEl.textContent=res.error||'Login failed'; errEl.classList.remove('hidden'); }
-    }catch(e){ errEl.textContent='Network error: '+e.message; errEl.classList.remove('hidden'); }
-  };
-  document.getElementById('btnChangeUrl').onclick=()=>{ API_URL=''; localStorage.removeItem('oba_api_url'); render(); };
-}
 
-// ============================================================
-// DASHBOARD
-// ============================================================
-function renderDashboard(){
-  const groups=groupKits(allKits);
-  const totalLots=allKits.length;
-  const completedLots=allKits.filter(k=>k.status==='Closed').length;
-  const passLots=allKits.filter(k=>k.result==='PASS').length;
-  const failLots=allKits.filter(k=>k.result==='FAIL').length;
-  const totalFG=allKits.reduce((s,k)=>s+(isNaN(Number(k.fgPassQty))?0:Number(k.fgPassQty)),0);
-  const totalKitQty=groups.reduce((s,g)=>s+g.kitQty,0);
-  const pct=totalLots>0?Math.round(completedLots/totalLots*100):0;
-  const isAdmin=currentUser.role==='admin';
+// ─── DASHBOARD ────────────────────────────────────────────
+function buildDashboard(){
+  const groups=groupBatches();
+  const totalLots=batches.length;
+  const done=batches.filter(b=>b.status==='Closed').length;
+  const passL=batches.filter(b=>b.result==='PASS').length;
+  const failL=batches.filter(b=>b.result==='FAIL').length;
+  const fgAll=batches.reduce((s,b)=>s+Number(b.fgPassQty||0),0);
+  const pct=totalLots?Math.round(done/totalLots*100):0;
+  const isAdmin=user.role==='admin';
 
-  let h=`
-  <header>
-    <div class="logo">
-      <div class="logo-icon">QC</div>
-      <div><div class="logo-title">IS2500 OBA INSPECTION <span style="font-size:10px;background:#1e1b4b;color:#818cf8;padding:2px 8px;border-radius:20px;font-weight:400;vertical-align:middle;">HMI v5</span></div>
-      <div class="logo-sub">IS 2500 | Level G2 | Minor Ac≤1 | Major Ac=0</div></div>
+  let html=`<div class="page">
+  <header class="hdr">
+    <div class="hdr-left">
+      <div class="logo">QC</div>
+      <div><div class="hdr-title">IS2500 OBA — BATCH INSPECTION HMI</div>
+        <div class="hdr-sub">IS 2500 | LEVEL G2 | LOT SIZE 90 | SAMPLE 13 | MINOR Ac≤1 | MAJOR Ac=0</div>
+      </div>
     </div>
-    <div class="flex gap-2 items-center flex-wrap">
-      <span style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:6px 14px;font-size:11px;font-family:monospace;color:#94a3b8;">
-        <span style="display:inline-block;width:7px;height:7px;background:#4ade80;border-radius:50%;margin-right:6px;animation:pulse 2s infinite;"></span>
-        ${currentUser.name} (${currentUser.role})
-      </span>
+    <div class="hdr-right">
+      <span class="text-muted mono" style="font-size:11px">${user.name} (${user.role})</span>
       <button id="btnLogout" class="btn btn-ghost btn-sm">Logout</button>
     </div>
   </header>
-  <div class="container">
+  <div class="main">
 
   <!-- STATS -->
-  <div class="grid4" style="margin-bottom:20px;">
-    <div class="stat-card"><div class="stat-label">Total Lots</div><div class="stat-value">${totalLots}</div><div class="stat-sub">Kit Qty: ${totalKitQty}</div></div>
-    <div class="stat-card">
-      <div class="stat-label">Progress</div>
-      <div class="stat-value">${completedLots}<span style="font-size:14px;color:#475569;"> / ${totalLots}</span></div>
-      <div class="progress-bar mt-2"><div class="progress-fill" style="width:${pct}%"></div></div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Yield Rate</div>
-      <div class="stat-value" style="color:#38bdf8;">${completedLots>0?((passLots/completedLots)*100).toFixed(1):'0.0'}%</div>
-      <div class="stat-sub"><span class="text-pass">${passLots} PASS</span> &nbsp; <span class="text-fail">${failLots} FAIL</span></div>
-    </div>
-    <div class="stat-card"><div class="stat-label">FG Released</div><div class="stat-value text-pass">${totalFG}</div><div class="stat-sub">Certified units</div></div>
+  <div class="stat-grid fade">
+    <div class="stat"><div class="stat-label">Total Lots</div><div class="stat-val">${totalLots}</div></div>
+    <div class="stat"><div class="stat-label">Progress</div><div class="stat-val" style="font-size:18px">${done}/${totalLots}</div>
+      <div style="margin-top:6px"><div class="progress-bar" style="height:6px"><div class="progress-fill" style="width:${pct}%"></div></div></div>
+      <div class="stat-sub">${pct}% done</div></div>
+    <div class="stat"><div class="stat-label">Pass Lots</div><div class="stat-val text-pass">${passL}</div><div class="stat-sub text-fail">${failL} fail</div></div>
+    <div class="stat"><div class="stat-label">FG Released</div><div class="stat-val text-pass">${fgAll}</div><div class="stat-sub">Certified units</div></div>
   </div>
 
-  <!-- BANNER -->
-  <div class="banner" style="margin-bottom:20px;">
-    <div class="banner-icon">i</div>
-    <div class="banner-text">
-      <strong>IS2500 Standard:</strong> Lot size <strong>90 units</strong> | Sample <strong>13 units</strong> | Minor (Aesthetic): <strong class="text-warn">≤1 allowed</strong> | Major (General/Functional/Screen/Black Dot): <strong class="text-fail">0 allowed</strong><br>
-      Serial: 15 digits = Model(4) + MMYY(4) + Unique(7) | Black Dot: D≤1.28→N≤3,DS≥15mm; 1.28&lt;D≤2.4→Area rules; D>2.4→FAIL
-    </div>
+  <!-- INFO BANNER -->
+  <div class="info-banner">
+    <b>IS 2500 Standard:</b> Lot = 90 units | Sample = 13 units | Minor (Aesthetic): ≤1 defect → LOT PASS | Major (General / Functional / Screen / Black Dot): 0 allowed → any 1 = LOT FAIL<br>
+    <b>Black Dot:</b> Not visible @2m → OK | Visible @2m: D≤1.28mm N≤3 DS≥15mm → OK | 1.28<D≤2.4mm → Area A(N≤1) / Area B(N≤3) / A+B(N≤3) | D>2.4mm → FAIL
   </div>`;
 
-  // ADMIN FORMS
+  // ADMIN PANELS
   if(isAdmin){
-    h+=`
-    <div class="grid3" style="margin-bottom:20px;">
-    <!-- CREATE KIT -->
+    html+=`<div class="grid-3">
+    <!-- CREATE BATCH -->
     <div class="card">
-      <div style="font-size:13px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e293b;">Create New Kit</div>
-      <div class="form-group"><label class="lbl">Kit Name</label><input id="newKitName" class="field" placeholder="e.g. LH1G-JUN26" type="text"></div>
-      <div class="form-group"><label class="lbl">Kit Quantity (total units)</label><input id="newKitQty" class="field" placeholder="e.g. 2000" type="number"></div>
-      <div class="form-group"><label class="lbl">Model</label>
-        <select id="newModel" class="field"><option value="LH1G">LH1G (Code: 1217)</option><option value="LH3G">LH3G (Code: 1218)</option></select></div>
-      <div class="form-group"><label class="lbl">Production Month</label><input id="newProdMonth" class="field" type="month"></div>
-      <button id="btnCreateKit" class="btn btn-primary btn-full">Create Kit</button>
-      <div id="createKitMsg" class="text-xs text-pass mt-2 hidden"></div>
-      <div class="text-xs text-muted mt-2">Number of lots = Kit Qty ÷ 90. Remainder becomes last lot (same 13-sample inspection applies).</div>
+      <div class="card-title">Create New Batch</div>
+      <div class="fg"><label class="lbl">Batch Name</label><input id="bName" class="field" type="text" placeholder="e.g. LH1G-JUN-2026"></div>
+      <div class="fg"><label class="lbl">Batch Quantity (total units)</label><input id="bQty" class="field" type="number" placeholder="e.g. 2000" min="1"></div>
+      <div class="fg"><label class="lbl">Model</label>
+        <select id="bModel" class="field"><option value="LH1G">LH1G (Code: 1217)</option><option value="LH3G">LH3G (Code: 1218)</option></select></div>
+      <div class="fg"><label class="lbl">Production Month</label><input id="bMonth" class="field" type="month"></div>
+      <button id="btnCreateBatch" class="btn btn-primary btn-full">Create Batch</button>
+      <div id="createMsg" class="text-muted hidden" style="margin-top:8px;font-size:11px;line-height:1.6"></div>
+      <div class="text-muted" style="margin-top:8px;font-size:10px">Lots = Batch Qty ÷ 90. Remainder = extra smaller lot (same 13-sample inspection).</div>
     </div>
 
     <!-- ADD USER -->
     <div class="card">
-      <div style="font-size:13px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e293b;">Add Inspector / Admin</div>
-      <div class="form-group"><label class="lbl">Username</label><input id="newInsUser" class="field" type="text"></div>
-      <div class="form-group"><label class="lbl">Password</label><input id="newInsPass" class="field" type="text"></div>
-      <div class="form-group"><label class="lbl">Full Name</label><input id="newInsName" class="field" type="text"></div>
-      <div class="form-group"><label class="lbl">Role</label>
-        <select id="newInsRole" class="field"><option value="inspector">Inspector</option><option value="admin">Admin</option></select></div>
+      <div class="card-title">Add Inspector / Admin</div>
+      <div class="fg"><label class="lbl">Username</label><input id="uUser" class="field" type="text"></div>
+      <div class="fg"><label class="lbl">Password</label><input id="uPass" class="field" type="text"></div>
+      <div class="fg"><label class="lbl">Full Name</label><input id="uName" class="field" type="text"></div>
+      <div class="fg"><label class="lbl">Role</label>
+        <select id="uRole" class="field"><option value="inspector">Inspector</option><option value="admin">Admin</option></select></div>
       <button id="btnAddUser" class="btn btn-ghost btn-full">Add User</button>
-      <div id="addUserMsg" class="text-xs text-pass mt-2 hidden"></div>
+      <div id="addUserMsg" class="text-muted hidden" style="margin-top:8px;font-size:11px"></div>
     </div>
 
-    <!-- ACTIONS -->
+    <!-- QUICK ACTIONS -->
     <div class="card">
-      <div style="font-size:13px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e293b;">Quick Actions</div>
-      <button id="btnRefresh" class="btn btn-ghost btn-full" style="margin-bottom:10px;">↻ Refresh Data</button>
-      <button id="btnDownloadCSV" class="btn btn-success btn-full">⬇ Download Master CSV</button>
+      <div class="card-title">Quick Actions</div>
+      <button id="btnRefresh" class="btn btn-ghost btn-full" style="margin-bottom:8px">↻ Refresh Data</button>
+      <button id="btnCSV" class="btn btn-primary btn-full">⬇ Download CSV Report</button>
     </div>
     </div>`;
   }
 
-  // KITS LIST
-  h+=`<div id="kitsList">`;
+  // BATCH LIST
+  html+=`<div id="batchList">`;
   if(groups.length===0){
-    h+=`<div class="card" style="text-align:center;color:#475569;padding:60px;">No kits registered yet.</div>`;
+    html+=`<div class="card" style="text-align:center;padding:40px;color:#475569">No batches yet. ${isAdmin?'Create one above.':'Ask admin to create a batch.'}</div>`;
   } else {
-    groups.forEach((g,gi)=>{
-      const pct2=g.totalLots>0?Math.round(g.completed/g.totalLots*100):0;
-      h+=`
-      <div class="kit-group">
-        <div class="kit-group-header">
+    groups.forEach(g=>{
+      const pct2=g.totalLots?Math.round(g.completed/g.totalLots*100):0;
+      html+=`<div class="batch-group fade">
+      <div class="batch-hdr">
+        <div>
+          <div class="batch-name">${g.name}</div>
+          <div class="batch-meta">
+            Model: <b>${g.model||'-'}</b> | Prod Month: <b>${mmyyDisp(g.prodMonthCode)}</b> |
+            Batch Qty: <b>${g.batchQty||'?'}</b> | Total Lots: <b>${g.totalLots}</b> |
+            Completed: <b>${g.completed}/${g.totalLots}</b> | Pending: <b>${g.pending}</b> |
+            <span class="text-pass">PASS: ${g.passLots}</span> |
+            <span class="text-fail">FAIL: ${g.failLots}</span> |
+            FG Released: <b class="text-pass">${g.fgTotal}</b>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <div>
-            <div class="kit-name">${g.name}</div>
-            <div class="kit-meta">
-              Model: ${g.model} &nbsp;|&nbsp; Prod Month: ${mmyyDisplay(g.prodMonthCode)} &nbsp;|&nbsp;
-              Kit Qty: ${g.kitQty} &nbsp;|&nbsp; Total Lots: ${g.totalLots} &nbsp;|&nbsp;
-              Completed: ${g.completed}/${g.totalLots} &nbsp;|&nbsp; Pending: ${g.pending} &nbsp;|&nbsp;
-              <span class="text-pass bold">PASS: ${g.passLots}</span> &nbsp;
-              <span class="text-fail bold">FAIL: ${g.failLots}</span> &nbsp;|&nbsp;
-              <span class="text-pass bold">FG Released: ${g.fgPass}</span>
-            </div>
+            <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:${pct2}%"></div></div>
+            <div class="text-muted" style="text-align:right;margin-top:3px">${pct2}%</div>
           </div>
-          <div style="min-width:120px;text-align:right;">
-            <div class="text-xs text-muted mono" style="margin-bottom:4px;">${pct2}% done</div>
-            <div class="progress-bar"><div class="progress-fill" style="width:${pct2}%"></div></div>
-            ${isAdmin?`<button class="btn btn-danger btn-sm deleteKitBtn" data-kitname="${g.name}" style="margin-top:8px;font-size:10px;padding:4px 10px;">🗑 Delete Kit</button>`:''}
-          </div>
-        </div>`;
+          ${isAdmin?`<button class="btn btn-danger btn-sm delBatchBtn" data-name="${g.name}">🗑 Delete Batch</button>`:''}
+        </div>
+      </div>`;
 
-      g.lots.forEach(k=>{
-        const kidx=allKits.indexOf(k);
-        const statusBadge=k.status==='Open'?`<span class="badge badge-open">Open</span>`:`<span class="badge badge-closed">Closed</span>`;
-        const resultBadge=k.result?(k.result==='PASS'?`<span class="badge badge-pass">PASS</span>`:`<span class="badge badge-fail">FAIL</span>`):'';
-        const fgTxt=k.fgPassQty!==''&&k.fgPassQty!==undefined?`<span class="text-xs text-pass mono">FG: ${k.fgPassQty}</span>`:'';
-        h+=`
-        <div class="lot-row">
+      g.lots.forEach(lot=>{
+        const ri=batches.indexOf(lot);
+        html+=`<div class="lot-row">
           <div>
-            <div class="lot-name">${k.lotNumber}</div>
-            <div class="lot-meta">Size: ${k.lotSize} | Sample: ${k.sampleSize} | BD Major &gt; ${k.bdMax}mm</div>
+            <div class="lot-name">${lot.lotNumber}</div>
+            <div class="lot-meta">Lot Size: ${lot.lotSize} | Sample: ${lot.sampleSize} | BD Limit: >${lot.bdMax}mm = Fail</div>
           </div>
           <div class="lot-actions">
-            ${statusBadge} ${resultBadge} ${fgTxt}
-            ${!isAdmin&&k.status==='Open'?`<button class="btn btn-primary btn-sm startInspBtn" data-idx="${kidx}">Start Inspection</button>`:''}
-            ${isAdmin?`<button class="btn btn-ghost btn-sm editLotBtn" data-idx="${kidx}">Edit</button>`:''}
-            ${isAdmin?`<button class="btn btn-danger btn-sm deleteLotBtn" data-idx="${kidx}" style="font-size:10px;padding:4px 10px;">🗑 Delete Lot</button>`:''}
+            <span class="badge ${lot.status==='Open'?'badge-open':'badge-closed'}">${lot.status}</span>
+            ${lot.result?`<span class="badge ${lot.result==='PASS'?'badge-pass':'badge-fail'}">${lot.result}</span>`:''}
+            ${lot.fgPassQty!==0&&lot.fgPassQty!==''?`<span class="text-muted mono" style="font-size:10px">FG:${lot.fgPassQty}</span>`:''}
+            ${!isAdmin&&lot.status==='Open'?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">Start Inspection</button>`:''}
+            ${isAdmin?`<button class="btn btn-ghost btn-sm editBtn" data-ri="${ri}">Edit</button>`:''}
+            ${isAdmin?`<button class="btn btn-danger btn-sm delLotBtn" data-ri="${ri}" style="font-size:9px;padding:4px 8px">🗑</button>`:''}
           </div>
         </div>
-        <div id="editPanel${kidx}" class="hidden"></div>`;
+        <div id="editArea${ri}" class="hidden" style="padding:12px 18px;background:#020617;border-top:1px solid #0f172a"></div>`;
       });
-
-      h+=`</div>`;
+      html+=`</div>`;
     });
   }
-  h+=`</div>`;
-
-  if(!isAdmin){
-    h+=`<button id="btnRefreshInsp" class="btn btn-ghost btn-sm" style="margin-top:12px;">↻ Refresh</button>`;
-  }
-
-  h+=`</div>
-  <footer>IS2500 Sampling Plan | Minor limit: ≤1 | Major limit: 0 | 13 samples per 90-unit lot | © 2026 Quality Assurance</footer>`;
-  return h;
+  html+=`</div></div>
+  <footer class="pg-footer">IS2500 OBA Inspection | Lot Size: 90 | Sample: 13 | Minor Ac≤1 | Major Ac=0 | © 2026</footer>
+  </div>`;
+  return html;
 }
 
-function bindDashboard(){
-  const btnLogout=document.getElementById('btnLogout');
-  if(btnLogout) btnLogout.onclick=()=>{ currentUser=null; lotState=null; sampleRows=[]; render(); };
+// ─── INSPECTION ───────────────────────────────────────────
+function buildInspection(){
+  const lot=activeLot;
+  const {minor,major,passed,filled}=tallyLot();
+  const allReady=filled===samples.length&&samples.every(s=>!s.serialError&&s.serial);
 
-  const btnRefresh=document.getElementById('btnRefresh');
-  if(btnRefresh) btnRefresh.onclick=async()=>{ await refreshKits(); render(); toast('Data refreshed'); };
-
-  const btnRefreshInsp=document.getElementById('btnRefreshInsp');
-  if(btnRefreshInsp) btnRefreshInsp.onclick=async()=>{ await refreshKits(); render(); toast('Data refreshed'); };
-
-  const btnCreateKit=document.getElementById('btnCreateKit');
-  if(btnCreateKit) btnCreateKit.onclick=async()=>{
-    const kitName=document.getElementById('newKitName').value.trim();
-    const kitQty=parseInt(document.getElementById('newKitQty').value)||0;
-    const model=document.getElementById('newModel').value;
-    const prodMonth=document.getElementById('newProdMonth').value;
-    const msgEl=document.getElementById('createKitMsg');
-    if(!kitName){ toast('Enter Kit Name','error'); return; }
-    if(kitQty<=0){ toast('Enter Kit Quantity > 0','error'); return; }
-    const prodMonthCode=prodMonth?mmyy(prodMonth):'';
-    console.log('Creating kit:', {kitName, kitQty, kitSize:kitQty, model, prodMonthCode});
-    msgEl.textContent='Creating...'; msgEl.classList.remove('hidden');
-    const res=await api('createKit',{kitName,kitSize:kitQty,lotSize:90,sampleSize:13,bdMax:2.4,model,prodMonthCode,createdBy:currentUser.username});
-    console.log('Create kit response:', res);
-    if(res.ok){
-      msgEl.textContent=`✓ Created ${res.lotsCreated} lot(s): ${kitName} Lot 1 – Lot ${res.lotsCreated} | Kit Qty: ${res.kitSize} | Lot Size: ${res.lotSize}`;
-      msgEl.classList.remove('hidden');
-      document.getElementById('newKitName').value='';
-      document.getElementById('newKitQty').value='';
-      await refreshKits(); render();
-      toast(`Kit created: ${res.lotsCreated} lots`);
-    } else {
-      msgEl.textContent='Error: '+(res.error||'unknown');
-      toast(res.error||'Error','error');
-    }
-  };
-
-  const btnAddUser=document.getElementById('btnAddUser');
-  if(btnAddUser) btnAddUser.onclick=async()=>{
-    const username=document.getElementById('newInsUser').value.trim();
-    const password=document.getElementById('newInsPass').value.trim();
-    const name=document.getElementById('newInsName').value.trim();
-    const role=document.getElementById('newInsRole').value;
-    if(!username||!password||!name){ toast('Fill all user fields','error'); return; }
-    const res=await api('addUser',{username,password,name,role});
-    if(res.ok){ document.getElementById('newInsUser').value=''; document.getElementById('newInsPass').value=''; document.getElementById('newInsName').value=''; const m=document.getElementById('addUserMsg'); m.textContent=`User "${username}" added.`; m.classList.remove('hidden'); toast(`User ${username} added`); }
-    else{ toast(res.error||'Error','error'); }
-  };
-
-  const btnCSV=document.getElementById('btnDownloadCSV');
-  if(btnCSV) btnCSV.onclick=downloadCSV;
-
-  // Delete Kit (all lots under kit name)
-  document.querySelectorAll('.deleteKitBtn').forEach(btn=>{
-    btn.onclick=async()=>{
-      const kitName=btn.getAttribute('data-kitname');
-      if(!confirm(`Delete ALL lots under kit "${kitName}"? This cannot be undone.`)) return;
-      const res=await api('deleteKit',{kitName});
-      if(res.ok){ await refreshKits(); render(); toast(`Kit "${kitName}" deleted`); }
-      else toast(res.error||'Delete failed','error');
-    };
-  });
-
-  // Delete single Lot
-  document.querySelectorAll('.deleteLotBtn').forEach(btn=>{
-    btn.onclick=async()=>{
-      const idx=parseInt(btn.getAttribute('data-idx'));
-      const k=allKits[idx];
-      if(!confirm(`Delete "${k.lotNumber}" from kit "${k.kitName}"? This cannot be undone.`)) return;
-      const res=await api('deleteLot',{kitName:k.kitName,lotNumber:k.lotNumber});
-      if(res.ok){ await refreshKits(); render(); toast(`Lot deleted`); }
-      else toast(res.error||'Delete failed','error');
-    };
-  });
-
-  // Start inspection
-  document.querySelectorAll('.startInspBtn').forEach(btn=>{
-    btn.onclick=()=>{
-      const idx=parseInt(btn.getAttribute('data-idx'));
-      const k=allKits[idx];
-      lotState={...k,sampleSize:parseInt(k.sampleSize)||13,bdMax:parseFloat(k.bdMax)||2.4};
-      sampleRows=freshSamples(lotState.sampleSize);
-      render();
-    };
-  });
-
-  // Edit lot
-  document.querySelectorAll('.editLotBtn').forEach(btn=>{
-    btn.onclick=()=>{
-      const idx=parseInt(btn.getAttribute('data-idx'));
-      const k=allKits[idx];
-      const panel=document.getElementById('editPanel'+idx);
-      if(!panel.classList.contains('hidden')){ panel.classList.add('hidden'); panel.innerHTML=''; return; }
-      panel.classList.remove('hidden');
-      panel.innerHTML=`
-      <div class="edit-panel">
-        <div class="edit-grid">
-          <div><label class="lbl">Lot Size</label><input id="eLS${idx}" class="field" type="number" value="${k.lotSize}"></div>
-          <div><label class="lbl">Sample Size</label><input id="eSS${idx}" class="field" type="number" value="${k.sampleSize}"></div>
-          <div><label class="lbl">BD Max (mm)</label><input id="eBD${idx}" class="field" type="number" step="0.01" value="${k.bdMax}"></div>
-          <div><label class="lbl">Status</label><select id="eST${idx}" class="field"><option value="Open" ${k.status==='Open'?'selected':''}>Open</option><option value="Closed" ${k.status==='Closed'?'selected':''}>Closed</option></select></div>
-          <div><label class="lbl">Model</label><select id="eMD${idx}" class="field"><option value="LH1G" ${k.model==='LH1G'?'selected':''}>LH1G (1217)</option><option value="LH3G" ${k.model==='LH3G'?'selected':''}>LH3G (1218)</option></select></div>
-          <div><label class="lbl">Production Month</label><input id="ePM${idx}" class="field" type="month" value="${mmyyToInput(k.prodMonthCode)}"></div>
-        </div>
-        <button class="btn btn-primary btn-sm saveLotEdit" data-idx="${idx}">Save Changes</button>
-        <button class="btn btn-ghost btn-sm cancelLotEdit" data-idx="${idx}" style="margin-left:8px;">Cancel</button>
-      </div>`;
-      panel.querySelector('.saveLotEdit').onclick=async()=>{
-        const lotSize=parseInt(document.getElementById('eLS'+idx).value);
-        const sampleSize=parseInt(document.getElementById('eSS'+idx).value);
-        const bdMax=parseFloat(document.getElementById('eBD'+idx).value);
-        const status=document.getElementById('eST'+idx).value;
-        const model=document.getElementById('eMD'+idx).value;
-        const pm=document.getElementById('ePM'+idx).value;
-        const prodMonthCode=pm?mmyy(pm):k.prodMonthCode;
-        const res=await api('updateKit',{kitName:k.kitName,lotNumber:k.lotNumber,lotSize,sampleSize,bdMax,status,model,prodMonthCode});
-        if(res.ok){ await refreshKits(); render(); toast('Lot updated'); }
-        else{ toast(res.error||'Error','error'); }
-      };
-      panel.querySelector('.cancelLotEdit').onclick=()=>{ panel.classList.add('hidden'); panel.innerHTML=''; };
-    };
-  });
-}
-
-// ============================================================
-// INSPECTION SCREEN
-// ============================================================
-function renderInspection(){
-  const lot=lotState;
-  const{minors,majors,passed}=tallyLot();
-  const filledOk=sampleRows.filter(s=>s.serial&&!s.serialError).length;
-  const allReady=filledOk===sampleRows.length&&sampleRows.every(s=>!s.serialError&&s.serial);
-
-  let h=`
-  <div class="insp-header">
-    <div>
-      <div style="font-size:14px;font-weight:800;color:#fff;font-family:monospace;text-transform:uppercase;">${lot.kitName} — ${lot.lotNumber}</div>
-      <div class="insp-meta">Lot Size: ${lot.lotSize} | Sample: ${lot.sampleSize} | Model: ${lot.model} (${MODEL_CODES[lot.model]||'?'}) | Prod Month: ${mmyyDisplay(lot.prodMonthCode)} | BD Major > ${lot.bdMax}mm = FAIL</div>
+  let html=`<div class="page">
+  <header class="hdr">
+    <div class="hdr-left">
+      <div class="logo">QC</div>
+      <div><div class="hdr-title mono">${lot.batchName} — ${lot.lotNumber}</div>
+        <div class="hdr-sub">LOT SIZE: ${lot.lotSize} | SAMPLE: ${lot.sampleSize} | MODEL: ${lot.model} (${MODEL_CODE[lot.model]||'?'}) | PROD: ${mmyyDisp(lot.prodMonthCode)} | BD LIMIT: ≤${lot.bdMax}mm</div>
+      </div>
     </div>
-    <div class="flex gap-2 items-center flex-wrap">
-      <div class="tally-box">
-        <div class="tally-label">Minor / Major</div>
-        <div class="tally-value">
-          <span style="color:${minors<=1?'#fbbf24':'#f87171'}">${minors}</span>
-          <span style="color:#475569;"> / </span>
-          <span style="color:${majors===0?'#4ade80':'#f87171'}">${majors}</span>
+    <div class="hdr-right">
+      <div class="card" style="padding:10px 14px;margin:0">
+        <div class="text-muted" style="font-size:9px;margin-bottom:3px">MINOR / MAJOR</div>
+        <div style="font-size:14px;font-weight:900;font-family:monospace">
+          <span class="${minor<=1?'text-warn':'text-fail'}">${minor}</span>
+          <span class="text-muted"> / </span>
+          <span class="${major===0?'text-pass':'text-fail'}">${major}</span>
         </div>
       </div>
-      <div class="tally-box">
-        <div class="tally-label">Running Status</div>
-        <div class="tally-value" style="font-size:14px;color:${passed?'#4ade80':'#f87171'}">${passed?'PASSING':'FAILING'}</div>
-      </div>
-      <div class="tally-box">
-        <div class="tally-label">Ready</div>
-        <div class="tally-value" style="font-size:14px;">${filledOk}/${sampleRows.length}</div>
+      <div class="card" style="padding:10px 14px;margin:0">
+        <div class="text-muted" style="font-size:9px;margin-bottom:3px">STATUS</div>
+        <div style="font-size:12px;font-weight:900;font-family:monospace;color:${passed?'#4ade80':'#f87171'}">${passed?'PASSING':'FAILING'}</div>
       </div>
       <button id="btnBackInsp" class="btn btn-ghost btn-sm">← Back</button>
     </div>
-  </div>
-  <div class="container">`;
+  </header>
+  <div class="main">`;
 
-  sampleRows.forEach((s,i)=>{
-    const st=sampleStatus(s);
-    const stCls=st==='PASS'?'result-pass':st==='FAIL-MINOR'?'result-minor':st==='FAIL-MAJOR'?'result-major':'result-pending';
-    const stLbl=st==='PASS'?'PASS':st==='FAIL-MINOR'?'FAIL (Minor)':st==='FAIL-MAJOR'?'FAIL (Major)':'—';
-    const bdJudge=s.noBlackDot?{ok:true,reason:'No Black Dot'}:evalBD({visible:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
+  samples.forEach((s,i)=>{
+    const r=sampleRes(s);
+    const rCls=r==='PASS'?'res-pass':r==='FAIL-MINOR'?'res-minor':r==='FAIL-MAJOR'?'res-major':'res-pending';
+    const rLbl=r==='PASS'?'PASS':r==='FAIL-MINOR'?'FAIL — MINOR':r==='FAIL-MAJOR'?'FAIL — MAJOR':'PENDING';
+    const bd=evalBD(s);
 
-    h+=`
-    <div class="sample-card">
-      <div class="sample-header">
-        <div class="sample-num">Sample ${i+1}</div>
-        <div class="sample-result ${stCls}">${stLbl}</div>
+    html+=`<div class="sample-card fade">
+    <div class="sample-hdr">
+      <span class="sample-num">Sample ${i+1} of ${samples.length}</span>
+      <span class="sample-result ${rCls}">${rLbl}</span>
+    </div>
+
+    <!-- SERIAL -->
+    <div class="fg">
+      <label class="lbl">Serial Number (15 digits: ${MODEL_CODE[lot.model]||'????'}${lot.prodMonthCode||'????'}xxxxxxx)</label>
+      <input class="field mono sSerial ${s.serialError?'err-field':''}" data-i="${i}" type="text" value="${s.serial}" placeholder="${MODEL_CODE[lot.model]||'????'}${lot.prodMonthCode||'????'}0000001">
+      ${s.serialError?`<div class="err">${s.serialError}</div>`:''}
+    </div>
+
+    <!-- TESTS -->
+    <div class="test-grid" style="margin-bottom:12px">
+      <div>
+        <div class="toggle-lbl" style="color:#fbbf24">Aesthetic (Minor)</div>
+        <button class="toggle-btn ${s.aestheticPass?'t-pass':'t-fail'} sToggle" data-i="${i}" data-f="aestheticPass">${s.aestheticPass?'PASS':'FAIL'}</button>
       </div>
+      <div>
+        <div class="toggle-lbl" style="color:#f87171">General (Major)</div>
+        <button class="toggle-btn ${s.generalPass?'t-pass':'t-fail'} sToggle" data-i="${i}" data-f="generalPass">${s.generalPass?'PASS':'FAIL'}</button>
+      </div>
+      <div>
+        <div class="toggle-lbl" style="color:#f87171">Functional (Major)</div>
+        <button class="toggle-btn ${s.funcPass?'t-pass':'t-fail'} sToggle" data-i="${i}" data-f="funcPass">${s.funcPass?'PASS':'FAIL'}</button>
+      </div>
+      <div>
+        <div class="toggle-lbl" style="color:#f87171">Screen (Major)</div>
+        <button class="toggle-btn ${s.screenPass?'t-pass':'t-fail'} sToggle" data-i="${i}" data-f="screenPass">${s.screenPass?'PASS':'FAIL'}</button>
+      </div>
+    </div>
 
-      <div class="grid2" style="gap:12px;margin-bottom:12px;">
-        <div>
-          <label class="lbl">Serial Number (15 digits)</label>
-          <input type="text" id="sSerial${i}" class="field mono ${s.serialError?'err-field':''}" placeholder="${MODEL_CODES[lot.model]||'????'}${lot.prodMonthCode||'????'}xxxxxxx" value="${s.serial}">
-          ${s.serialError?`<div class="err-msg">${s.serialError}</div>`:''}
+    <!-- BLACK DOT -->
+    <div class="bd-box">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+        <span class="lbl" style="margin-bottom:0">Black Dot (Major)</span>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
+          <input type="checkbox" class="sBDNoDot" data-i="${i}" ${s.bdNoDot?'checked':''}> No Black Dot
+        </label>
+        ${!s.bdNoDot?`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
+          <input type="checkbox" class="sBDVis" data-i="${i}" ${s.bdVisible?'checked':''}> Visible at 2m
+        </label>`:''}
+      </div>
+      ${!s.bdNoDot?`
+      <div class="bd-grid">
+        <div><label class="lbl">D (mm)</label><input class="field mono sBDF" data-i="${i}" data-f="bdD" type="number" step="0.01" value="${s.bdD}" placeholder="e.g. 1.2"></div>
+        <div><label class="lbl">N (spots)</label><input class="field mono sBDF" data-i="${i}" data-f="bdN" type="number" value="${s.bdN}" placeholder="e.g. 2"></div>
+        <div><label class="lbl">DS (mm)</label><input class="field mono sBDF" data-i="${i}" data-f="bdDS" type="number" step="0.1" value="${s.bdDS}" placeholder="e.g. 20"></div>
+        <div><label class="lbl">Area</label>
+          <select class="field mono sBDF" data-i="${i}" data-f="bdArea">
+            <option value="A" ${s.bdArea==='A'?'selected':''}>Area A (Inner)</option>
+            <option value="B" ${s.bdArea==='B'?'selected':''}>Area B (Outer)</option>
+            <option value="A+B" ${s.bdArea==='A+B'?'selected':''}>Area A+B</option>
+          </select></div>
+        <div style="display:flex;align-items:flex-end">
+          <div class="bd-result ${bd.ok?'bd-ok':'bd-fail'}">${bd.ok?'✓ OK':'✗ FAIL'}<br>${bd.reason}</div>
         </div>
-        <div>
-          <label class="lbl">Remark</label>
-          <input type="text" id="sRemark${i}" class="field" placeholder="Optional remark" value="${s.remarks||''}">
-        </div>
-      </div>
+      </div>`:`<div class="text-pass" style="font-size:11px;font-family:monospace">✓ No Black Dot — Acceptable</div>`}
+    </div>
 
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;">
-        ${buildToggle2(i,'aestheticPass',s.aestheticPass,'Aesthetic','Minor')}
-        ${buildToggle2(i,'generalPass',s.generalPass,'General','Major')}
-        ${buildToggle2(i,'functionalPass',s.functionalPass,'Functional','Major')}
-        ${buildToggle2(i,'screenPass',s.screenPass,'Screen','Major')}
-      </div>
-
-      <div class="bd-box">
-        <div class="flex items-center gap-3 flex-wrap">
-          <span class="lbl" style="margin-bottom:0;">Black Dot</span>
-          <label class="flex items-center gap-2" style="cursor:pointer;font-size:12px;">
-            <input type="checkbox" id="sNoBD${i}" ${s.noBlackDot?'checked':''} style="accent-color:#4ade80;width:14px;height:14px;">
-            No Black Dot
-          </label>
-          ${!s.noBlackDot?`
-          <label class="flex items-center gap-2" style="cursor:pointer;font-size:12px;">
-            <input type="checkbox" id="sBDVis${i}" ${s.bdVisible?'checked':''} style="accent-color:#818cf8;width:14px;height:14px;">
-            Visible at 2m
-          </label>`:''}
-        </div>
-
-        ${!s.noBlackDot?`
-        <div class="bd-row">
-          <div><label class="lbl">D (mm)</label><input type="number" step="0.01" id="sBDD${i}" value="${s.bdD}" class="field mono"></div>
-          <div><label class="lbl">N (spots)</label><input type="number" id="sBDN${i}" value="${s.bdN}" class="field mono"></div>
-          <div><label class="lbl">DS (mm)</label><input type="number" step="0.1" id="sBDDS${i}" value="${s.bdDS}" class="field mono"></div>
-          <div><label class="lbl">Area</label>
-            <select id="sBDA${i}" class="field mono">
-              <option value="A" ${s.bdArea==='A'?'selected':''}>Area A (Inner)</option>
-              <option value="B" ${s.bdArea==='B'?'selected':''}>Area B (Outer)</option>
-              <option value="A+B" ${s.bdArea==='A+B'?'selected':''}>Area A+B</option>
-            </select></div>
-          <div style="display:flex;align-items:flex-end;">
-            <div style="background:#020617;border:1px solid ${bdJudge.ok?'#14532d':'#7f1d1d'};border-radius:8px;padding:8px;width:100%;">
-              <div class="${bdJudge.ok?'bd-result-ok':'bd-result-fail'}">${bdJudge.ok?'✓ OK':'✗ FAIL'}</div>
-              <div style="font-size:9px;color:#64748b;margin-top:2px;font-family:monospace;">${bdJudge.reason.substring(0,55)}</div>
-            </div>
-          </div>
-        </div>`:`<div class="bd-result-ok mt-2">✓ No Black Dot — Acceptable</div>`}
-      </div>
+    <!-- REMARK -->
+    <div class="fg" style="margin-top:10px;margin-bottom:0">
+      <label class="lbl">Remark</label>
+      <input class="field sRemark" data-i="${i}" type="text" value="${s.remark||''}" placeholder="Optional remark or defect description">
+    </div>
     </div>`;
   });
 
-  h+=`
-  <div class="submit-section">
-    <div class="form-group">
-      <label class="lbl">General Lot Remarks</label>
-      <input type="text" id="lotRemarks" class="field" placeholder="Overall inspection remarks for this lot...">
+  html+=`<div class="insp-footer">
+    <div class="insp-tally">
+      <div>Samples filled: <b>${filled}/${samples.length}</b></div>
+      <div>Minor (Aesthetic): <b class="${minor<=1?'t-ok':'t-fail'}">${minor}</b> (max 1)</div>
+      <div>Major defects: <b class="${major===0?'t-ok':'t-fail'}">${major}</b> (max 0)</div>
+      <div>Lot verdict: <b class="${passed?'t-ok':'t-fail'}">${passed?'PASS':'FAIL'}</b></div>
     </div>
-    <div class="submit-row">
-      <div class="tally-summary">
-        <div>Samples ready: <span style="color:#818cf8;font-weight:700;">${filledOk}/${sampleRows.length}</span></div>
-        <div style="margin-top:4px;">Minor defects: <span class="${minors<=1?'text-warn':'text-fail'} bold">${minors} / 1 allowed</span></div>
-        <div style="margin-top:4px;">Major defects: <span class="${majors===0?'text-pass':'text-fail'} bold">${majors} / 0 allowed</span></div>
-        <div style="margin-top:4px;">Lot decision: <span class="${passed?'text-pass':'text-fail'} bold" style="font-size:14px;">${passed?'PASS':'FAIL'}</span> | FG Pass Qty: <span class="text-pass bold">${passed?lot.lotSize:0}</span></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+      <div class="fg" style="margin:0;width:300px">
+        <label class="lbl">General Lot Remarks</label>
+        <input id="lotRemarks" class="field" type="text" placeholder="Overall remark for this lot">
       </div>
-      <button id="btnSubmitLot" ${allReady?'':'disabled'} class="btn ${allReady?(passed?'btn-success':'btn-danger'):'btn-ghost'}" style="padding:14px 32px;font-size:14px;">
+      <button id="btnSubmitLot" class="btn ${allReady?(passed?'btn-primary':'btn-danger'):''}" ${allReady?'':'disabled'}>
         Submit Lot — ${passed?'PASS':'FAIL'}
       </button>
+      ${!allReady?`<div class="text-muted" style="font-size:10px">Fill all ${samples.length} serial numbers to enable submit</div>`:''}
     </div>
   </div>
+
   </div>
-  <footer>IS2500 Sampling Plan | Minor limit: ≤1 | Major limit: 0 | 13 samples per 90-unit lot | © 2026 Quality Assurance</footer>`;
-  return h;
-}
-
-function buildToggle2(i,field,val,label,type){
-  const typeCls=type==='Minor'?'text-warn':'text-fail';
-  return`<div class="toggle-group">
-    <div class="toggle-lbl ${typeCls}">${label} <span class="text-muted">(${type})</span></div>
-    <button class="toggle-btn ${val?'toggle-pass':'toggle-fail'} sToggle" data-si="${i}" data-field="${field}">${val?'PASS':'FAIL'}</button>
+  <footer class="pg-footer">IS2500 OBA Inspection | © 2026</footer>
   </div>`;
+  return html;
 }
 
-function bindInspection(){
-  document.getElementById('btnBackInsp').onclick=()=>{ if(confirm('Go back? Unsaved data will be lost.')){ lotState=null; sampleRows=[]; render(); } };
+// ═══════════════════════════════════════════════════════════
+// EVENT BINDING
+// ═══════════════════════════════════════════════════════════
+function bindEvents(){
+  // Setup
+  const bs=document.getElementById('btnSetup');
+  if(bs) bs.onclick=()=>{ const v=document.getElementById('apiInput').value.trim(); if(!v){toast('Enter URL','err');return;} API=v; localStorage.setItem('oba_api',v); render(); };
 
-  // Serial inputs
-  sampleRows.forEach((_,i)=>{
-    const el=document.getElementById('sSerial'+i);
-    if(el) el.onchange=()=>{
-      sampleRows[i].serial=el.value;
-      const used=sampleRows.filter((_,idx)=>idx!==i).map(s=>s.serial.toUpperCase()).filter(Boolean);
-      sampleRows[i].serialError=validateSerial(el.value,lotState.model,lotState.prodMonthCode,used);
-      render();
+  // Login
+  const bl=document.getElementById('btnLogin');
+  if(bl) bl.onclick=async()=>{
+    const u=document.getElementById('lUser').value.trim();
+    const p=document.getElementById('lPass').value.trim();
+    const err=document.getElementById('lErr');
+    err.classList.add('hidden');
+    try{
+      const r=await api('login',{username:u,password:p});
+      if(r.ok){ user={username:r.username,role:r.role,name:r.name}; await loadBatches(); render(); }
+      else{ err.textContent=r.error||'Login failed'; err.classList.remove('hidden'); }
+    }catch(e){ err.textContent='Network error: '+e.message; err.classList.remove('hidden'); }
+  };
+  const lp=document.getElementById('lPass');
+  if(lp) lp.onkeydown=e=>{ if(e.key==='Enter') document.getElementById('btnLogin')?.click(); };
+
+  const bcu=document.getElementById('btnChgUrl');
+  if(bcu) bcu.onclick=()=>{ API=''; localStorage.removeItem('oba_api'); render(); };
+
+  // Logout
+  const blo=document.getElementById('btnLogout');
+  if(blo) blo.onclick=()=>{ user=null; batches=[]; activeLot=null; samples=[]; render(); };
+
+  // Refresh
+  const br=document.getElementById('btnRefresh');
+  if(br) br.onclick=async()=>{ await loadBatches(); render(); toast('Refreshed'); };
+
+  // Create Batch
+  const bcb=document.getElementById('btnCreateBatch');
+  if(bcb) bcb.onclick=async()=>{
+    const batchName=document.getElementById('bName').value.trim();
+    const batchQty=parseInt(document.getElementById('bQty').value)||0;
+    const model=document.getElementById('bModel').value;
+    const month=document.getElementById('bMonth').value;
+    const msgEl=document.getElementById('createMsg');
+    if(!batchName){ toast('Enter Batch Name','err'); return; }
+    if(batchQty<1){ toast('Enter Batch Quantity > 0','err'); return; }
+    const prodMonthCode=month?mmyy(month):'';
+    msgEl.textContent='Creating lots…'; msgEl.classList.remove('hidden');
+    try{
+      const r=await api('createBatch',{batchName,batchQty,model,prodMonthCode,createdBy:user.username});
+      if(r.ok){
+        const lots=r.lotsCreated;
+        msgEl.innerHTML=`✓ <b>${batchName}</b> created with <b>${lots} lots</b>.<br>
+          Batch Qty: <b>${r.batchQty}</b> | Lot Size: 90 | Sample: 13<br>
+          ${lots} × 90${r.batchQty%90>0?' + 1 remainder lot of '+(r.batchQty%90)+' units':''}<br>
+          Lots named: ${batchName} Lot 1 → ${batchName} Lot ${lots}`;
+        msgEl.classList.remove('hidden');
+        document.getElementById('bName').value='';
+        document.getElementById('bQty').value='';
+        await loadBatches(); render();
+        toast(`Batch created: ${lots} lots`);
+      } else {
+        msgEl.textContent='Error: '+(r.error||'unknown');
+        toast(r.error||'Error','err');
+      }
+    }catch(e){ msgEl.textContent='Network error: '+e.message; toast('Network error','err'); }
+  };
+
+  // Add User
+  const bau=document.getElementById('btnAddUser');
+  if(bau) bau.onclick=async()=>{
+    const username=document.getElementById('uUser').value.trim();
+    const password=document.getElementById('uPass').value.trim();
+    const name=document.getElementById('uName').value.trim();
+    const role=document.getElementById('uRole').value;
+    if(!username||!password||!name){ toast('Fill all user fields','err'); return; }
+    const r=await api('addUser',{username,password,name,role});
+    if(r.ok){ toast(`User ${username} added`); document.getElementById('addUserMsg').textContent=`✓ ${username} added as ${role}`; document.getElementById('addUserMsg').classList.remove('hidden'); document.getElementById('uUser').value=''; document.getElementById('uPass').value=''; document.getElementById('uName').value=''; }
+    else toast(r.error||'Error','err');
+  };
+
+  // Delete Batch
+  document.querySelectorAll('.delBatchBtn').forEach(btn=>{
+    btn.onclick=async()=>{
+      const name=btn.getAttribute('data-name');
+      if(!confirm(`Delete ALL lots in batch "${name}"? Cannot be undone.`)) return;
+      const r=await api('deleteBatch',{batchName:name});
+      if(r.ok){ await loadBatches(); render(); toast(`Batch "${name}" deleted`); }
+      else toast(r.error||'Error','err');
     };
-    const rem=document.getElementById('sRemark'+i);
-    if(rem) rem.onchange=()=>{ sampleRows[i].remarks=rem.value; };
-
-    const noBD=document.getElementById('sNoBD'+i);
-    if(noBD) noBD.onchange=()=>{ sampleRows[i].noBlackDot=noBD.checked; render(); };
-
-    const bdVis=document.getElementById('sBDVis'+i);
-    if(bdVis) bdVis.onchange=()=>{ sampleRows[i].bdVisible=bdVis.checked; render(); };
-
-    ['D','N','DS','A'].forEach(x=>{
-      const el2=document.getElementById('sBD'+x+i);
-      if(el2) el2.onchange=()=>{
-        if(x==='D') sampleRows[i].bdD=el2.value;
-        else if(x==='N') sampleRows[i].bdN=el2.value;
-        else if(x==='DS') sampleRows[i].bdDS=el2.value;
-        else if(x==='A') sampleRows[i].bdArea=el2.value;
-        render();
-      };
-    });
   });
 
-  // Toggle pass/fail buttons
+  // Delete Lot
+  document.querySelectorAll('.delLotBtn').forEach(btn=>{
+    btn.onclick=async()=>{
+      const ri=parseInt(btn.getAttribute('data-ri'));
+      const lot=batches[ri];
+      if(!confirm(`Delete lot "${lot.lotNumber}"?`)) return;
+      const r=await api('deleteLot',{batchName:lot.batchName,lotNumber:lot.lotNumber});
+      if(r.ok){ await loadBatches(); render(); toast('Lot deleted'); }
+      else toast(r.error||'Error','err');
+    };
+  });
+
+  // Edit Lot
+  document.querySelectorAll('.editBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const ri=parseInt(btn.getAttribute('data-ri'));
+      const lot=batches[ri];
+      const area=document.getElementById('editArea'+ri);
+      if(!area.classList.contains('hidden')){ area.classList.add('hidden'); area.innerHTML=''; return; }
+      area.classList.remove('hidden');
+      area.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:10px">
+        <div><label class="lbl">Status</label><select id="eS${ri}" class="field"><option value="Open" ${lot.status==='Open'?'selected':''}>Open</option><option value="Closed" ${lot.status==='Closed'?'selected':''}>Closed</option></select></div>
+        <div><label class="lbl">BD Max (mm)</label><input id="eBD${ri}" class="field" type="number" step="0.01" value="${lot.bdMax}"></div>
+        <div><label class="lbl">Model</label><select id="eMD${ri}" class="field"><option value="LH1G" ${lot.model==='LH1G'?'selected':''}>LH1G</option><option value="LH3G" ${lot.model==='LH3G'?'selected':''}>LH3G</option></select></div>
+        <div><label class="lbl">Prod Month</label><input id="ePM${ri}" class="field" type="month" value="${mmyyInp(lot.prodMonthCode)}"></div>
+      </div>
+      <button class="btn btn-primary btn-sm saveLotEdit" data-ri="${ri}">Save Changes</button>`;
+      area.querySelector('.saveLotEdit').onclick=async()=>{
+        const status=document.getElementById('eS'+ri).value;
+        const bdMax=parseFloat(document.getElementById('eBD'+ri).value)||2.4;
+        const model=document.getElementById('eMD'+ri).value;
+        const pm=document.getElementById('ePM'+ri).value;
+        const prodMonthCode=pm?mmyy(pm):lot.prodMonthCode;
+        const r=await api('updateLot',{batchName:lot.batchName,lotNumber:lot.lotNumber,status,bdMax,model,prodMonthCode});
+        if(r.ok){ await loadBatches(); render(); toast('Lot updated'); }
+        else toast(r.error||'Error','err');
+      };
+    };
+  });
+
+  // Start Inspection
+  document.querySelectorAll('.startBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const ri=parseInt(btn.getAttribute('data-ri'));
+      activeLot=batches[ri];
+      samples=freshSamples(activeLot.sampleSize||SAMPLE_N);
+      render();
+    };
+  });
+
+  // CSV
+  const bcsv=document.getElementById('btnCSV');
+  if(bcsv) bcsv.onclick=downloadCSV;
+
+  // Back from inspection
+  const back=document.getElementById('btnBackInsp');
+  if(back) back.onclick=()=>{ if(confirm('Go back? Unsaved data will be lost.')){ activeLot=null; samples=[]; render(); } };
+
+  // Sample serial input
+  document.querySelectorAll('.sSerial').forEach(el=>{
+    el.onchange=()=>{
+      const i=parseInt(el.getAttribute('data-i'));
+      samples[i].serial=el.value.trim().toUpperCase();
+      const used=samples.filter((_,j)=>j!==i&&samples[j].serial).map(s=>s.serial.toUpperCase());
+      samples[i].serialError=validateSerial(samples[i].serial,activeLot.model,activeLot.prodMonthCode,used);
+      render();
+    };
+  });
+
+  // Sample toggles (pass/fail buttons)
   document.querySelectorAll('.sToggle').forEach(btn=>{
     btn.onclick=()=>{
-      const i=parseInt(btn.getAttribute('data-si'));
-      const field=btn.getAttribute('data-field');
-      sampleRows[i][field]=!sampleRows[i][field];
+      const i=parseInt(btn.getAttribute('data-i'));
+      const f=btn.getAttribute('data-f');
+      samples[i][f]=!samples[i][f];
       render();
     };
   });
 
-  // Submit
-  const btnSubmit=document.getElementById('btnSubmitLot');
-  if(btnSubmit) btnSubmit.onclick=async()=>{
-    const{minors,majors,passed}=tallyLot();
-    const fgPassQty=passed?lotState.lotSize:0;
-    const lotResult=passed?'PASS':'FAIL';
-    const remarks=document.getElementById('lotRemarks')?.value||'';
+  // BD no dot checkbox
+  document.querySelectorAll('.sBDNoDot').forEach(el=>{
+    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); samples[i].bdNoDot=el.checked; render(); };
+  });
 
-    const units=sampleRows.map(s=>{
-      const bd=s.noBlackDot?{ok:true,reason:'No Black Dot'}:evalBD({visible:s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea});
+  // BD visible checkbox
+  document.querySelectorAll('.sBDVis').forEach(el=>{
+    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); samples[i].bdVisible=el.checked; render(); };
+  });
+
+  // BD fields
+  document.querySelectorAll('.sBDF').forEach(el=>{
+    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); const f=el.getAttribute('data-f'); samples[i][f]=el.value; render(); };
+  });
+
+  // Remark
+  document.querySelectorAll('.sRemark').forEach(el=>{
+    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); samples[i].remark=el.value; };
+  });
+
+  // Submit Lot
+  const bsub=document.getElementById('btnSubmitLot');
+  if(bsub) bsub.onclick=async()=>{
+    const {minor,major,passed}=tallyLot();
+    const lotResult=passed?'PASS':'FAIL';
+    const fgPassQty=passed?Number(activeLot.lotSize):0;
+    const lotRemarks=document.getElementById('lotRemarks')?.value||'';
+
+    const units=samples.map(s=>{
+      const bd=evalBD(s);
+      const r=sampleRes(s);
       const fails=[];
       if(!s.aestheticPass) fails.push('Aesthetic Fail (Minor)');
-      if(!s.generalPass) fails.push('General Fail (Major)');
-      if(!s.functionalPass) fails.push('Functional Fail (Major)');
-      if(!s.screenPass) fails.push('Screen Fail (Major)');
-      if(!s.noBlackDot&&!bd.ok) fails.push('Black Dot Fail: '+bd.reason);
-      const res=sampleStatus(s);
-      return{serial:s.serial,aes:s.aestheticPass?'Pass':'Fail',general:s.generalPass?'Pass':'Fail',func:s.functionalPass?'Pass':'Fail',screen:s.screenPass?'Pass':'Fail',bdDisplay:s.noBlackDot?'No Black Dot':bd.reason,remark:fails.length?fails.join(', '):(s.remarks||'OK'),result:res==='PASS'?'Pass':'Fail'};
+      if(!s.generalPass)   fails.push('General Fail (Major)');
+      if(!s.funcPass)      fails.push('Functional Fail (Major)');
+      if(!s.screenPass)    fails.push('Screen Fail (Major)');
+      if(!bd.ok)           fails.push('Black Dot Fail (Major): '+bd.reason);
+      return{
+        serial:s.serial,
+        aes:s.aestheticPass?'Pass':'Fail',
+        general:s.generalPass?'Pass':'Fail',
+        func:s.funcPass?'Pass':'Fail',
+        screen:s.screenPass?'Pass':'Fail',
+        bd:s.bdNoDot?'No BD':(s.bdVisible?bd.reason:'Not visible @2m'),
+        remark:fails.length?fails.join(' | '):(s.remark||lotRemarks||'OK'),
+        sampleResult:r==='PASS'?'Pass':'Fail'
+      };
     });
 
-    const res=await api('submitInspection',{
-      inspector:currentUser.name,kitName:lotState.kitName,lotNumber:lotState.lotNumber,
-      lotResult,kitTotalQty:lotState.kitTotalQty,totalLots:lotState.totalLots,
-      model:lotState.model,prodMonthCode:lotState.prodMonthCode,fgPassQty,
-      generalRemarks:remarks,units
+    const r=await api('submitLot',{
+      inspector:user.name,
+      batchName:activeLot.batchName,
+      lotNumber:activeLot.lotNumber,
+      lotResult,fgPassQty,
+      batchQty:activeLot.batchQty,
+      totalLots:activeLot.totalLots,
+      model:activeLot.model,
+      prodMonthCode:activeLot.prodMonthCode,
+      units
     });
-    if(res.ok){ toast(`${lotState.lotNumber}: ${lotResult} | FG Pass: ${fgPassQty}`); lotState=null; sampleRows=[]; await refreshKits(); render(); }
-    else{ toast(res.error||'Save error','error'); }
+
+    if(r.ok){
+      toast(`${activeLot.lotNumber}: ${lotResult} | FG Pass: ${fgPassQty}`);
+      activeLot=null; samples=[];
+      await loadBatches(); render();
+    } else toast(r.error||'Save failed','err');
   };
 }
 
-// ============================================================
-// DATA & CSV
-// ============================================================
-async function refreshKits(){
-  try{ const res=await api('getKits',{}); if(res.ok) allKits=res.kits; }catch(e){ console.error(e); }
-}
-
+// ═══════════════════════════════════════════════════════════
+// CSV
+// ═══════════════════════════════════════════════════════════
 function downloadCSV(){
-  const groups=groupKits(allKits);
-  let csv='IS2500 OBA MASTER COMPLIANCE REPORT\n';
+  const groups=groupBatches();
+  let csv='IS2500 OBA Batch Inspection Report\n';
   csv+=`Generated: ${new Date().toLocaleString()}\n\n`;
-  csv+='Lot Name,Kit Name,Model,Prod Month,Lot Size,Sample Size,Status,Result,FG Pass Qty,Kit Total Qty\n';
+  csv+='BatchName,LotNumber,Model,ProdMonth,BatchQty,LotSize,SampleSize,Status,Result,FGPassQty\n';
   groups.forEach(g=>{
-    g.lots.forEach(k=>{
-      csv+=`"${k.lotNumber}","${k.kitName}","${k.model||'-'}","${mmyyDisplay(k.prodMonthCode)}",${k.lotSize},${k.sampleSize},"${k.status}","${k.result||'Pending'}",${k.fgPassQty||0},${k.kitTotalQty||''}\n`;
+    g.lots.forEach(l=>{
+      csv+=`"${l.batchName}","${l.lotNumber}","${l.model||'-'}","${mmyyDisp(l.prodMonthCode)}",${l.batchQty},${l.lotSize},${l.sampleSize},"${l.status}","${l.result||'Pending'}",${l.fgPassQty||0}\n`;
     });
   });
-  const link=document.createElement('a');
-  link.href='data:text/csv;charset=utf-8,'+encodeURI(csv);
-  link.download=`IS2500_Report_${Date.now()}.csv`;
-  document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download=`OBA_Report_${Date.now()}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════════
 // BOOT
-// ============================================================
+// ═══════════════════════════════════════════════════════════
 render();
 </script>
 </body>
