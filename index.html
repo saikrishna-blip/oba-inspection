@@ -192,14 +192,31 @@ function groupBatches(){
 // ═══════════════════════════════════════════════════════════
 function validateSerial(serial,model,prodMonthCode,batchUsed){
   const s=(serial||'').trim().toUpperCase();
-  if(!/^\d{15}$/.test(s)) return 'Must be exactly 15 digits';
+
+  if(!/^\d{15}$/.test(s))
+    return 'Serial must be exactly 15 digits';
+
   const exp=MODEL_CODE[model]||'';
-  if(exp && s.substring(0,4)!==exp) return `Model prefix must be ${exp} for ${model}`;
-  if(prodMonthCode && s.substring(4,8)!==prodMonthCode) return `Month code must be ${prodMonthCode} (${mmyyDisp(prodMonthCode)})`;
-  const mm=parseInt(s.substring(4,6));
-  if(isNaN(mm)||mm<1||mm>12) return 'Month digits invalid (01-12)';
-  if(!/^\d{7}$/.test(s.substring(8))) return 'Last 7 chars must be numeric';
-  if((batchUsed||[]).includes(s)) return 'Duplicate serial in this batch';
+  if(exp && s.substring(0,4)!==exp)
+    return `${model} serial must start with ${exp}`;
+
+  if(prodMonthCode && s.substring(4,8)!==prodMonthCode)
+    return `Production code must be ${prodMonthCode} (${mmyyDisp(prodMonthCode)})`;
+
+  const mm=parseInt(s.substring(4,6),10);
+  if(isNaN(mm) || mm<1 || mm>12)
+    return 'Invalid month code (01-12)';
+
+  const yy=parseInt(s.substring(6,8),10);
+  if(isNaN(yy) || yy<26)
+    return 'Invalid year code';
+
+  if(!/^\d{7}$/.test(s.substring(8)))
+    return 'Last 7 digits must be numeric';
+
+  if((batchUsed||[]).includes(s))
+    return 'Duplicate serial in current lot';
+
   return '';
 }
 
