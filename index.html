@@ -613,7 +613,15 @@ function bindEvents(){
     const prodMonthCode=month?mmyy(month):'';
     msgEl.textContent='Creating lots…'; msgEl.classList.remove('hidden');
     try{
-      const r=await api('createBatch',{batchName,batchQty,model,prodMonthCode,createdBy:user.username});
+      async function api(action,data={}){
+   return fetch(API,{
+      method:'POST',
+      body:JSON.stringify({
+          action,
+          ...data
+      })
+   });
+}
       if(r.ok){
         const lots=r.lotsCreated;
         msgEl.innerHTML=`✓ <b>${batchName}</b> created with <b>${lots} lots</b>.<br>
