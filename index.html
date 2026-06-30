@@ -98,6 +98,29 @@ select.field{cursor:pointer}
 .insp-tally b{color:#e2e8f0}
 .insp-tally .t-ok{color:#4ade80}.insp-tally .t-warn{color:#fbbf24}.insp-tally .t-fail{color:#f87171}
 
+/* COMPACT SAMPLE LIST */
+.samp-table{background:#0a0f1e;border:1px solid #1e293b;border-radius:14px;overflow:hidden;margin-bottom:16px}
+.samp-row{border-bottom:1px solid #0f172a;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;transition:background .15s}
+.samp-row:last-child{border-bottom:none}
+.samp-row:hover{background:#0f172a}
+.samp-row.is-fail{background:#1a0a0a}
+.samp-num-badge{width:26px;height:26px;border-radius:7px;background:#1e293b;color:#94a3b8;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:monospace;flex-shrink:0}
+.samp-serial-wrap{flex:1 1 220px;min-width:200px}
+.samp-serial-inp{width:100%;background:#020617;border:1px solid #1e293b;border-radius:7px;padding:7px 10px;font-size:12px;color:#e2e8f0;outline:none;font-family:monospace}
+.samp-serial-inp:focus{border-color:#6366f1}
+.samp-serial-inp.err-field{border-color:#ef4444}
+.samp-toggles{display:flex;gap:5px;flex-wrap:wrap}
+.mini-toggle{padding:6px 10px;border-radius:7px;border:1px solid;font-size:10px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.03em;min-width:38px;text-align:center}
+.mini-toggle-pass{background:#052e16;color:#4ade80;border-color:#166534}
+.mini-toggle-fail{background:#2d0a0a;color:#f87171;border-color:#991b1b}
+.samp-bd-toggle{padding:6px 10px;border-radius:7px;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap}
+.samp-bd-toggle.bd-active-ok{background:#052e16;color:#4ade80;border-color:#166534}
+.samp-bd-toggle.bd-active-fail{background:#2d0a0a;color:#f87171;border-color:#991b1b}
+.samp-result-tag{font-size:10px;font-weight:800;font-family:monospace;padding:5px 10px;border-radius:7px;white-space:nowrap;min-width:90px;text-align:center}
+.samp-expand{width:100%;margin-top:10px;background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px}
+.samp-remark-inp{width:100%;background:#020617;border:1px solid #1e293b;border-radius:7px;padding:6px 10px;font-size:11px;color:#e2e8f0;outline:none;margin-top:8px}
+.samp-remark-inp:focus{border-color:#6366f1}
+
 /* TOAST */
 .toast{position:fixed;top:16px;right:16px;z-index:9999;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:700;color:#fff;animation:fadeIn .3s ease;pointer-events:none}
 .toast-ok{background:#166534}.toast-err{background:#991b1b}
@@ -126,6 +149,7 @@ let user = null;          // {username,role,name}
 let batches = [];         // all batch/lot rows from backend
 let activeLot = null;     // lot object being inspected
 let samples = [];         // array of sample state objects
+let expandedSample = null; // index of sample with expanded BD/remark panel open
 let toastTimer = null;
 
 const MODEL_CODE = {LH1G:'1217',LH3G:'1218'};
@@ -534,80 +558,69 @@ function buildInspection(){
   </header>
   <div class="main">`;
 
+  html+=`<div class="samp-table">`;
+
   samples.forEach((s,i)=>{
     const r=sampleRes(s);
     const rCls=r==='PASS'?'res-pass':r==='FAIL-MINOR'?'res-minor':r==='FAIL-MAJOR'?'res-major':'res-pending';
-    const rLbl=r==='PASS'?'PASS':r==='FAIL-MINOR'?'FAIL — MINOR':r==='FAIL-MAJOR'?'FAIL — MAJOR':'PENDING';
+    const rLbl=r==='PASS'?'PASS':r==='FAIL-MINOR'?'MINOR FAIL':r==='FAIL-MAJOR'?'MAJOR FAIL':'PENDING';
+    const rBg=r==='PASS'?'background:#052e16;color:#4ade80':r==='FAIL-MINOR'?'background:#3f2d05;color:#fbbf24':r==='FAIL-MAJOR'?'background:#2d0a0a;color:#f87171':'background:#1e293b;color:#64748b';
     const bd=evalBD(s);
+    const isExpanded=expandedSample===i;
+    const hasBDIssue=!s.bdNoDot;
+    const bdBtnCls=s.bdNoDot?'':(bd.ok?'bd-active-ok':'bd-active-fail');
+    const bdBtnLabel=s.bdNoDot?'No BD':(s.bdVisible?(bd.ok?'BD ✓':'BD ✗'):'BD: Set');
 
-    html+=`<div class="sample-card fade">
-    <div class="sample-hdr">
-      <span class="sample-num">Sample ${i+1} of ${samples.length}</span>
-      <span class="sample-result ${rCls}">${rLbl}</span>
-    </div>
+    html+=`<div class="samp-row ${r.startsWith('FAIL')?'is-fail':''}">
+      <div class="samp-num-badge">${i+1}</div>
 
-    <!-- SERIAL -->
-    <div class="fg">
-      <label class="lbl">Serial Number (15 digits: ${MODEL_CODE[lot.model]||'????'}${lot.prodMonthCode||'????'}xxxxxxx)</label>
-      <input class="field mono sSerial ${s.serialError?'err-field':''}" data-i="${i}" type="text" value="${s.serial}" placeholder="${MODEL_CODE[lot.model]||'????'}${lot.prodMonthCode||'????'}0000001">
-      ${s.serialError?`<div class="err">${s.serialError}</div>`:''}
-    </div>
+      <div class="samp-serial-wrap">
+        <input class="samp-serial-inp sSerial ${s.serialError?'err-field':''}" data-i="${i}" type="text" value="${s.serial}" placeholder="${MODEL_CODE[lot.model]||'????'}${lot.prodMonthCode||'????'}0000001">
+        ${s.serialError?`<div class="err" style="margin-top:3px">${s.serialError}</div>`:''}
+      </div>
 
-    <!-- TESTS -->
-    <div class="test-grid" style="margin-bottom:12px">
-      <div>
-        <div class="toggle-lbl" style="color:#fbbf24">Aesthetic (Minor)</div>
-        <button class="toggle-btn ${s.aestheticPass?'t-pass':'t-fail'} sToggle" data-i="${i}" data-f="aestheticPass">${s.aestheticPass?'PASS':'FAIL'}</button>
+      <div class="samp-toggles">
+        <button class="mini-toggle ${s.aestheticPass?'mini-toggle-pass':'mini-toggle-fail'} sToggle" data-i="${i}" data-f="aestheticPass" title="Aesthetic (Minor)">Aes</button>
+        <button class="mini-toggle ${s.generalPass?'mini-toggle-pass':'mini-toggle-fail'} sToggle" data-i="${i}" data-f="generalPass" title="General (Major)">Gen</button>
+        <button class="mini-toggle ${s.funcPass?'mini-toggle-pass':'mini-toggle-fail'} sToggle" data-i="${i}" data-f="funcPass" title="Functional (Major)">Func</button>
+        <button class="mini-toggle ${s.screenPass?'mini-toggle-pass':'mini-toggle-fail'} sToggle" data-i="${i}" data-f="screenPass" title="Screen (Major)">Scr</button>
+        <button class="samp-bd-toggle ${bdBtnCls} bdExpandBtn" data-i="${i}" title="Black Dot">${bdBtnLabel}</button>
       </div>
-      <div>
-        <div class="toggle-lbl" style="color:#f87171">General (Major)</div>
-        <button class="toggle-btn ${s.generalPass?'t-pass':'t-fail'} sToggle" data-i="${i}" data-f="generalPass">${s.generalPass?'PASS':'FAIL'}</button>
-      </div>
-      <div>
-        <div class="toggle-lbl" style="color:#f87171">Functional (Major)</div>
-        <button class="toggle-btn ${s.funcPass?'t-pass':'t-fail'} sToggle" data-i="${i}" data-f="funcPass">${s.funcPass?'PASS':'FAIL'}</button>
-      </div>
-      <div>
-        <div class="toggle-lbl" style="color:#f87171">Screen (Major)</div>
-        <button class="toggle-btn ${s.screenPass?'t-pass':'t-fail'} sToggle" data-i="${i}" data-f="screenPass">${s.screenPass?'PASS':'FAIL'}</button>
-      </div>
-    </div>
 
-    <!-- BLACK DOT -->
-    <div class="bd-box">
-      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px">
-        <span class="lbl" style="margin-bottom:0">Black Dot (Major)</span>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
-          <input type="checkbox" class="sBDNoDot" data-i="${i}" ${s.bdNoDot?'checked':''}> No Black Dot
-        </label>
-        ${!s.bdNoDot?`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
-          <input type="checkbox" class="sBDVis" data-i="${i}" ${s.bdVisible?'checked':''}> Visible at 2m
-        </label>`:''}
-      </div>
-      ${!s.bdNoDot?`
-      <div class="bd-grid">
-        <div><label class="lbl">D (mm)</label><input class="field mono sBDF" data-i="${i}" data-f="bdD" type="number" step="0.01" value="${s.bdD}" placeholder="e.g. 1.2"></div>
-        <div><label class="lbl">N (spots)</label><input class="field mono sBDF" data-i="${i}" data-f="bdN" type="number" value="${s.bdN}" placeholder="e.g. 2"></div>
-        <div><label class="lbl">DS (mm)</label><input class="field mono sBDF" data-i="${i}" data-f="bdDS" type="number" step="0.1" value="${s.bdDS}" placeholder="e.g. 20"></div>
-        <div><label class="lbl">Area</label>
-          <select class="field mono sBDF" data-i="${i}" data-f="bdArea">
-            <option value="A" ${s.bdArea==='A'?'selected':''}>Area A (Inner)</option>
-            <option value="B" ${s.bdArea==='B'?'selected':''}>Area B (Outer)</option>
-            <option value="A+B" ${s.bdArea==='A+B'?'selected':''}>Area A+B</option>
-          </select></div>
-        <div style="display:flex;align-items:flex-end">
-          <div class="bd-result ${bd.ok?'bd-ok':'bd-fail'}">${bd.ok?'✓ OK':'✗ FAIL'}<br>${bd.reason}</div>
+      <span class="samp-result-tag" style="${rBg}">${rLbl}</span>
+
+      ${isExpanded?`
+      <div class="samp-expand">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+          <span class="lbl" style="margin-bottom:0">Black Dot Detail</span>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
+            <input type="checkbox" class="sBDNoDot" data-i="${i}" ${s.bdNoDot?'checked':''}> No Black Dot
+          </label>
+          ${!s.bdNoDot?`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
+            <input type="checkbox" class="sBDVis" data-i="${i}" ${s.bdVisible?'checked':''}> Visible at 2m
+          </label>`:''}
         </div>
-      </div>`:`<div class="text-pass" style="font-size:11px;font-family:monospace">✓ No Black Dot — Acceptable</div>`}
-    </div>
-
-    <!-- REMARK -->
-    <div class="fg" style="margin-top:10px;margin-bottom:0">
-      <label class="lbl">Remark</label>
-      <input class="field sRemark" data-i="${i}" type="text" value="${s.remark||''}" placeholder="Optional remark or defect description">
-    </div>
+        ${!s.bdNoDot?`
+        <div class="bd-grid">
+          <div><label class="lbl">D (mm)</label><input class="field mono sBDF" data-i="${i}" data-f="bdD" type="number" step="0.01" value="${s.bdD}" placeholder="e.g. 1.2"></div>
+          <div><label class="lbl">N (spots)</label><input class="field mono sBDF" data-i="${i}" data-f="bdN" type="number" value="${s.bdN}" placeholder="e.g. 2"></div>
+          <div><label class="lbl">DS (mm)</label><input class="field mono sBDF" data-i="${i}" data-f="bdDS" type="number" step="0.1" value="${s.bdDS}" placeholder="e.g. 20"></div>
+          <div><label class="lbl">Area</label>
+            <select class="field mono sBDF" data-i="${i}" data-f="bdArea">
+              <option value="A" ${s.bdArea==='A'?'selected':''}>Area A</option>
+              <option value="B" ${s.bdArea==='B'?'selected':''}>Area B</option>
+              <option value="A+B" ${s.bdArea==='A+B'?'selected':''}>Area A+B</option>
+            </select></div>
+          <div style="display:flex;align-items:flex-end">
+            <div class="bd-result ${bd.ok?'bd-ok':'bd-fail'}">${bd.ok?'✓ OK':'✗ FAIL'}<br>${bd.reason}</div>
+          </div>
+        </div>`:`<div class="text-pass" style="font-size:11px;font-family:monospace">✓ No Black Dot — Acceptable</div>`}
+        <input class="samp-remark-inp sRemark" data-i="${i}" type="text" value="${s.remark||''}" placeholder="Optional remark or defect description">
+      </div>`:''}
     </div>`;
   });
+
+  html+=`</div>`;
 
   html+=`<div class="insp-footer">
     <div class="insp-tally">
@@ -663,7 +676,7 @@ function bindEvents(){
 
   // Logout
   const blo=document.getElementById('btnLogout');
-  if(blo) blo.onclick=()=>{ user=null; batches=[]; activeLot=null; samples=[]; render(); };
+  if(blo) blo.onclick=()=>{ user=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; render(); };
 
   // Refresh
   const br=document.getElementById('btnRefresh');
@@ -779,7 +792,7 @@ function bindEvents(){
       if(draft && draft.samples && draft.samples.length){
         const filled=draft.samples.filter(s=>s.serial).length;
         if(confirm(`A saved draft exists for ${lot.lotNumber} (${filled}/${draft.samples.length} samples filled, saved ${new Date(draft.savedAt).toLocaleString()}).\n\nResume this draft? (Cancel = start fresh)`)){
-          activeLot=lot;
+          activeLot=lot; expandedSample=null;
           samples=draft.samples;
           render();
           setTimeout(()=>{ const r=document.getElementById('lotRemarks'); if(r) r.value=draft.lotRemarks||''; },50);
@@ -788,7 +801,7 @@ function bindEvents(){
           clearDraft(lot);
         }
       }
-      activeLot=lot;
+      activeLot=lot; expandedSample=null;
       samples=freshSamples(activeLot.sampleSize||SAMPLE_N);
       render();
     };
@@ -803,7 +816,7 @@ function bindEvents(){
   if(back) back.onclick=()=>{
     saveDraft();
     toast('Draft saved — resume anytime from this lot');
-    activeLot=null; samples=[]; render();
+    activeLot=null; samples=[]; expandedSample=null; render();
   };
 
   // Sample serial input
@@ -832,6 +845,15 @@ function bindEvents(){
       const f=btn.getAttribute('data-f');
       samples[i][f]=!samples[i][f];
       saveDraft();
+      render();
+    };
+  });
+
+  // Black Dot expand/collapse toggle
+  document.querySelectorAll('.bdExpandBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const i=parseInt(btn.getAttribute('data-i'));
+      expandedSample = (expandedSample===i) ? null : i;
       render();
     };
   });
@@ -904,7 +926,7 @@ function bindEvents(){
     if(r.ok){
       clearDraft(activeLot);
       toast(`${activeLot.lotNumber}: ${lotResult} | FG Pass: ${fgPassQty}`);
-      activeLot=null; samples=[];
+      activeLot=null; samples=[]; expandedSample=null;
       await loadBatches(); render();
     } else { saveDraft(); toast(r.error||'Save failed — draft kept locally','err'); }
   };
