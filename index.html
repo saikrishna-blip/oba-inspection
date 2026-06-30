@@ -155,7 +155,29 @@ async function api(action,data={}){
 }
 
 async function loadBatches(){
-  const r=await api('getBatches');
+  let r=await api('getBatches');
+  if(!r.ok && (r.error||'').toLowerCase().includes('unknown')){
+    r=await api('getKits');
+    if(r.ok && r.kits){
+      // normalize kits to batch format
+      r.batches=r.kits.map(k=>({
+        batchName:k.kitName||k.batchName||'',
+        lotNumber:k.lotNumber||'',
+        lotSize:Number(k.lotSize)||90,
+        sampleSize:Number(k.sampleSize)||13,
+        bdMax:Number(k.bdMax)||2.4,
+        status:k.status||'Open',
+        createdBy:k.createdBy||'',
+        createdAt:k.createdAt||'',
+        result:k.result||'',
+        batchQty:Number(k.kitTotalQty)||Number(k.batchQty)||0,
+        totalLots:Number(k.totalLots)||0,
+        model:k.model||'',
+        prodMonthCode:k.prodMonthCode||'',
+        fgPassQty:Number(k.fgPassQty)||0
+      }));
+    }
+  }
   if(r.ok) batches=r.batches||[];
 }
 
@@ -192,31 +214,17 @@ function groupBatches(){
 // ═══════════════════════════════════════════════════════════
 function validateSerial(serial,model,prodMonthCode,batchUsed){
   const s=(serial||'').trim().toUpperCase();
-
-  if(!/^\d{15}$/.test(s))
-    return 'Serial must be exactly 15 digits';
-
+  if(!/^\d{15}$/.test(s)) return 'Must be exactly 15 digits';
   const exp=MODEL_CODE[model]||'';
-  if(exp && s.substring(0,4)!==exp)
-    return `${model} serial must start with ${exp}`;
-
-  if(prodMonthCode && s.substring(4,8)!==prodMonthCode)
-    return `Production code must be ${prodMonthCode} (${mmyyDisp(prodMonthCode)})`;
-
-  const mm=parseInt(s.substring(4,6),10);
-  if(isNaN(mm) || mm<1 || mm>12)
-    return 'Invalid month code (01-12)';
-
-  const yy=parseInt(s.substring(6,8),10);
-  if(isNaN(yy) || yy<26)
-    return 'Invalid year code';
-
-  if(!/^\d{7}$/.test(s.substring(8)))
-    return 'Last 7 digits must be numeric';
-
-  if((batchUsed||[]).includes(s))
-    return 'Duplicate serial in current lot';
-
+  if(exp && s.substring(0,4)!==exp) return `Model prefix must be ${exp} for ${model}`;
+  // Normalize prodMonthCode to 4 digits (restore lost leading zero, e.g. "626" -> "0626")
+  let pmc=String(prodMonthCode||'').trim();
+  if(pmc.length===3) pmc='0'+pmc;
+  if(pmc && s.substring(4,8)!==pmc) return `Month code must be ${pmc} (${mmyyDisp(pmc)})`;
+  const mm=parseInt(s.substring(4,6));
+  if(isNaN(mm)||mm<1||mm>12) return 'Month digits invalid (01-12)';
+  if(!/^\d{7}$/.test(s.substring(8))) return 'Last 7 chars must be numeric';
+  if((batchUsed||[]).includes(s)) return 'Duplicate serial in this batch';
   return '';
 }
 
@@ -630,18 +638,23 @@ function bindEvents(){
     const prodMonthCode=month?mmyy(month):'';
     msgEl.textContent='Creating lots…'; msgEl.classList.remove('hidden');
     try{
-      const r=await api('createBatch',{batchName,batchQty,model,prodMonthCode,createdBy:user.username});
+      // Try new API first, fall back to old if script not yet updated
+      let r=await api('createBatch',{batchName,batchQty,model,prodMonthCode,createdBy:user.username});
+      if(!r.ok && (r.error||'').toLowerCase().includes('unknown')){
+        // Old script fallback: createKit
+        r=await api('createKit',{kitName:batchName,kitSize:batchQty,lotSize:90,sampleSize:13,bdMax:2.4,model,prodMonthCode,createdBy:user.username});
+        if(r.ok) r.batchQty=batchQty;
+      }
       if(r.ok){
         const lots=r.lotsCreated;
-        msgEl.innerHTML=`✓ <b>${batchName}</b> created with <b>${lots} lots</b>.<br>
-          Batch Qty: <b>${r.batchQty}</b> | Lot Size: 90 | Sample: 13<br>
-          ${lots} × 90${r.batchQty%90>0?' + 1 remainder lot of '+(r.batchQty%90)+' units':''}<br>
-          Lots named: ${batchName} Lot 1 → ${batchName} Lot ${lots}`;
+        const rem=batchQty%90;
+        msgEl.innerHTML=`✓ <b>${batchName}</b>: <b>${lots} lots</b> created.<br>
+          Batch Qty: <b>${batchQty}</b> | Each lot: 90 units | Sample: 13${rem>0?`<br>Last lot: ${rem} units (still 13 samples)`:''}`;
         msgEl.classList.remove('hidden');
         document.getElementById('bName').value='';
         document.getElementById('bQty').value='';
         await loadBatches(); render();
-        toast(`Batch created: ${lots} lots`);
+        toast(`✓ ${lots} lots created for ${batchName}`);
       } else {
         msgEl.textContent='Error: '+(r.error||'unknown');
         toast(r.error||'Error','err');
@@ -733,11 +746,18 @@ function bindEvents(){
 
   // Sample serial input
   document.querySelectorAll('.sSerial').forEach(el=>{
-    el.onchange=()=>{
+    el.onchange=async()=>{
       const i=parseInt(el.getAttribute('data-i'));
       samples[i].serial=el.value.trim().toUpperCase();
       const used=samples.filter((_,j)=>j!==i&&samples[j].serial).map(s=>s.serial.toUpperCase());
-      samples[i].serialError=validateSerial(samples[i].serial,activeLot.model,activeLot.prodMonthCode,used);
+      let err=validateSerial(samples[i].serial,activeLot.model,activeLot.prodMonthCode,used);
+      if(!err && samples[i].serial){
+        try{
+          const dup=await api('checkSerial',{serial:samples[i].serial});
+          if(dup.ok && dup.exists) err='Duplicate — already exists in master data ('+(dup.batch||'')+' '+(dup.lot||'')+')';
+        }catch(e){ /* ignore network errors on dup check */ }
+      }
+      samples[i].serialError=err;
       render();
     };
   });
