@@ -139,6 +139,47 @@ function mmyy(s){ if(!s)return''; const[y,m]=s.split('-'); return m+y.slice(2); 
 function mmyyDisp(c){ if(!c||c.length!==4)return'-'; return c.slice(0,2)+'/20'+c.slice(2); }
 function mmyyInp(c){ if(!c||c.length!==4)return''; return'20'+c.slice(2)+'-'+c.slice(0,2); }
 
+// ═══════════════════════════════════════════════════════════
+// DRAFT AUTO-SAVE (so in-progress inspections survive refresh/close)
+// ═══════════════════════════════════════════════════════════
+function draftKey(lot){
+  return 'oba_draft_'+(user?user.username:'anon')+'_'+lot.batchName+'_'+lot.lotNumber;
+}
+function saveDraft(){
+  if(!activeLot) return;
+  try{
+    localStorage.setItem(draftKey(activeLot), JSON.stringify({
+      lot:activeLot, samples:samples,
+      lotRemarks:document.getElementById('lotRemarks')?.value||'',
+      savedAt:new Date().toISOString()
+    }));
+  }catch(e){ /* storage full or blocked - ignore */ }
+}
+function loadDraft(lot){
+  try{
+    const raw=localStorage.getItem(draftKey(lot));
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+function clearDraft(lot){
+  try{ localStorage.removeItem(draftKey(lot)); }catch(e){}
+}
+function listDraftsForUser(){
+  const out=[];
+  const prefix='oba_draft_'+(user?user.username:'anon')+'_';
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k && k.startsWith(prefix)){
+      try{
+        const d=JSON.parse(localStorage.getItem(k));
+        out.push({key:k, ...d});
+      }catch(e){}
+    }
+  }
+  return out;
+}
+
 function toast(msg,type='ok'){
   clearTimeout(toastTimer);
   const el=document.getElementById('toast');
@@ -433,6 +474,8 @@ function buildDashboard(){
 
       g.lots.forEach(lot=>{
         const ri=batches.indexOf(lot);
+        const draft=(!isAdmin && lot.status==='Open') ? loadDraft(lot) : null;
+        const draftFilled=draft ? draft.samples.filter(s=>s.serial).length : 0;
         html+=`<div class="lot-row">
           <div>
             <div class="lot-name">${lot.lotNumber}</div>
@@ -441,8 +484,9 @@ function buildDashboard(){
           <div class="lot-actions">
             <span class="badge ${lot.status==='Open'?'badge-open':'badge-closed'}">${lot.status}</span>
             ${lot.result?`<span class="badge ${lot.result==='PASS'?'badge-pass':'badge-fail'}">${lot.result}</span>`:''}
+            ${draft?`<span class="badge" style="background:#1e1b4b;color:#a5b4fc;border:1px solid #4338ca">📝 Draft ${draftFilled}/${draft.samples.length}</span>`:''}
             ${lot.fgPassQty!==0&&lot.fgPassQty!==''?`<span class="text-muted mono" style="font-size:10px">FG:${lot.fgPassQty}</span>`:''}
-            ${!isAdmin&&lot.status==='Open'?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">Start Inspection</button>`:''}
+            ${!isAdmin&&lot.status==='Open'?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume Inspection':'Start Inspection'}</button>`:''}
             ${isAdmin?`<button class="btn btn-ghost btn-sm editBtn" data-ri="${ri}">Edit</button>`:''}
             ${isAdmin?`<button class="btn btn-danger btn-sm delLotBtn" data-ri="${ri}" style="font-size:9px;padding:4px 8px">🗑</button>`:''}
           </div>
@@ -730,7 +774,21 @@ function bindEvents(){
   document.querySelectorAll('.startBtn').forEach(btn=>{
     btn.onclick=()=>{
       const ri=parseInt(btn.getAttribute('data-ri'));
-      activeLot=batches[ri];
+      const lot=batches[ri];
+      const draft=loadDraft(lot);
+      if(draft && draft.samples && draft.samples.length){
+        const filled=draft.samples.filter(s=>s.serial).length;
+        if(confirm(`A saved draft exists for ${lot.lotNumber} (${filled}/${draft.samples.length} samples filled, saved ${new Date(draft.savedAt).toLocaleString()}).\n\nResume this draft? (Cancel = start fresh)`)){
+          activeLot=lot;
+          samples=draft.samples;
+          render();
+          setTimeout(()=>{ const r=document.getElementById('lotRemarks'); if(r) r.value=draft.lotRemarks||''; },50);
+          return;
+        } else {
+          clearDraft(lot);
+        }
+      }
+      activeLot=lot;
       samples=freshSamples(activeLot.sampleSize||SAMPLE_N);
       render();
     };
@@ -740,9 +798,13 @@ function bindEvents(){
   const bcsv=document.getElementById('btnCSV');
   if(bcsv) bcsv.onclick=downloadCSV;
 
-  // Back from inspection
+  // Back from inspection - auto-saves draft, does not lose data
   const back=document.getElementById('btnBackInsp');
-  if(back) back.onclick=()=>{ if(confirm('Go back? Unsaved data will be lost.')){ activeLot=null; samples=[]; render(); } };
+  if(back) back.onclick=()=>{
+    saveDraft();
+    toast('Draft saved — resume anytime from this lot');
+    activeLot=null; samples=[]; render();
+  };
 
   // Sample serial input
   document.querySelectorAll('.sSerial').forEach(el=>{
@@ -758,6 +820,7 @@ function bindEvents(){
         }catch(e){ /* ignore network errors on dup check */ }
       }
       samples[i].serialError=err;
+      saveDraft();
       render();
     };
   });
@@ -768,29 +831,34 @@ function bindEvents(){
       const i=parseInt(btn.getAttribute('data-i'));
       const f=btn.getAttribute('data-f');
       samples[i][f]=!samples[i][f];
+      saveDraft();
       render();
     };
   });
 
   // BD no dot checkbox
   document.querySelectorAll('.sBDNoDot').forEach(el=>{
-    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); samples[i].bdNoDot=el.checked; render(); };
+    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); samples[i].bdNoDot=el.checked; saveDraft(); render(); };
   });
 
   // BD visible checkbox
   document.querySelectorAll('.sBDVis').forEach(el=>{
-    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); samples[i].bdVisible=el.checked; render(); };
+    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); samples[i].bdVisible=el.checked; saveDraft(); render(); };
   });
 
   // BD fields
   document.querySelectorAll('.sBDF').forEach(el=>{
-    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); const f=el.getAttribute('data-f'); samples[i][f]=el.value; render(); };
+    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); const f=el.getAttribute('data-f'); samples[i][f]=el.value; saveDraft(); render(); };
   });
 
   // Remark
   document.querySelectorAll('.sRemark').forEach(el=>{
-    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); samples[i].remark=el.value; };
+    el.onchange=()=>{ const i=parseInt(el.getAttribute('data-i')); samples[i].remark=el.value; saveDraft(); };
   });
+
+  // Lot-level remarks field also triggers save
+  const lotRemarksEl=document.getElementById('lotRemarks');
+  if(lotRemarksEl) lotRemarksEl.onchange=()=>{ saveDraft(); };
 
   // Submit Lot
   const bsub=document.getElementById('btnSubmitLot');
@@ -834,10 +902,11 @@ function bindEvents(){
     });
 
     if(r.ok){
+      clearDraft(activeLot);
       toast(`${activeLot.lotNumber}: ${lotResult} | FG Pass: ${fgPassQty}`);
       activeLot=null; samples=[];
       await loadBatches(); render();
-    } else toast(r.error||'Save failed','err');
+    } else { saveDraft(); toast(r.error||'Save failed — draft kept locally','err'); }
   };
 }
 
@@ -863,6 +932,10 @@ function downloadCSV(){
 // ═══════════════════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════════════════
+window.addEventListener('beforeunload', ()=>{
+  if(activeLot && samples.length) saveDraft();
+});
+
 render();
 </script>
 </body>
