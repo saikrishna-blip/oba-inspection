@@ -171,6 +171,12 @@ function draftKey(lot){
 }
 function saveDraft(){
   if(!activeLot) return;
+  // Stamp each sample with its completion time if not already stamped
+  samples.forEach(s=>{
+    if(!s.inspectedAt && sampleRes(s)!=='PENDING'){
+      s.inspectedAt = new Date().toISOString();
+    }
+  });
   try{
     localStorage.setItem(draftKey(activeLot), JSON.stringify({
       lot:activeLot, samples:samples,
@@ -897,7 +903,7 @@ function bindEvents(){
 
     const units=samples.map(s=>{
       const bd=evalBD(s);
-      const r=sampleRes(s);
+      const r=sampleResult(s);
       const fails=[];
       if(!s.aestheticPass) fails.push('Aesthetic Fail (Minor)');
       if(!s.generalPass)   fails.push('General Fail (Major)');
@@ -912,7 +918,8 @@ function bindEvents(){
         screen:s.screenPass?'Pass':'Fail',
         bd:s.bdNoDot?'No BD':(s.bdVisible?bd.reason:'Not visible @2m'),
         remark:fails.length?fails.join(' | '):(s.remark||lotRemarks||'OK'),
-        sampleResult:r==='PASS'?'Pass':'Fail'
+        sampleResult:r==='PASS'?'Pass':'Fail',
+        inspectedAt: s.inspectedAt || new Date().toISOString()
       };
     });
 
