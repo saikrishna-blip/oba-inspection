@@ -173,7 +173,7 @@ function saveDraft(){
   if(!activeLot) return;
   // Stamp each sample with its completion time if not already stamped
   samples.forEach(s=>{
-    if(!s.inspectedAt && sampleRes(s)!=='PENDING'){
+    if(!s.inspectedAt && sampleResultult(s)!=='PENDING'){
       s.inspectedAt = new Date().toISOString();
     }
   });
@@ -321,7 +321,7 @@ function evalBD(s){
 // ═══════════════════════════════════════════════════════════
 // SAMPLE RESULT
 // ═══════════════════════════════════════════════════════════
-function sampleRes(s){
+function sampleResultult(s){
   if(!s.serial||s.serialError) return 'PENDING';
   const bd=evalBD(s);
   const major=!s.generalPass||!s.funcPass||!s.screenPass||!bd.ok;
@@ -343,11 +343,11 @@ function freshSamples(n){
 function tallyLot(){
   let minor=0,major=0;
   samples.forEach(s=>{
-    const r=sampleRes(s);
+    const r=sampleResultult(s);
     if(r==='FAIL-MINOR') minor++;
     if(r==='FAIL-MAJOR') major++;
   });
-  return{minor,major,passed:minor<=1&&major===0,filled:samples.filter(s=>sampleRes(s)!=='PENDING').length};
+  return{minor,major,passed:minor<=1&&major===0,filled:samples.filter(s=>sampleResultult(s)!=='PENDING').length};
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -574,7 +574,7 @@ function buildInspection(){
   </div>`;
 
   samples.forEach((s,i)=>{
-    const r=sampleRes(s);
+    const r=sampleResultult(s);
     const rCls=r==='PASS'?'res-pass':r==='FAIL-MINOR'?'res-minor':r==='FAIL-MAJOR'?'res-major':'res-pending';
     const rLbl=r==='PASS'?'PASS':r==='FAIL-MINOR'?'MINOR FAIL':r==='FAIL-MAJOR'?'MAJOR FAIL':'PENDING';
     const rBg=r==='PASS'?'background:#052e16;color:#4ade80':r==='FAIL-MINOR'?'background:#3f2d05;color:#fbbf24':r==='FAIL-MAJOR'?'background:#2d0a0a;color:#f87171':'background:#1e293b;color:#64748b';
@@ -903,7 +903,7 @@ function bindEvents(){
 
     const units=samples.map(s=>{
       const bd=evalBD(s);
-      const r=sampleResult(s);
+      const r=sampleResultultult(s);
       const fails=[];
       if(!s.aestheticPass) fails.push('Aesthetic Fail (Minor)');
       if(!s.generalPass)   fails.push('General Fail (Major)');
@@ -918,7 +918,7 @@ function bindEvents(){
         screen:s.screenPass?'Pass':'Fail',
         bd:s.bdNoDot?'No BD':(s.bdVisible?bd.reason:'Not visible @2m'),
         remark:fails.length?fails.join(' | '):(s.remark||lotRemarks||'OK'),
-        sampleResult:r==='PASS'?'Pass':'Fail',
+        sampleResultult:r==='PASS'?'Pass':'Fail',
         inspectedAt: s.inspectedAt || new Date().toISOString()
       };
     });
