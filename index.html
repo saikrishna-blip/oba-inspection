@@ -918,7 +918,7 @@ function bindEvents(){
         screen:s.screenPass?'Pass':'Fail',
         bd:s.bdNoDot?'No BD':(s.bdVisible?bd.reason:'Not visible @2m'),
         remark:fails.length?fails.join(' | '):(s.remark||lotRemarks||'OK'),
-        sampleResultult:r==='PASS'?'Pass':'Fail',
+        sampleResult:r==='PASS'?'Pass':'Fail',
         inspectedAt: s.inspectedAt || new Date().toISOString()
       };
     });
