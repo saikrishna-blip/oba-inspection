@@ -253,6 +253,7 @@ async function loadBatches(){
         totalLots:Number(k.totalLots)||0,
         model:k.model||'',
         prodMonthCode:k.prodMonthCode||'',
+      prodMonthCode2:k.prodMonthCode2||'',
         fgPassQty:Number(k.fgPassQty)||0
       }));
     }
@@ -284,22 +285,27 @@ function groupBatches(){
     const failLots   = lots.filter(l=>l.result==='FAIL').length;
     const fgTotal    = lots.reduce((s,l)=>s+Number(l.fgPassQty||0),0);
     return{name,lots,batchQty,totalLots,completed,pending,passLots,failLots,fgTotal,
-           model:lots[0].model||'',prodMonthCode:lots[0].prodMonthCode||''};
+           model:lots[0].model||'',prodMonthCode:lots[0].prodMonthCode||'',prodMonthCode2:lots[0].prodMonthCode2||''};
   });
 }
 
 // ═══════════════════════════════════════════════════════════
 // SERIAL VALIDATION
 // ═══════════════════════════════════════════════════════════
-function validateSerial(serial,model,prodMonthCode,batchUsed){
+function validateSerial(serial,model,prodMonthCode,batchUsed,prodMonthCode2){
   const s=(serial||'').trim().toUpperCase();
   if(!/^\d{15}$/.test(s)) return 'Must be exactly 15 digits';
   const exp=MODEL_CODE[model]||'';
   if(exp && s.substring(0,4)!==exp) return `Model prefix must be ${exp} for ${model}`;
-  // Normalize prodMonthCode to 4 digits (restore lost leading zero, e.g. "626" -> "0626")
-  let pmc=String(prodMonthCode||'').trim();
-  if(pmc.length===3) pmc='0'+pmc;
-  if(pmc && s.substring(4,8)!==pmc) return `Month code must be ${pmc} (${mmyyDisp(pmc)})`;
+  // Normalize month codes - restore lost leading zero e.g. "626" -> "0626"
+  let pmc=String(prodMonthCode||'').trim(); if(pmc.length===3) pmc='0'+pmc;
+  let pmc2=String(prodMonthCode2||'').trim(); if(pmc2.length===3) pmc2='0'+pmc2;
+  const serialMonth=s.substring(4,8);
+  const validMonths=[pmc,pmc2].filter(Boolean);
+  if(validMonths.length>0 && !validMonths.includes(serialMonth)){
+    const labels=validMonths.map(m=>m+' ('+mmyyDisp(m)+')').join(' or ');
+    return `Month code must be ${labels}`;
+  }
   const mm=parseInt(s.substring(4,6));
   if(isNaN(mm)||mm<1||mm>12) return 'Month digits invalid (01-12)';
   if(!/^\d{7}$/.test(s.substring(8))) return 'Last 7 chars must be numeric';
@@ -454,7 +460,8 @@ function buildDashboard(){
       <div class="fg"><label class="lbl">Batch Quantity (total units)</label><input id="bQty" class="field" type="number" placeholder="e.g. 2000" min="1"></div>
       <div class="fg"><label class="lbl">Model</label>
         <select id="bModel" class="field"><option value="LH1G">LH1G (Code: 1217)</option><option value="LH3G">LH3G (Code: 1218)</option></select></div>
-      <div class="fg"><label class="lbl">Production Month</label><input id="bMonth" class="field" type="month"></div>
+      <div class="fg"><label class="lbl">Production Month 1</label><input id="bMonth" class="field" type="month"></div>
+      <div class="fg"><label class="lbl">Production Month 2 <span style="color:#475569;font-weight:400">(optional)</span></label><input id="bMonth2" class="field" type="month"></div>
       <button id="btnCreateBatch" class="btn btn-primary btn-full">Create Batch</button>
       <div id="createMsg" class="text-muted hidden" style="margin-top:8px;font-size:11px;line-height:1.6"></div>
       <div class="text-muted" style="margin-top:8px;font-size:10px">Lots = Batch Qty ÷ 90. Remainder = extra smaller lot (same 13-sample inspection).</div>
@@ -494,7 +501,7 @@ function buildDashboard(){
         <div>
           <div class="batch-name">${g.name}</div>
           <div class="batch-meta">
-            Model: <b>${g.model||'-'}</b> | Prod Month: <b>${mmyyDisp(g.prodMonthCode)}</b> |
+            Model: <b>${g.model||'-'}</b> | Prod Month: <b>${mmyyDisp(g.prodMonthCode)}${g.prodMonthCode2?' / '+mmyyDisp(g.prodMonthCode2):''}</b> |
             Batch Qty: <b>${g.batchQty||'?'}</b> | Total Lots: <b>${g.totalLots}</b> |
             Completed: <b>${g.completed}/${g.totalLots}</b> | Pending: <b>${g.pending}</b> |
             <span class="text-pass">PASS: ${g.passLots}</span> |
@@ -552,7 +559,7 @@ function buildInspection(){
     <div class="hdr-left">
       <div class="logo"><img src="data:image/png;base64,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" alt="Lumio"></div>
       <div><div class="hdr-title mono">${lot.batchName} — ${lot.lotNumber}</div>
-        <div class="hdr-sub">LOT SIZE: ${lot.lotSize} | SAMPLE: ${lot.sampleSize} | MODEL: ${lot.model} (${MODEL_CODE[lot.model]||'?'}) | PROD: ${mmyyDisp(lot.prodMonthCode)} | BD LIMIT: ≤${lot.bdMax}mm</div>
+        <div class="hdr-sub">LOT SIZE: ${lot.lotSize} | SAMPLE: ${lot.sampleSize} | MODEL: ${lot.model} (${MODEL_CODE[lot.model]||'?'}) | PROD: ${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' / '+mmyyDisp(lot.prodMonthCode2):''} | BD LIMIT: ≤${lot.bdMax}mm</div>
       </div>
     </div>
     <div class="hdr-right">
@@ -709,17 +716,19 @@ function bindEvents(){
     const batchQty=parseInt(document.getElementById('bQty').value)||0;
     const model=document.getElementById('bModel').value;
     const month=document.getElementById('bMonth').value;
+    const month2=document.getElementById('bMonth2')?document.getElementById('bMonth2').value:'';
     const msgEl=document.getElementById('createMsg');
     if(!batchName){ toast('Enter Batch Name','err'); return; }
     if(batchQty<1){ toast('Enter Batch Quantity > 0','err'); return; }
     const prodMonthCode=month?mmyy(month):'';
+    const prodMonthCode2=month2?mmyy(month2):'';
     msgEl.textContent='Creating lots…'; msgEl.classList.remove('hidden');
     try{
       // Try new API first, fall back to old if script not yet updated
-      let r=await api('createBatch',{batchName,batchQty,model,prodMonthCode,createdBy:user.username});
+      let r=await api('createBatch',{batchName,batchQty,model,prodMonthCode,prodMonthCode2,createdBy:user.username});
       if(!r.ok && (r.error||'').toLowerCase().includes('unknown')){
         // Old script fallback: createKit
-        r=await api('createKit',{kitName:batchName,kitSize:batchQty,lotSize:90,sampleSize:13,bdMax:2.4,model,prodMonthCode,createdBy:user.username});
+        r=await api('createKit',{kitName:batchName,kitSize:batchQty,lotSize:90,sampleSize:13,bdMax:2.4,model,prodMonthCode,prodMonthCode2,createdBy:user.username});
         if(r.ok) r.batchQty=batchQty;
       }
       if(r.ok){
@@ -787,7 +796,8 @@ function bindEvents(){
         <div><label class="lbl">Status</label><select id="eS${ri}" class="field"><option value="Open" ${lot.status==='Open'?'selected':''}>Open</option><option value="Closed" ${lot.status==='Closed'?'selected':''}>Closed</option></select></div>
         <div><label class="lbl">BD Max (mm)</label><input id="eBD${ri}" class="field" type="number" step="0.01" value="${lot.bdMax}"></div>
         <div><label class="lbl">Model</label><select id="eMD${ri}" class="field"><option value="LH1G" ${lot.model==='LH1G'?'selected':''}>LH1G</option><option value="LH3G" ${lot.model==='LH3G'?'selected':''}>LH3G</option></select></div>
-        <div><label class="lbl">Prod Month</label><input id="ePM${ri}" class="field" type="month" value="${mmyyInp(lot.prodMonthCode)}"></div>
+        <div><label class="lbl">Prod Month 1</label><input id="ePM${ri}" class="field" type="month" value="${mmyyInp(lot.prodMonthCode)}"></div>
+        <div><label class="lbl">Prod Month 2</label><input id="ePM2${ri}" class="field" type="month" value="${mmyyInp(lot.prodMonthCode2||'')}"></div>
       </div>
       <button class="btn btn-primary btn-sm saveLotEdit" data-ri="${ri}">Save Changes</button>`;
       area.querySelector('.saveLotEdit').onclick=async()=>{
@@ -796,7 +806,9 @@ function bindEvents(){
         const model=document.getElementById('eMD'+ri).value;
         const pm=document.getElementById('ePM'+ri).value;
         const prodMonthCode=pm?mmyy(pm):lot.prodMonthCode;
-        const r=await api('updateLot',{batchName:lot.batchName,lotNumber:lot.lotNumber,status,bdMax,model,prodMonthCode});
+        const pm2=document.getElementById('ePM2'+ri).value;
+        const prodMonthCode2=pm2?mmyy(pm2):(lot.prodMonthCode2||'');
+        const r=await api('updateLot',{batchName:lot.batchName,lotNumber:lot.lotNumber,status,bdMax,model,prodMonthCode,prodMonthCode2});
         if(r.ok){ await loadBatches(); render(); toast('Lot updated'); }
         else toast(r.error||'Error','err');
       };
@@ -852,7 +864,7 @@ function bindEvents(){
       const i=parseInt(el.getAttribute('data-i'));
       samples[i].serial=el.value.trim().toUpperCase();
       const used=samples.filter((_,j)=>j!==i&&samples[j].serial).map(s=>s.serial.toUpperCase());
-      let err=validateSerial(samples[i].serial,activeLot.model,activeLot.prodMonthCode,used);
+      let err=validateSerial(samples[i].serial,activeLot.model,activeLot.prodMonthCode,used,activeLot.prodMonthCode2||'');
       if(!err && samples[i].serial){
         try{
           const dup=await api('checkSerial',{serial:samples[i].serial});
