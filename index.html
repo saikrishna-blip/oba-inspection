@@ -924,6 +924,28 @@ function bindEvents(){
   // Submit Lot
   const bsub=document.getElementById('btnSubmitLot');
   if(bsub) bsub.onclick=async()=>{
+    // Guard against double-submit
+    if(bsub.getAttribute('data-submitting')==='1'){
+      toast('Already submitting, please wait...','err'); return;
+    }
+    bsub.setAttribute('data-submitting','1');
+    bsub.disabled=true;
+    bsub.textContent='Submitting...';
+
+    // Guard: check if lot already closed in master data
+    const alreadyClosed = batches.find(b=>
+      b.batchName===activeLot.batchName &&
+      b.lotNumber===activeLot.lotNumber &&
+      b.status==='Closed'
+    );
+    if(alreadyClosed){
+      toast('This lot is already submitted and closed!','err');
+      bsub.removeAttribute('data-submitting');
+      bsub.disabled=false;
+      render();
+      return;
+    }
+
     const {minor,major,passed}=tallyLot();
     const lotResult=passed?'PASS':'FAIL';
     const fgPassQty=passed?Number(activeLot.lotSize):0;
@@ -931,7 +953,7 @@ function bindEvents(){
 
     const units=samples.map(s=>{
       const bd=evalBD(s);
-      const r=sampleResult(s);
+      const r=sampleRes(s);
       const fails=[];
       if(!s.aestheticPass) fails.push('Aesthetic Fail (Minor)');
       if(!s.generalPass)   fails.push('General Fail (Major)');
@@ -968,7 +990,7 @@ function bindEvents(){
       toast(`${activeLot.lotNumber}: ${lotResult} | FG Pass: ${fgPassQty}`);
       activeLot=null; samples=[]; expandedSample=null;
       await loadBatches(); render();
-    } else { saveDraft(); toast(r.error||'Save failed — draft kept locally','err'); }
+    } else { saveDraft(); toast(r.error||'Save failed — draft kept locally','err'); bsub.removeAttribute('data-submitting'); bsub.disabled=false; render(); }
   };
 }
 
