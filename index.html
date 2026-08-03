@@ -229,8 +229,18 @@ function toast(msg,type='ok'){
 
 async function api(action,data={}){
   data.action=action;
-  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(data)});
-  return r.json();
+  try{
+    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(data)});
+    const text=await r.text();
+    // If response starts with < it is an HTML error page (script not deployed / URL wrong)
+    if(text.trim().startsWith('<')){
+      console.error('Apps Script returned HTML instead of JSON. URL may be wrong or script needs redeployment.');
+      return {ok:false, error:'Backend error: The Apps Script URL is invalid or the script needs to be redeployed. Please check the URL and redeploy as a New Version.'};
+    }
+    return JSON.parse(text);
+  }catch(err){
+    return {ok:false, error:'Network error: '+err.message+'. Check your internet connection and Apps Script URL.'};
+  }
 }
 
 async function loadBatches(){
@@ -692,7 +702,13 @@ function bindEvents(){
     try{
       const r=await api('login',{username:u,password:p});
       if(r.ok){ user={username:r.username,role:r.role,name:r.name}; await loadBatches(); render(); }
-      else{ err.textContent=r.error||'Login failed'; err.classList.remove('hidden'); }
+      else{
+        err.textContent=r.error||'Login failed';
+        err.classList.remove('hidden');
+        if((r.error||'').includes('Apps Script')||(r.error||'').includes('redeployed')){
+          err.innerHTML=r.error+'<br><br><b>Fix:</b> In Apps Script → Deploy → Manage deployments → pencil icon → New version → Deploy. Then copy the new URL here.';
+        }
+      }
     }catch(e){ err.textContent='Network error: '+e.message; err.classList.remove('hidden'); }
   };
   const lp=document.getElementById('lPass');
@@ -924,72 +940,51 @@ function bindEvents(){
   // Submit Lot
   const bsub=document.getElementById('btnSubmitLot');
   if(bsub) bsub.onclick=async()=>{
-    // Prevent double-submit
-    if(bsub.getAttribute('data-submitting')==='1') return;
-    bsub.setAttribute('data-submitting','1');
-    bsub.disabled=true;
-    bsub.textContent='Submitting...';
+    const {minor,major,passed}=tallyLot();
+    const lotResult=passed?'PASS':'FAIL';
+    const fgPassQty=passed?Number(activeLot.lotSize):0;
+    const lotRemarks=document.getElementById('lotRemarks')?.value||'';
 
-    try{
-      const {minor,major,passed}=tallyLot();
-      const lotResult=passed?'PASS':'FAIL';
-      const fgPassQty=passed?Number(activeLot.lotSize):0;
-      const lotRemarks=document.getElementById('lotRemarks')?.value||'';
-      // batchName may be stored as batchName or kitName on older lots
-      const batchName=activeLot.batchName||activeLot.kitName||'';
+    const units=samples.map(s=>{
+      const bd=evalBD(s);
+      const r=sampleResult(s);
+      const fails=[];
+      if(!s.aestheticPass) fails.push('Aesthetic Fail (Minor)');
+      if(!s.generalPass)   fails.push('General Fail (Major)');
+      if(!s.funcPass)      fails.push('Functional Fail (Major)');
+      if(!s.screenPass)    fails.push('Screen Fail (Major)');
+      if(!bd.ok)           fails.push('Black Dot Fail (Major): '+bd.reason);
+      return{
+        serial:s.serial,
+        aes:s.aestheticPass?'Pass':'Fail',
+        general:s.generalPass?'Pass':'Fail',
+        func:s.funcPass?'Pass':'Fail',
+        screen:s.screenPass?'Pass':'Fail',
+        bd:s.bdNoDot?'No BD':(s.bdVisible?bd.reason:'Not visible @2m'),
+        remark:fails.length?fails.join(' | '):(s.remark||lotRemarks||'OK'),
+        sampleResult:r==='PASS'?'Pass':'Fail',
+        inspectedAt: s.inspectedAt || new Date().toISOString()
+      };
+    });
 
-      const units=samples.map(s=>{
-        const bd=evalBD(s);
-        const r=sampleResult(s);
-        const fails=[];
-        if(!s.aestheticPass) fails.push('Aesthetic Fail (Minor)');
-        if(!s.generalPass)   fails.push('General Fail (Major)');
-        if(!s.funcPass)      fails.push('Functional Fail (Major)');
-        if(!s.screenPass)    fails.push('Screen Fail (Major)');
-        if(!bd.ok)           fails.push('Black Dot Fail (Major): '+bd.reason);
-        return{
-          serial:s.serial,
-          aes:s.aestheticPass?'Pass':'Fail',
-          general:s.generalPass?'Pass':'Fail',
-          func:s.funcPass?'Pass':'Fail',
-          screen:s.screenPass?'Pass':'Fail',
-          bd:s.bdNoDot?'No BD':(s.bdVisible?bd.reason:'Not visible @2m'),
-          remark:fails.length?fails.join(' | '):(s.remark||lotRemarks||'OK'),
-          sampleResult:r==='PASS'?'Pass':'Fail',
-          inspectedAt:s.inspectedAt||new Date().toISOString()
-        };
-      });
+    const r=await api('submitLot',{
+      inspector:user.name,
+      batchName:activeLot.batchName,
+      lotNumber:activeLot.lotNumber,
+      lotResult,fgPassQty,
+      batchQty:activeLot.batchQty,
+      totalLots:activeLot.totalLots,
+      model:activeLot.model,
+      prodMonthCode:activeLot.prodMonthCode,
+      units
+    });
 
-      const r=await api('submitLot',{
-        inspector:user.name,
-        batchName:batchName,
-        lotNumber:activeLot.lotNumber,
-        lotResult,fgPassQty,
-        batchQty:activeLot.batchQty||activeLot.kitTotalQty||0,
-        totalLots:activeLot.totalLots||0,
-        model:activeLot.model||'',
-        prodMonthCode:activeLot.prodMonthCode||'',
-        units
-      });
-
-      if(r.ok){
-        clearDraft(activeLot);
-        toast(activeLot.lotNumber+': '+lotResult+' | FG Pass: '+fgPassQty);
-        activeLot=null; samples=[]; expandedSample=null;
-        await loadBatches(); render();
-      } else {
-        saveDraft();
-        toast(r.error||'Save failed — draft kept locally','err');
-        bsub.removeAttribute('data-submitting');
-        bsub.disabled=false;
-        bsub.textContent='✓ Submit Lot — '+lotResult;
-      }
-    } catch(err){
-      toast('Network error: '+err.message,'err');
-      bsub.removeAttribute('data-submitting');
-      bsub.disabled=false;
-      bsub.textContent='Retry Submit';
-    }
+    if(r.ok){
+      clearDraft(activeLot);
+      toast(`${activeLot.lotNumber}: ${lotResult} | FG Pass: ${fgPassQty}`);
+      activeLot=null; samples=[]; expandedSample=null;
+      await loadBatches(); render();
+    } else { saveDraft(); toast(r.error||'Save failed — draft kept locally','err'); }
   };
 }
 
