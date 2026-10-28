@@ -146,6 +146,9 @@ select.field{cursor:pointer;appearance:none;background-image:linear-gradient(45d
 .found-box{border:1px solid var(--minor-line);background:var(--minor-bg);border-radius:10px;padding:14px 16px;margin-bottom:20px}
 .found-box table td{background:transparent}
 
+.ok-note{background:var(--pass-bg);border:1px solid var(--pass-line);color:var(--pass);border-radius:10px;padding:12px 16px;font-weight:600}
+.res-table tr.row-muted td{color:var(--ink-3);background:var(--paper)}
+
 /* ── Inspection: sample tray (signature) ──────────────── */
 .bench{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center;background:var(--ink);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:16px}
 .bench-title{font-family:var(--num);font-size:24px;font-weight:700;letter-spacing:-.01em}
@@ -263,6 +266,8 @@ let modelPrefill = null;    // values copied from a suggestion into the add form
 let view = {batch:'', status:'all', q:''};  // dashboard lot filters
 let selLot = null;          // "batch||lot" of the lot opened in the detail panel
 let lotUnits = {};          // cache of sample results per lot
+let dataScan = null;        // duplicate-serial check result (admin)
+let recSearch = {q:'', loading:false, res:null};  // record lookup (admin)
 const LOT_SIZE   = 90;
 const SAMPLE_N   = 13;
 
@@ -649,6 +654,7 @@ function buildDashboard(){
     </div>
     </div>`;
     html+=buildModelsPanel();
+    html+=buildDataPanel();
   }
 
   // BATCH + LOT BROWSER
@@ -760,6 +766,62 @@ async function loadLotUnits(lot){
   const r=await api('getLotUnits',{batchName:lot.batchName,lotNumber:lot.lotNumber});
   lotUnits[k]=r.ok?{units:r.units||[]}:{error:(r.error||'').toLowerCase().includes('unknown')?'Sample results need the latest backend version.':(r.error||'Could not load sample results')};
   if(!activeLot && selLot===k) render();
+}
+
+// ─── DATA RECORDS PANEL (admin) ───────────────────────────
+function buildDataPanel(){
+  const d=dataScan;
+  const brief=r=>`<b>${esc(r.lot||'-')}</b><br><span class="text-muted">${esc(fmtDate(r.time))}, ${esc(r.inspector||'-')}, ${esc(r.result||'-')}, Master row ${r.row}</span>`;
+  let scanHtml='';
+  if(d&&d.loading) scanHtml=`<div class="text-muted" style="margin-top:14px">Checking every serial number…</div>`;
+  else if(d&&d.error) scanHtml=`<div class="err" style="margin-top:14px">${esc(d.error)}</div>`;
+  else if(d){
+    scanHtml=`<div class="stat-grid" style="margin:16px 0">
+      <div class="stat"><div class="stat-label">Records</div><div class="stat-val">${d.totalRecords}</div></div>
+      <div class="stat"><div class="stat-label">Unique serials</div><div class="stat-val">${d.uniqueSerials}</div></div>
+      <div class="stat"><div class="stat-label">Serials recorded twice or more</div><div class="stat-val ${d.duplicateSerials?'text-fail':'text-pass'}">${d.duplicateSerials}</div></div>
+      <div class="stat"><div class="stat-label">Extra copies</div><div class="stat-val ${d.extraRows?'text-fail':'text-pass'}">${d.extraRows}</div><div class="stat-sub">${d.archivedRows} moved out earlier</div></div>
+    </div>`;
+    if(!d.extraRows){
+      scanHtml+=`<div class="ok-note">No duplicates. Every serial number is recorded once.</div>`;
+    } else {
+      const shown=d.groups.slice(0,100);
+      scanHtml+=`<div style="overflow-x:auto"><table class="res-table">
+        <thead><tr><th>Serial number</th><th>Original, kept</th><th>Extra copies, will be moved</th></tr></thead>
+        <tbody>${shown.map(g=>`<tr><td style="font-family:var(--code);white-space:nowrap">${esc(g.serial)}</td><td>${brief(g.keep)}</td><td>${g.dups.map(brief).join('<div style="height:6px"></div>')}</td></tr>`).join('')}</tbody>
+      </table></div>
+      ${d.groups.length>shown.length?`<div class="text-muted" style="margin-top:8px">Showing the first ${shown.length} of ${d.groups.length} serial numbers.</div>`:''}
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px">
+        <button id="btnRemoveDups" class="btn btn-danger">Move ${d.extraRows} extra ${d.extraRows===1?'copy':'copies'} to Duplicates sheet</button>
+        <span class="text-muted">The earliest record of each serial stays in Master. Extra copies are moved to a sheet named Duplicates, not deleted.</span>
+      </div>`;
+    }
+  }
+  const rs=recSearch;
+  let recHtml='';
+  if(rs.loading) recHtml=`<div class="text-muted" style="margin-top:10px">Searching…</div>`;
+  else if(rs.res&&rs.res.error) recHtml=`<div class="err" style="margin-top:10px">${esc(rs.res.error)}</div>`;
+  else if(rs.res){
+    const recs=rs.res.records||[];
+    recHtml=!recs.length?`<div class="text-muted" style="margin-top:10px">No records match “${esc(rs.q)}”.</div>`:`
+      <div class="text-muted" style="margin:10px 0 8px">${recs.length}${rs.res.truncated?'+':''} record${recs.length===1?'':'s'} found${rs.res.truncated?', showing the first 300':''}.</div>
+      <div style="overflow-x:auto"><table class="res-table"><thead><tr><th>Serial number</th><th>Batch</th><th>Lot</th><th>Result</th><th>Inspector</th><th>Inspected</th><th>Status</th><th>Sheet row</th></tr></thead><tbody>
+      ${recs.map(r=>`<tr class="${r.status==='Active'?'':'row-muted'}"><td style="font-family:var(--code);white-space:nowrap">${esc(r.serial)}</td><td>${esc(r.batch)}</td><td>${esc(r.lot)}</td><td class="${/fail/i.test(r.result)?'bad':''}">${esc(r.result||'-')}</td><td>${esc(r.inspector)}</td><td style="white-space:nowrap">${esc(fmtDate(r.time))}</td><td>${r.status==='Active'?'<span class="badge badge-pass">In Master</span>':`<span class="badge badge-closed">Moved to Duplicates</span>`}</td><td>${r.status==='Active'?'Master':'Duplicates'} ${r.row}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  }
+  return `<div class="card" id="dataCard">
+    <div class="card-title">Data records</div>
+    <p class="text-muted" style="font-size:14px;max-width:70ch">Rule: each serial number is recorded once. New submissions with a serial that already exists are refused. Use the check below to find older duplicates.</p>
+    <div style="margin-top:12px"><button id="btnScanDups" class="btn btn-primary" ${d&&d.loading?'disabled':''}>${d&&!d.loading?'Check again':'Check for duplicate serials'}</button></div>
+    ${scanHtml}
+    <div style="border-top:1px solid var(--line);margin:22px 0 16px"></div>
+    <div style="font-weight:700;margin-bottom:8px">Look up a record</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;max-width:620px">
+      <input id="recQ" class="field" type="search" value="${esc(rs.q)}" placeholder="Serial number (or part of it) or lot number" style="flex:1;min-width:220px">
+      <button id="btnRecSearch" class="btn btn-ghost">Search</button>
+    </div>
+    ${recHtml}
+  </div>`;
 }
 
 // ─── MODELS PANEL (admin) ─────────────────────────────────
@@ -1005,7 +1067,7 @@ function bindEvents(){
 
   // Logout
   const blo=document.getElementById('btnLogout');
-  if(blo) blo.onclick=()=>{ view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; render(); };
+  if(blo) blo.onclick=()=>{ dataScan=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; render(); };
 
   // Refresh
   const br=document.getElementById('btnRefresh');
@@ -1136,6 +1198,36 @@ function bindEvents(){
     };
   });
   document.querySelectorAll('.lotCloseBtn').forEach(b=>{ b.onclick=()=>{ selLot=null; render(); }; });
+
+  // Data records: duplicate check, cleanup, lookup
+  const bsd=document.getElementById('btnScanDups');
+  if(bsd) bsd.onclick=async()=>{
+    dataScan={loading:true}; render();
+    const r=await api('scanDuplicates');
+    dataScan=r.ok?r:{error:(r.error||'').toLowerCase().includes('unknown')?'This needs the latest backend version.':(r.error||'Check failed')};
+    render(); document.getElementById('dataCard')?.scrollIntoView({block:'start'});
+  };
+  const brd=document.getElementById('btnRemoveDups');
+  if(brd) brd.onclick=async()=>{
+    const n=dataScan.extraRows;
+    if(!confirm(`Move ${n} extra ${n===1?'copy':'copies'} out of the Master sheet?\n\nThe earliest record of each serial number stays. The extra copies go to a sheet named "Duplicates", where you can still see them.`)) return;
+    brd.disabled=true; brd.textContent='Moving…';
+    const r=await api('removeDuplicates',{expected:n,by:user.username});
+    if(r.ok){ toast(`${r.removed} duplicate ${r.removed===1?'copy':'copies'} moved to Duplicates`); lotUnits={}; dataScan={loading:true}; render(); const s=await api('scanDuplicates'); dataScan=s.ok?s:{error:s.error}; render(); }
+    else { toast(r.error||'Could not move duplicates','err'); brd.disabled=false; }
+  };
+  const doRecSearch=async()=>{
+    const q=(document.getElementById('recQ')?.value||'').trim();
+    if(q.length<3){ toast('Type at least 3 characters','err'); return; }
+    recSearch={q,loading:true,res:null}; render();
+    const r=await api('searchRecords',{q});
+    recSearch={q,loading:false,res:r.ok?r:{error:(r.error||'').toLowerCase().includes('unknown')?'This needs the latest backend version.':(r.error||'Search failed')}};
+    render(); document.getElementById('recQ')?.scrollIntoView({block:'center'});
+  };
+  const brs=document.getElementById('btnRecSearch');
+  if(brs) brs.onclick=doRecSearch;
+  const rq=document.getElementById('recQ');
+  if(rq) rq.onkeydown=e=>{ if(e.key==='Enter') doRecSearch(); };
 
   // Delete Batch
   document.querySelectorAll('.delBatchBtn').forEach(btn=>{

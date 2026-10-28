@@ -117,6 +117,15 @@ function doPost(e){
     if(action === "getLotUnits"){
       result = getLotUnits(data);
     }
+    if(action === "scanDuplicates"){
+      result = scanDuplicates();
+    }
+    if(action === "removeDuplicates"){
+      result = removeDuplicates(data);
+    }
+    if(action === "searchRecords"){
+      result = searchRecords(data);
+    }
 
     return ContentService
       .createTextOutput(JSON.stringify(result))
@@ -277,6 +286,22 @@ function submitLot(d){
 
   var master = getOrCreateSheet("Master",[]);
   if(master.getRange(1, 19).getValue() === "") master.getRange(1, 19).setValue("BDSpec");
+
+  // Rule: a serial number is recorded only once, ever
+  var seen = {}, existing = {}, clash = [];
+  var mRows = master.getDataRange().getValues();
+  for(var x = 1; x < mRows.length; x++){
+    var sx = normSerial_(mRows[x][4]);
+    if(sx && !existing[sx]) existing[sx] = String(mRows[x][3]||"");
+  }
+  (d.units||[]).forEach(function(u){
+    var su = normSerial_(u.serial);
+    if(!su) return;
+    if(seen[su]) clash.push(su + " (repeated in this lot)");
+    else if(existing[su]) clash.push(su + " (already recorded in " + existing[su] + ")");
+    seen[su] = true;
+  });
+  if(clash.length) return {ok:false, error:"Duplicate serial number, nothing was saved: " + clash.join(", ")};
 
   var units = d.units || [];
   for(var i = 0; i < units.length; i++){
@@ -511,4 +536,124 @@ function getLotUnits(d){
     });
   }
   return {ok:true, units:out};
+}
+
+/****************************************************
+ * DUPLICATE SERIAL RULE
+ * Each serial number may appear in Master only once.
+ * The original is the earliest record (by timestamp, then row order).
+ * Extra copies are moved to the "Duplicates" sheet, never deleted outright.
+ ****************************************************/
+function normSerial_(v){
+  return String(v == null ? "" : v).replace(/^'/,"").replace(/\.0+$/,"").trim().toUpperCase();
+}
+
+function recOf_(r, rowNo){
+  return {
+    row: rowNo,
+    time: r[0] instanceof Date ? r[0].toISOString() : String(r[0]||""),
+    inspector: String(r[1]||""), batch: String(r[2]||""), lot: String(r[3]||""),
+    serial: normSerial_(r[4]), result: String(r[11]||""), lotResult: String(r[12]||""),
+    remark: String(r[10]||"")
+  };
+}
+
+function findDuplicates_(rows){
+  var bySerial = {}, order = [];
+  for(var i = 1; i < rows.length; i++){
+    var s = normSerial_(rows[i][4]);
+    if(!s) continue;
+    if(!bySerial[s]){ bySerial[s] = []; order.push(s); }
+    bySerial[s].push(i);
+  }
+  var groups = [], dupIdx = {};
+  order.forEach(function(s){
+    var idx = bySerial[s];
+    if(idx.length < 2) return;
+    idx.sort(function(a, b){
+      var ta = rows[a][0] instanceof Date ? rows[a][0].getTime() : Infinity;
+      var tb = rows[b][0] instanceof Date ? rows[b][0].getTime() : Infinity;
+      return ta === tb ? a - b : ta - tb;
+    });
+    var keep = idx[0];
+    var dups = idx.slice(1);
+    dups.forEach(function(k){ dupIdx[k] = keep; });
+    groups.push({serial:s, keep:recOf_(rows[keep], keep+1), dups:dups.map(function(k){ return recOf_(rows[k], k+1); })});
+  });
+  return {groups:groups, dupIdx:dupIdx, unique:order.length};
+}
+
+function scanDuplicates(){
+  var rows = getOrCreateSheet("Master",[]).getDataRange().getValues();
+  var f = findDuplicates_(rows);
+  var extra = Object.keys(f.dupIdx).length;
+  var archived = getSpreadsheet().getSheetByName("Duplicates");
+  return {ok:true, totalRecords: rows.length - 1, uniqueSerials: f.unique,
+          duplicateSerials: f.groups.length, extraRows: extra,
+          archivedRows: archived ? Math.max(archived.getLastRow() - 1, 0) : 0,
+          groups: f.groups.slice(0, 500)};
+}
+
+function removeDuplicates(d){
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try{
+    var master = getOrCreateSheet("Master",[]);
+    var rows = master.getDataRange().getValues();
+    var f = findDuplicates_(rows);
+    var extra = Object.keys(f.dupIdx).length;
+    if(extra === 0) return {ok:true, removed:0, message:"No duplicates found"};
+    if(Number(d.expected) !== extra)
+      return {ok:false, error:"The data changed since you checked (" + extra + " duplicate rows now). Check again before removing."};
+
+    var width = rows[0].length;
+    var arch = getSpreadsheet().getSheetByName("Duplicates");
+    if(!arch){
+      arch = getSpreadsheet().insertSheet("Duplicates");
+      arch.appendRow(rows[0].concat(["RemovedAt","RemovedBy","KeptMasterRow"]));
+      arch.setFrozenRows(1);
+    }
+    var keepRows = [rows[0]], moved = [], now = new Date(), by = String(d.by||"");
+    // first pass: final row number of each kept record after cleanup
+    var newRowOf = {}, n = 1;
+    for(var i = 1; i < rows.length; i++){ if(!(i in f.dupIdx)){ n++; newRowOf[i] = n; } }
+    for(var j = 1; j < rows.length; j++){
+      if(j in f.dupIdx){
+        var r = rows[j].slice(0, width);
+        while(r.length < width) r.push("");
+        moved.push(r.concat([now, by, newRowOf[f.dupIdx[j]] || ""]));
+      } else keepRows.push(rows[j]);
+    }
+    // archive first, then rewrite Master in one write
+    arch.getRange(arch.getLastRow()+1, 1, moved.length, moved[0].length).setValues(moved);
+    master.getRange(1, 1, rows.length, width).clearContent();
+    master.getRange(1, 1, keepRows.length, width).setValues(keepRows);
+    SpreadsheetApp.flush();
+    return {ok:true, removed: moved.length, remaining: keepRows.length - 1};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function searchRecords(d){
+  var q = normSerial_(d.q);
+  if(q.length < 3) return {ok:false, error:"Type at least 3 characters"};
+  var out = [];
+  function scan(sheet, status){
+    if(!sheet) return;
+    var rows = sheet.getDataRange().getValues();
+    var remCol = rows.length ? rows[0].indexOf("RemovedAt") : -1;
+    for(var i = 1; i < rows.length && out.length < 300; i++){
+      var s = normSerial_(rows[i][4]);
+      var lot = String(rows[i][3]||"").toUpperCase();
+      if(s.indexOf(q) === -1 && lot.indexOf(q) === -1) continue;
+      var rec = recOf_(rows[i], i+1);
+      rec.status = status;
+      if(remCol > -1 && rows[i][remCol] instanceof Date) rec.removedAt = rows[i][remCol].toISOString();
+      out.push(rec);
+    }
+  }
+  scan(getOrCreateSheet("Master",[]), "Active");
+  scan(getSpreadsheet().getSheetByName("Duplicates"), "Removed duplicate");
+  return {ok:true, records: out, truncated: out.length >= 300};
 }
