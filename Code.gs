@@ -49,7 +49,7 @@ function setup(){
 }
 
 function testCreateBatch(){
-  var m = getModels().models[0];
+  var m = readModels_()[0];
   if(!m){ Logger.log("Add a model in the app first"); return; }
   var result = createBatch({
     batchName: "TEST_BATCH",
@@ -113,6 +113,9 @@ function doPost(e){
     }
     if(action === "deleteModel"){
       result = deleteModel(data);
+    }
+    if(action === "getLotUnits"){
+      result = getLotUnits(data);
     }
 
     return ContentService
@@ -308,15 +311,16 @@ function getMaster(){
 }
 /****************************************************
  * MODELS + BLACK DOT SPEC  (sheet: "Models")
- * name | code | maxD | smallD | maxN | minDS | nA | nB | nAB | updatedBy | updatedAt
+ * name | code | maxD | smallD | maxN | minDS | nA | nB | nAB | updatedBy | updatedAt | lumioModel
  *   code   = first 4 digits of serial
+ *   lumioModel = Lumio model number (product name/number shown to users)
  *   maxD   = FAIL if D > maxD
  *   smallD = OK if D <= smallD (no area check)
  *   maxN   = FAIL if N > maxN
  *   minDS  = FAIL if DS < minDS (only when N > 1)
  *   nA/nB/nAB = max N in Area A / B / A+B for smallD < D <= maxD
  ****************************************************/
-var MODEL_COLS     = ["name","code","maxD","smallD","maxN","minDS","nA","nB","nAB","updatedBy","updatedAt"];
+var MODEL_COLS     = ["name","code","maxD","smallD","maxN","minDS","nA","nB","nAB","updatedBy","updatedAt","lumioModel"];
 var MODEL_NUM_COLS = ["maxD","smallD","maxN","minDS","nA","nB","nAB"];
 
 function modelsSheet_(){
@@ -328,12 +332,13 @@ function modelsSheet_(){
     sh.getRange("B:B").setNumberFormat("@");   // keep code as text (e.g. 0123)
     sh.setFrozenRows(1);
   }
+  if(sh.getRange(1, MODEL_COLS.length).getValue() === "") sh.getRange(1, MODEL_COLS.length).setValue(MODEL_COLS[MODEL_COLS.length-1]);
   return sh;
 }
 
 function code4_(v){ return ("0000" + String(v).replace(/^'/,"").trim()).slice(-4); }
 
-function getModels(){
+function readModels_(){
   var v = modelsSheet_().getDataRange().getValues();
   var out = [];
   for(var i = 1; i < v.length; i++){
@@ -342,14 +347,68 @@ function getModels(){
     out.push({
       name:String(r[0]).trim(), code:code4_(r[1]),
       maxD:Number(r[2]), smallD:Number(r[3]), maxN:Number(r[4]), minDS:Number(r[5]),
-      nA:Number(r[6]), nB:Number(r[7]), nAB:Number(r[8])
+      nA:Number(r[6]), nB:Number(r[7]), nAB:Number(r[8]),
+      lumioModel:String(r[11]||"").trim()
     });
   }
-  return {ok:true, models:out};
+  return out;
+}
+
+function mostCommon_(counts){
+  var best = "", n = 0;
+  for(var k in counts){ if(counts[k] > n){ best = k; n = counts[k]; } }
+  return best;
+}
+
+/* Models + what is already in Batches/Master (used to suggest models to add) */
+function getModels(){
+  var models = readModels_();
+  var known = {};
+  models.forEach(function(m){ known[m.name.toLowerCase()] = true; });
+
+  var info = {};   // model name -> {lots, open, closed, bd:{}, codes:{}, months:{}}
+  function slot(name){
+    if(!info[name]) info[name] = {lots:0, open:0, closed:0, bd:{}, codes:{}, months:{}, batches:{}};
+    return info[name];
+  }
+  var b = getOrCreateSheet("Batches",[]).getDataRange().getValues();
+  for(var i = 1; i < b.length; i++){
+    var name = String(b[i][11]||"").trim();
+    if(!name) continue;
+    var s = slot(name);
+    s.lots++;
+    if(String(b[i][5]) === "Open") s.open++; else s.closed++;
+    s.batches[String(b[i][0])] = true;
+    var bd = String(b[i][4]||""); if(bd) s.bd[bd] = (s.bd[bd]||0) + 1;
+  }
+  var m = getOrCreateSheet("Master",[]).getDataRange().getValues();
+  for(var j = 1; j < m.length; j++){
+    var mn = String(m[j][15]||"").trim();
+    var serial = String(m[j][4]||"").trim();
+    if(!mn || !/^\d{15}$/.test(serial)) continue;
+    var ms = slot(mn);
+    var c = serial.substring(0,4);
+    ms.codes[c] = (ms.codes[c]||0) + 1;
+  }
+
+  var usage = {}, suggestions = [];
+  for(var nm in info){
+    var x = info[nm];
+    var row = {
+      name: nm,
+      code: mostCommon_(x.codes),
+      maxD: Number(mostCommon_(x.bd)) || "",
+      lots: x.lots, openLots: x.open, closedLots: x.closed,
+      batches: Object.keys(x.batches).length
+    };
+    usage[nm] = row;
+    if(!known[nm.toLowerCase()]) suggestions.push(row);
+  }
+  return {ok:true, models:models, usage:usage, suggestions:suggestions};
 }
 
 function findModel_(name){
-  var list = getModels().models;
+  var list = readModels_();
   for(var i = 0; i < list.length; i++){
     if(list[i].name === String(name).trim()) return list[i];
   }
@@ -360,7 +419,9 @@ function saveModel(d){
   var m    = d.model || {};
   var name = String(m.name||"").trim();
   var code = String(m.code||"").trim();
+  var lumio = String(m.lumioModel||"").trim();
   if(!name) return {ok:false, error:"Model name is required"};
+  if(!lumio) return {ok:false, error:"Lumio model number is required"};
   if(!/^\d{4}$/.test(code)) return {ok:false, error:"Serial code must be exactly 4 digits"};
   for(var k = 0; k < MODEL_NUM_COLS.length; k++){
     var key = MODEL_NUM_COLS[k];
@@ -385,7 +446,7 @@ function saveModel(d){
     if(original && rowIdx === -1) return {ok:false, error:"Model to edit not found - refresh and try again"};
 
     var row = [name, code, Number(m.maxD), Number(m.smallD), Number(m.maxN), Number(m.minDS),
-               Number(m.nA), Number(m.nB), Number(m.nAB), d.updatedBy||"", new Date()];
+               Number(m.nA), Number(m.nB), Number(m.nAB), d.updatedBy||"", new Date(), lumio];
     var target;
     if(rowIdx === -1){
       sh.appendRow(row);
@@ -428,4 +489,26 @@ function deleteModel(d){
   } finally {
     lock.releaseLock();
   }
+}
+
+/****************************************************
+ * LOT RESULTS — sample rows from Master for one lot
+ ****************************************************/
+function getLotUnits(d){
+  var bn = String(d.batchName||""), ln = String(d.lotNumber||"");
+  if(!bn || !ln) return {ok:false, error:"Batch and lot are required"};
+  var rows = getOrCreateSheet("Master",[]).getDataRange().getValues();
+  var out = [];
+  for(var i = 1; i < rows.length; i++){
+    var r = rows[i];
+    if(String(r[2]) !== bn || String(r[3]) !== ln) continue;
+    out.push({
+      time: r[0] instanceof Date ? r[0].toISOString() : String(r[0]||""),
+      inspector: String(r[1]||""), serial: String(r[4]||""),
+      aes: String(r[5]||""), general: String(r[6]||""), func: String(r[7]||""), screen: String(r[8]||""),
+      bd: String(r[9]||""), remark: String(r[10]||""),
+      sampleResult: String(r[11]||""), lotResult: String(r[12]||"")
+    });
+  }
+  return {ok:true, units:out};
 }

@@ -109,6 +109,43 @@ select.field{cursor:pointer;appearance:none;background-image:linear-gradient(45d
 .progress-bar{background:var(--sunk);border-radius:99px;height:8px;overflow:hidden;min-width:80px}
 .progress-fill{background:var(--lime);height:100%;transition:width .4s;border-radius:99px}
 
+/* ── Lot browser ─────────────────────────────────────── */
+.lot-toolbar{display:grid;grid-template-columns:minmax(220px,1.3fr) auto minmax(180px,1fr);gap:16px;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:16px}
+.lot-toolbar .lbl{margin-bottom:6px}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:9px;overflow:hidden;background:var(--panel)}
+.seg-btn{border:none;border-right:1px solid var(--line);background:none;padding:0 14px;min-height:42px;font-size:14px;font-weight:600;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.seg-btn:last-child{border-right:none}
+.seg-btn span{font-family:var(--num);color:var(--ink-3);margin-left:4px}
+.seg-btn.on{background:var(--ink);color:#fff}
+.seg-btn.on span{color:var(--lime)}
+.lot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px;padding:16px 20px}
+.lot-tile{height:60px;border-radius:9px;border:1px solid var(--line-strong);background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;color:var(--ink-2);padding:0}
+.lot-tile:hover{border-color:var(--ink)}
+.lt-no{font-family:var(--num);font-size:21px;font-weight:700;line-height:1;color:var(--ink)}
+.lt-st{font-size:11.5px;font-weight:600}
+.lot-tile.t-pass{background:var(--pass-bg);border-color:var(--pass-line);color:var(--pass)}
+.lot-tile.t-fail{background:var(--fail);border-color:var(--fail);color:#fff}
+.lot-tile.t-fail .lt-no{color:#fff}
+.lot-tile.t-open{border:1.5px dashed var(--open);color:var(--open)}
+.lot-tile.t-closed{background:var(--sunk);color:var(--ink-3)}
+.lot-tile.t-draft{border:1.5px solid var(--open);background:var(--open-bg);color:var(--open)}
+.lot-tile.sel{outline:3px solid var(--ink);outline-offset:2px}
+.lot-empty{padding:18px 20px;color:var(--ink-3);font-size:14px}
+.lot-detail{margin:0 20px 20px;border:1px solid var(--line-strong);border-radius:12px;background:var(--paper);overflow:hidden;animation:fadeIn .18s ease both}
+.ld-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;padding:16px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+.ld-title{font-family:var(--num);font-size:22px;font-weight:700;line-height:1.15}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+.facts div{background:var(--panel);padding:10px 18px;font-size:13px;color:var(--ink-3)}
+.facts b{display:block;font-size:15px;color:var(--ink);font-weight:600;margin-top:1px}
+.res-wrap{padding:14px 18px 18px}
+.res-table{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.res-table th{background:var(--sunk);text-align:left;padding:8px 10px;font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.res-table td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}
+.res-table td.bad{color:var(--fail);font-weight:700}
+.res-table tr.row-bad td{background:var(--fail-row)}
+.found-box{border:1px solid var(--minor-line);background:var(--minor-bg);border-radius:10px;padding:14px 16px;margin-bottom:20px}
+.found-box table td{background:transparent}
+
 /* ── Inspection: sample tray (signature) ──────────────── */
 .bench{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center;background:var(--ink);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:16px}
 .bench-title{font-family:var(--num);font-size:24px;font-weight:700;letter-spacing:-.01em}
@@ -184,6 +221,10 @@ table th{font-weight:600}
   .stat{border-right:none;border-bottom:1px solid var(--line)}
   .insp-footer{position:static}
   .samp-head{display:none!important}
+  .lot-toolbar{grid-template-columns:1fr}
+  .seg{display:flex;overflow-x:auto}
+  .lot-grid{grid-template-columns:repeat(auto-fill,minmax(58px,1fr));padding:12px}
+  .lot-detail{margin:0 12px 12px}
   .samp-serial-wrap{width:calc(100% - 42px)}
 }
 @media print{
@@ -216,6 +257,12 @@ let models = [];            // loaded from backend "Models" sheet — managed by
 let activeSpec = null;      // Black Dot spec of the model being inspected
 let editingModel = null;    // name of model being edited in admin panel
 let lotRemarksVal = '';     // lot remarks kept across re-renders
+let modelUsage = {};        // model name -> usage found in Batches/Master
+let modelSuggestions = [];  // models found in existing data but not yet defined
+let modelPrefill = null;    // values copied from a suggestion into the add form
+let view = {batch:'', status:'all', q:''};  // dashboard lot filters
+let selLot = null;          // "batch||lot" of the lot opened in the detail panel
+let lotUnits = {};          // cache of sample results per lot
 const LOT_SIZE   = 90;
 const SAMPLE_N   = 13;
 
@@ -309,19 +356,28 @@ function normModel(m){
     code:String(m.code||'').trim().padStart(4,'0'),
     maxD:Number(m.maxD), smallD:Number(m.smallD),
     maxN:Number(m.maxN), minDS:Number(m.minDS),
-    nA:Number(m.nA), nB:Number(m.nB), nAB:Number(m.nAB)
+    nA:Number(m.nA), nB:Number(m.nB), nAB:Number(m.nAB),
+    lumioModel:String(m.lumioModel||'').trim()
   };
+}
+function modelLabel(name){
+  const m=getModel(name);
+  return m&&m.lumioModel ? `${m.lumioModel} (${m.name})` : (name||'-');
 }
 function specText(m){
   if(!m) return 'No spec';
   return `Not visible @2m → OK | D>${m.maxD}mm → FAIL | N>${m.maxN} → FAIL | DS<${m.minDS}mm (when N>1) → FAIL | D≤${m.smallD}mm → OK | ${m.smallD}<D≤${m.maxD}mm → Area A N≤${m.nA} / Area B N≤${m.nB} / A+B N≤${m.nAB}`;
 }
 function modelOptions(selected){
-  return models.map(m=>`<option value="${esc(m.name)}" ${m.name===selected?'selected':''}>${esc(m.name)}  (Code: ${esc(m.code)})</option>`).join('');
+  return models.map(m=>`<option value="${esc(m.name)}" ${m.name===selected?'selected':''}>${esc(m.lumioModel||m.name)}, ${esc(m.name)}, code ${esc(m.code)}</option>`).join('');
 }
 async function loadModels(){
   const r=await api('getModels');
-  if(r.ok) models=(r.models||[]).map(normModel).filter(m=>m.name);
+  if(r.ok){
+    models=(r.models||[]).map(normModel).filter(m=>m.name);
+    modelUsage=r.usage||{};
+    modelSuggestions=r.suggestions||[];
+  }
   else console.warn('getModels failed:',r.error);
 }
 async function loadAll(){ await Promise.all([loadBatches(),loadModels()]); }
@@ -552,7 +608,7 @@ function buildDashboard(){
   <!-- INFO BANNER -->
   <div class="info-banner">
     <b>Acceptance:</b> each lot of 90 units is judged on 13 samples. One aesthetic (minor) defect is allowed. Any general, functional, screen or black dot (major) defect fails the lot.<br>
-    ${models.length?models.map(m=>`<b>Black dot, ${esc(m.name)}:</b> ${esc(specText(m))}`).join('<br>'):'<b>Black dot:</b> no models yet. '+(isAdmin?'Add one in Models and black dot spec below.':'Ask an admin to add one.')}
+    ${models.length?models.map(m=>`<b>Black dot, ${esc(m.lumioModel||m.name)}:</b> ${esc(specText(m))}`).join('<br>'):'<b>Black dot:</b> no models yet. '+(isAdmin?'Add one in Models and black dot spec below.':'Ask an admin to add one.')}
   </div>`;
 
   // ADMIN PANELS
@@ -595,112 +651,188 @@ function buildDashboard(){
     html+=buildModelsPanel();
   }
 
-  // BATCH LIST
+  // BATCH + LOT BROWSER
+  const stOf=l=>l.result==='PASS'?'pass':l.result==='FAIL'?'fail':l.status==='Open'?'open':'closed';
+  const lotNo=l=>{const m=String(l.lotNumber).match(/(\d+)\s*$/);return m?m[1]:l.lotNumber;};
+  const inBatch=l=>!view.batch||l.batchName===view.batch;
+  const matches=l=>(view.status==='all'||stOf(l)===view.status)&&(!view.q||String(l.lotNumber).toLowerCase().includes(view.q.trim().toLowerCase()));
+  const cnt=k=>batches.filter(l=>inBatch(l)&&(k==='all'||stOf(l)===k)).length;
   html+=`<div id="batchList">`;
   if(groups.length===0){
-    html+=`<div class="card" style="text-align:center;padding:40px;color:var(--ink-3)">No batches yet. ${isAdmin?'Create one above.':'Ask admin to create a batch.'}</div>`;
+    html+=`<div class="card" style="text-align:center;padding:40px;color:var(--ink-3)">No batches yet. ${isAdmin?'Create one above.':'Ask an admin to create a batch.'}</div>`;
   } else {
-    groups.forEach(g=>{
+    html+=`<div class="lot-toolbar">
+      <div><label class="lbl" for="fBatch">Batch</label>
+        <select id="fBatch" class="field"><option value="">All batches (${groups.length})</option>${groups.map(g=>`<option value="${esc(g.name)}" ${g.name===view.batch?'selected':''}>${esc(g.name)}, ${g.completed} of ${g.totalLots} lots done</option>`).join('')}</select></div>
+      <div><span class="lbl">Show lots</span><div class="seg" role="group" aria-label="Filter lots by status">${[['all','All'],['open','Open'],['pass','Passed'],['fail','Failed']].map(([k,l])=>`<button class="seg-btn fStatus ${view.status===k?'on':''}" data-k="${k}" aria-pressed="${view.status===k}">${l}<span>${cnt(k)}</span></button>`).join('')}</div></div>
+      <div><label class="lbl" for="fSearch">Find a lot</label><input id="fSearch" class="field" type="search" value="${esc(view.q)}" placeholder="Lot number, e.g. 12"></div>
+    </div>`;
+    groups.filter(g=>!view.batch||g.name===view.batch).forEach(g=>{
       const pct2=g.totalLots?Math.round(g.completed/g.totalLots*100):0;
+      const lots=g.lots.filter(matches);
+      const nextOpen=!isAdmin?g.lots.find(l=>l.status==='Open'):null;
       html+=`<div class="batch-group fade">
       <div class="batch-hdr">
         <div>
-          <div class="batch-name">${g.name}</div>
+          <div class="batch-name">${esc(g.name)}</div>
           <div class="batch-meta">
-            Model <b>${esc(g.model||'-')}</b>, production <b>${mmyyDisp(g.prodMonthCode)}${g.prodMonthCode2?' / '+mmyyDisp(g.prodMonthCode2):''}</b>, <b>${g.batchQty||'?'}</b> units in <b>${g.totalLots}</b> lots<br>
+            ${esc(modelLabel(g.model))}, production <b>${mmyyDisp(g.prodMonthCode)}${g.prodMonthCode2?' / '+mmyyDisp(g.prodMonthCode2):''}</b>, <b>${g.batchQty||'?'}</b> units in <b>${g.totalLots}</b> lots<br>
             <b>${g.completed}</b> inspected, <b>${g.pending}</b> open,
-            <span class="text-pass"><b class="text-pass">${g.passLots}</b> passed</span>,
-            <span class="text-fail"><b class="text-fail">${g.failLots}</b> failed</span>,
-            <b class="text-pass">${g.fgTotal}</b> units released
+            <b class="text-pass">${g.passLots}</b> passed, <b class="text-fail">${g.failLots}</b> failed, <b class="text-pass">${g.fgTotal}</b> units released
           </div>
-          <div class="lot-strip" aria-label="Lot status">${g.lots.map(l=>`<span class="lot-cell ${l.result==='PASS'?'c-pass':l.result==='FAIL'?'c-fail':l.status==='Open'?'c-open':''}" title="${esc(l.lotNumber)}: ${l.result||l.status}"></span>`).join('')}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <div>
-            <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:${pct2}%"></div></div>
-            <div class="text-muted" style="text-align:right;margin-top:3px">${pct2}%</div>
+            <div class="progress-bar" style="width:140px"><div class="progress-fill" style="width:${pct2}%"></div></div>
+            <div class="text-muted" style="text-align:right;margin-top:4px">${pct2}% inspected</div>
           </div>
-          ${isAdmin?`<button class="btn btn-danger btn-sm delBatchBtn" data-name="${g.name}">🗑 Delete Batch</button>`:''}
+          ${nextOpen?`<button class="btn btn-primary btn-sm startBtn" data-ri="${batches.indexOf(nextOpen)}">Inspect next open lot (${esc(lotNo(nextOpen))})</button>`:''}
+          ${isAdmin?`<button class="btn btn-ghost btn-sm delBatchBtn" data-name="${esc(g.name)}" style="color:var(--fail)">Delete batch</button>`:''}
         </div>
       </div>`;
-
-      g.lots.forEach(lot=>{
-        const ri=batches.indexOf(lot);
-        const draft=(!isAdmin && lot.status==='Open') ? loadDraft(lot) : null;
-        const draftFilled=draft ? draft.samples.filter(s=>s.serial).length : 0;
-        html+=`<div class="lot-row">
-          <div>
-            <div class="lot-name">${lot.lotNumber}</div>
-            <div class="lot-meta">${lot.lotSize} units, ${lot.sampleSize} samples, model ${esc(lot.model||'-')}${getModel(lot.model)?'':' <span class="text-fail">(not in model list)</span>'}</div>
-          </div>
-          <div class="lot-actions">
-            <span class="badge ${lot.status==='Open'?'badge-open':'badge-closed'}">${lot.status}</span>
-            ${lot.result?`<span class="badge ${lot.result==='PASS'?'badge-pass':'badge-fail'}">${lot.result}</span>`:''}
-            ${draft?`<span class="badge" style="background:var(--open-bg);color:var(--open);border:1px solid var(--open-line)">📝 Draft ${draftFilled}/${draft.samples.length}</span>`:''}
-            ${lot.fgPassQty!==0&&lot.fgPassQty!==''?`<span class="text-muted">${lot.fgPassQty} released</span>`:''}
-            ${!isAdmin&&lot.status==='Open'?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume Inspection':'Start Inspection'}</button>`:''}
-            ${isAdmin?`<button class="btn btn-ghost btn-sm editBtn" data-ri="${ri}">Edit</button>`:''}
-            ${isAdmin?`<button class="btn btn-danger btn-sm delLotBtn" data-ri="${ri}" style="font-size:12px;padding:4px 8px">🗑</button>`:''}
-          </div>
-        </div>
-        <div id="editArea${ri}" class="hidden" style="padding:12px 18px;background:var(--paper);border-top:1px solid var(--line)"></div>`;
-      });
+      if(!lots.length){
+        html+=`<div class="lot-empty">No lots in this batch match the filter.</div>`;
+      } else {
+        html+=`<div class="lot-grid" role="list">${lots.map(l=>{
+          const ri=batches.indexOf(l), st=stOf(l), key=l.batchName+'||'+l.lotNumber;
+          const draft=(!isAdmin&&l.status==='Open')?loadDraft(l):null;
+          const cls=draft?'t-draft':'t-'+st;
+          const word=draft?'Draft':st==='pass'?'Pass':st==='fail'?'Fail':st==='open'?'Open':'Closed';
+          return `<button class="lot-tile ${cls} lotTile ${selLot===key?'sel':''}" data-ri="${ri}" role="listitem" aria-pressed="${selLot===key}" title="${esc(l.lotNumber)}: ${word}"><span class="lt-no">${esc(lotNo(l))}</span><span class="lt-st">${word}</span></button>`;
+        }).join('')}</div>`;
+      }
+      const sel=g.lots.find(l=>selLot===l.batchName+'||'+l.lotNumber);
+      if(sel) html+=buildLotDetail(sel,isAdmin);
       html+=`</div>`;
     });
   }
   html+=`</div></div>
-  <footer class="pg-footer">IS2500 OBA Inspection | Lot Size: 90 | Sample: 13 | Minor Ac≤1 | Major Ac=0 | © 2026</footer>
+  <footer class="pg-footer">Lumio OBA inspection, IS 2500 level G2</footer>
   </div>`;
   return html;
+}
+
+// ─── LOT DETAIL ───────────────────────────────────────────
+function fmtDate(v){ const d=new Date(v); return isNaN(d)?(v||'-'):d.toLocaleString([], {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function buildLotDetail(lot,isAdmin){
+  const ri=batches.indexOf(lot), key=lot.batchName+'||'+lot.lotNumber;
+  const draft=(!isAdmin&&lot.status==='Open')?loadDraft(lot):null;
+  const st=lot.result==='PASS'?'<span class="badge badge-pass">Passed</span>':lot.result==='FAIL'?'<span class="badge badge-fail">Failed</span>':lot.status==='Open'?'<span class="badge badge-open">Open</span>':'<span class="badge badge-closed">Closed</span>';
+  let h=`<section class="lot-detail" aria-label="${esc(lot.lotNumber)} details">
+    <div class="ld-head">
+      <div><div class="ld-title">${esc(lot.lotNumber)}</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${st}${draft?`<span class="badge badge-open">Draft, ${draft.samples.filter(s=>s.serial).length} of ${draft.samples.length} samples</span>`:''}</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${!isAdmin&&lot.status==='Open'?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume inspection':'Start inspection'}</button>`:''}
+        ${isAdmin?`<button class="btn btn-ghost btn-sm editBtn" data-ri="${ri}">Edit lot</button><button class="btn btn-ghost btn-sm delLotBtn" data-ri="${ri}" style="color:var(--fail)">Delete lot</button>`:''}
+        <button class="btn btn-ghost btn-sm lotCloseBtn" aria-label="Close lot details">Close</button>
+      </div>
+    </div>
+    <div class="facts">
+      <div>Lot size<b>${lot.lotSize} units</b></div>
+      <div>Samples<b>${lot.sampleSize}</b></div>
+      <div>Model<b>${esc(modelLabel(lot.model))}</b></div>
+      <div>Production<b>${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' / '+mmyyDisp(lot.prodMonthCode2):''}</b></div>
+      <div>Released<b>${lot.fgPassQty?lot.fgPassQty+' units':'—'}</b></div>
+      <div>Created<b>${esc(fmtDate(lot.createdAt))}</b></div>
+    </div>
+    <div id="editArea${ri}" class="hidden" style="padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--line)"></div>`;
+  if(lot.status==='Closed'||lot.result){
+    const c=lotUnits[key];
+    h+=`<div class="res-wrap"><div style="font-weight:700;margin-bottom:8px">Sample results</div>`;
+    if(!c||c.loading) h+=`<div class="text-muted">Loading sample results…</div>`;
+    else if(c.error) h+=`<div class="err">${esc(c.error)}</div>`;
+    else if(!c.units.length) h+=`<div class="text-muted">No sample records found for this lot.</div>`;
+    else {
+      const cell=v=>`<td class="${/fail/i.test(v)?'bad':''}">${esc(v||'-')}</td>`;
+      h+=`<div style="overflow-x:auto"><table class="res-table"><thead><tr><th>#</th><th>Serial</th><th>Aes</th><th>Gen</th><th>Func</th><th>Scr</th><th>Black dot</th><th>Result</th><th>Remark</th><th>Inspected</th></tr></thead><tbody>
+        ${c.units.map((u,i)=>`<tr class="${/fail/i.test(u.sampleResult)?'row-bad':''}"><td>${i+1}</td><td style="font-family:var(--code);white-space:nowrap">${esc(u.serial)}</td>${cell(u.aes)}${cell(u.general)}${cell(u.func)}${cell(u.screen)}<td>${esc(u.bd)}</td>${cell(u.sampleResult)}<td>${esc(u.remark)}</td><td style="white-space:nowrap">${esc(u.inspector)}<br><span class="text-muted">${esc(fmtDate(u.time))}</span></td></tr>`).join('')}
+      </tbody></table></div>`;
+    }
+    h+=`</div>`;
+  } else {
+    h+=`<div class="res-wrap text-muted">${isAdmin?'Not inspected yet. An inspector can start this lot from their dashboard.':'Not inspected yet.'}</div>`;
+  }
+  return h+`</section>`;
+}
+async function loadLotUnits(lot){
+  const k=lot.batchName+'||'+lot.lotNumber;
+  lotUnits[k]={loading:true};
+  const r=await api('getLotUnits',{batchName:lot.batchName,lotNumber:lot.lotNumber});
+  lotUnits[k]=r.ok?{units:r.units||[]}:{error:(r.error||'').toLowerCase().includes('unknown')?'Sample results need the latest backend version.':(r.error||'Could not load sample results')};
+  if(!activeLot && selLot===k) render();
 }
 
 // ─── MODELS PANEL (admin) ─────────────────────────────────
 function buildModelsPanel(){
   const em=editingModel?getModel(editingModel):null;
-  const v=k=>em?esc(em[k]):'';
-  const nf=(id,label,ph,step,hint)=>`<div><label class="lbl">${label}</label><input id="${id}" class="field mono" type="number" step="${step}" min="0" value="${v(id.slice(2))}" placeholder="${ph}"><div class="text-muted" style="font-size:12px;margin-top:3px">${hint}</div></div>`;
-  let rows=models.map(m=>`<tr style="border-bottom:1px solid var(--line)">
-      <td style="padding:7px 10px;color:var(--ink);font-weight:700">${esc(m.name)}</td>
-      <td style="padding:7px 10px">${esc(m.code)}</td>
-      <td style="padding:7px 10px;text-align:center">${m.maxD}</td>
-      <td style="padding:7px 10px;text-align:center">${m.smallD}</td>
-      <td style="padding:7px 10px;text-align:center">${m.maxN}</td>
-      <td style="padding:7px 10px;text-align:center">${m.minDS}</td>
-      <td style="padding:7px 10px;text-align:center">${m.nA} / ${m.nB} / ${m.nAB}</td>
-      <td style="padding:7px 10px;text-align:right;white-space:nowrap">
+  const src=em||modelPrefill||{};
+  const v=k=>(src[k]!==undefined&&src[k]!=='')?esc(src[k]):'';
+  const th='padding:9px 12px;text-align:left;font-weight:600';
+  const td='padding:9px 12px';
+  const nf=(id,label,ph,step,hint)=>`<div><label class="lbl" for="${id}">${label}</label><input id="${id}" class="field mono" type="number" step="${step}" min="0" value="${v(id.slice(2))}" placeholder="${ph}"><div class="text-muted" style="font-size:12px;margin-top:3px">${hint}</div></div>`;
+  let rows=models.map(m=>{
+    const u=modelUsage[m.name];
+    return `<tr style="border-top:1px solid var(--line)">
+      <td style="${td};color:var(--ink);font-weight:600">${m.lumioModel?esc(m.lumioModel):'<span class="text-fail">Missing — edit to add</span>'}</td>
+      <td style="${td};color:var(--ink)">${esc(m.name)}</td>
+      <td style="${td}" class="mono">${esc(m.code)}</td>
+      <td style="${td}" class="mono">${m.maxD} / ${m.smallD}</td>
+      <td style="${td}" class="mono">${m.maxN} / ${m.minDS}</td>
+      <td style="${td}" class="mono">${m.nA} / ${m.nB} / ${m.nAB}</td>
+      <td style="${td}">${u?`${u.lots} lots${u.openLots?`, ${u.openLots} open`:''}`:'<span class="text-muted">Not used yet</span>'}</td>
+      <td style="${td};text-align:right;white-space:nowrap">
         <button class="btn btn-ghost btn-sm editModelBtn" data-name="${esc(m.name)}">Edit</button>
-        <button class="btn btn-danger btn-sm delModelBtn" data-name="${esc(m.name)}" style="padding:4px 8px">🗑</button>
-      </td></tr>`).join('');
-  if(!rows) rows=`<tr><td colspan="8" style="padding:14px;text-align:center;color:var(--ink-3)">No models yet. Add your first model below.</td></tr>`;
-  return `<div class="card">
+        <button class="btn btn-ghost btn-sm delModelBtn" data-name="${esc(m.name)}" aria-label="Delete ${esc(m.name)}" style="color:var(--fail)">Delete</button>
+      </td></tr>`;}).join('');
+  if(!rows) rows=`<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--ink-3)">No models yet. ${modelSuggestions.length?'Start with the models found in your data below.':'Add your first model below.'}</td></tr>`;
+
+  const sugg=modelSuggestions.length?`
+    <div class="found-box">
+      <div style="font-weight:700;color:var(--ink);margin-bottom:4px">Found in your existing data</div>
+      <div class="text-muted" style="margin-bottom:10px">These model names are used by batches but have no spec yet. Lots using them can't be inspected until you add them.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px;color:var(--ink-2)">
+        <thead><tr style="color:var(--ink-3);font-size:13px"><th style="${th}">Model</th><th style="${th}">Serial code in data</th><th style="${th}">Black dot limit used</th><th style="${th}">Lots</th><th style="${th}">Batches</th><th></th></tr></thead>
+        <tbody>${modelSuggestions.map(sg=>`<tr style="border-top:1px solid var(--line)">
+          <td style="${td};color:var(--ink);font-weight:600">${esc(sg.name)}</td>
+          <td style="${td}" class="mono">${sg.code?esc(sg.code):'<span class="text-muted">No serials yet</span>'}</td>
+          <td style="${td}" class="mono">${sg.maxD?esc(sg.maxD)+' mm':'—'}</td>
+          <td style="${td}">${sg.lots}${sg.openLots?` <span class="text-warn">(${sg.openLots} open)</span>`:''}</td>
+          <td style="${td}">${sg.batches}</td>
+          <td style="${td};text-align:right"><button class="btn btn-primary btn-sm useSuggestBtn" data-name="${esc(sg.name)}">Add this model</button></td>
+        </tr>`).join('')}</tbody></table></div>
+    </div>`:'';
+
+  return `<div class="card" id="modelsCard">
     <div class="card-title">Models and black dot spec</div>
-    <div style="overflow-x:auto;margin-bottom:16px">
-      <table style="width:100%;border-collapse:collapse;font-size:13px;font-family:var(--num);color:var(--ink-2)">
-        <thead><tr style="background:var(--sunk);font-size:12px;color:var(--ink-3)">
-          <th style="padding:7px 10px;text-align:left">Model</th><th style="padding:7px 10px;text-align:left">Serial Code</th>
-          <th style="padding:7px 10px">Fail if D &gt; (mm)</th><th style="padding:7px 10px">OK if D ≤ (mm)</th>
-          <th style="padding:7px 10px">Max N</th><th style="padding:7px 10px">Min DS (mm)</th>
-          <th style="padding:7px 10px">N limit A / B / A+B</th><th></th></tr></thead>
+    <div style="overflow-x:auto;margin-bottom:18px;border:1px solid var(--line);border-radius:10px">
+      <table style="width:100%;border-collapse:collapse;font-size:14px;color:var(--ink-2)">
+        <thead><tr style="background:var(--sunk);font-size:13px;color:var(--ink-2)">
+          <th style="${th}">Lumio model no.</th><th style="${th}">Model</th><th style="${th}">Serial code</th>
+          <th style="${th}">D fail / OK (mm)</th><th style="${th}">Max N / min DS</th>
+          <th style="${th}">Area N A / B / A+B</th><th style="${th}">Used by</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
-    <div style="font-size:13px;font-weight:700;color:var(--open);margin-bottom:10px">${em?'Editing: '+esc(em.name):'Add New Model'}</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px">
-      <div><label class="lbl">Model Name</label><input id="m_name" class="field" type="text" value="${v('name')}" placeholder="e.g. LH1G"><div class="text-muted" style="font-size:12px;margin-top:3px">Shown everywhere</div></div>
-      <div><label class="lbl">Serial Code (4 digits)</label><input id="m_code" class="field mono" type="text" maxlength="4" value="${v('code')}" placeholder="e.g. 1217"><div class="text-muted" style="font-size:12px;margin-top:3px">First 4 digits of serial</div></div>
-      ${nf('m_maxD','Fail if D &gt; (mm)','e.g. 2.4','0.01','Any dot bigger = FAIL')}
+    ${sugg}
+    <div id="modelForm" style="font-size:16px;font-weight:700;color:var(--ink);margin:6px 0 12px">${em?'Edit '+esc(em.lumioModel||em.name):(modelPrefill?'Add '+esc(modelPrefill.name)+' from existing data':'Add a model')}</div>
+    ${modelPrefill&&!em?`<div class="text-muted" style="margin:-6px 0 12px">Model name, serial code and black dot fail limit were copied from your data. Fill in the Lumio model number and the remaining limits.</div>`:''}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:12px">
+      <div><label class="lbl" for="m_lumioModel">Lumio model number</label><input id="m_lumioModel" class="field" type="text" value="${v('lumioModel')}" placeholder="As printed on the product"><div class="text-muted" style="font-size:12px;margin-top:3px">Shown to inspectors</div></div>
+      <div><label class="lbl" for="m_name">Model name</label><input id="m_name" class="field" type="text" value="${v('name')}" placeholder="Name used in batches"><div class="text-muted" style="font-size:12px;margin-top:3px">Must match existing batches</div></div>
+      <div><label class="lbl" for="m_code">Serial code (4 digits)</label><input id="m_code" class="field mono" type="text" inputmode="numeric" maxlength="4" value="${v('code')}" placeholder="First 4 digits"><div class="text-muted" style="font-size:12px;margin-top:3px">First 4 digits of serial</div></div>
+      ${nf('m_maxD','Fail if D &gt; (mm)','e.g. 2.4','0.01','Any dot bigger fails')}
       ${nf('m_smallD','OK if D ≤ (mm)','e.g. 1.28','0.01','Small dot, no area check')}
-      ${nf('m_maxN','Max N (spots)','e.g. 3','1','More spots = FAIL')}
-      ${nf('m_minDS','Min DS (mm)','e.g. 15','0.1','Spot spacing, when N&gt;1')}
-      ${nf('m_nA','Area A — max N','e.g. 1','1','For mid-size dots')}
-      ${nf('m_nB','Area B — max N','e.g. 3','1','For mid-size dots')}
-      ${nf('m_nAB','Area A+B — max N','e.g. 3','1','For mid-size dots')}
+      ${nf('m_maxN','Max N (spots)','e.g. 3','1','More spots fails')}
+      ${nf('m_minDS','Min DS (mm)','e.g. 15','0.1','Spot spacing, when N &gt; 1')}
+      ${nf('m_nA','Area A, max N','e.g. 1','1','For mid-size dots')}
+      ${nf('m_nB','Area B, max N','e.g. 3','1','For mid-size dots')}
+      ${nf('m_nAB','Area A+B, max N','e.g. 3','1','For mid-size dots')}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button id="btnSaveModel" class="btn btn-primary">${em?'Save Changes':'Add Model'}</button>
-      ${em?'<button id="btnCancelModel" class="btn btn-ghost">Cancel</button>':''}
+      <button id="btnSaveModel" class="btn btn-primary">${em?'Save changes':'Add model'}</button>
+      ${em||modelPrefill?'<button id="btnCancelModel" class="btn btn-ghost">Cancel</button>':''}
     </div>
-    <div class="text-muted" style="margin-top:10px;font-size:12.5px;line-height:1.6">Black Dot rule order: not visible @2m → OK · D &gt; Fail limit → FAIL · N &gt; Max N → FAIL · DS &lt; Min DS (only when N&gt;1) → FAIL · D ≤ OK limit → OK · otherwise the Area limit decides. Changes apply to inspections immediately.</div>
+    <div class="text-muted" style="margin-top:12px;font-size:12.5px;line-height:1.6">Black dot rules run in this order: not visible at 2 m passes; D above the fail limit fails; more than max N spots fails; spacing below min DS fails (only when N &gt; 1); D at or below the OK limit passes; otherwise the area limit decides. Changes apply to inspections immediately.</div>
   </div>`;
 }
 
@@ -728,7 +860,7 @@ function buildInspection(){
   <section class="bench fade">
     <div>
       <div class="bench-title">${esc(lot.lotNumber)}</div>
-      <div class="bench-sub">Model ${esc(lot.model)} (serial code ${activeSpec?activeSpec.code:'?'}), production ${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' or '+mmyyDisp(lot.prodMonthCode2):''}<br>Lot of ${lot.lotSize} units, ${lot.sampleSize} samples. Black dot fails above ${activeSpec?activeSpec.maxD:'?'} mm.</div>
+      <div class="bench-sub">${esc(modelLabel(lot.model))} (serial code ${activeSpec?activeSpec.code:'?'}), production ${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' or '+mmyyDisp(lot.prodMonthCode2):''}<br>Lot of ${lot.lotSize} units, ${lot.sampleSize} samples. Black dot fails above ${activeSpec?activeSpec.maxD:'?'} mm.</div>
       <div class="verdict">
         <div><b>${filled}/${samples.length}</b>Inspected</div>
         <div><b class="${minor<=1?(minor?'v-warn':''):'v-bad'}">${minor}</b>Minor (1 allowed)</div>
@@ -873,11 +1005,11 @@ function bindEvents(){
 
   // Logout
   const blo=document.getElementById('btnLogout');
-  if(blo) blo.onclick=()=>{ user=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; render(); };
+  if(blo) blo.onclick=()=>{ view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; render(); };
 
   // Refresh
   const br=document.getElementById('btnRefresh');
-  if(br) br.onclick=async()=>{ await loadAll(); render(); toast('Refreshed'); };
+  if(br) br.onclick=async()=>{ lotUnits={}; await loadAll(); render(); toast('Refreshed'); };
 
   // Create Batch
   const bcb=document.getElementById('btnCreateBatch');
@@ -936,7 +1068,8 @@ function bindEvents(){
   const bsm=document.getElementById('btnSaveModel');
   if(bsm) bsm.onclick=async()=>{
     const g=id=>document.getElementById(id).value.trim();
-    const m={name:g('m_name'),code:g('m_code'),maxD:g('m_maxD'),smallD:g('m_smallD'),maxN:g('m_maxN'),minDS:g('m_minDS'),nA:g('m_nA'),nB:g('m_nB'),nAB:g('m_nAB')};
+    const m={lumioModel:g('m_lumioModel'),name:g('m_name'),code:g('m_code'),maxD:g('m_maxD'),smallD:g('m_smallD'),maxN:g('m_maxN'),minDS:g('m_minDS'),nA:g('m_nA'),nB:g('m_nB'),nAB:g('m_nAB')};
+    if(!m.lumioModel) return toast('Enter the Lumio model number','err');
     if(!m.name) return toast('Enter model name','err');
     if(!/^\d{4}$/.test(m.code)) return toast('Serial code must be exactly 4 digits','err');
     for(const k of ['maxD','smallD','maxN','minDS','nA','nB','nAB']){
@@ -954,13 +1087,24 @@ function bindEvents(){
     bsm.disabled=true;
     const r=await api('saveModel',{model:m,originalName:editingModel||'',updatedBy:user.username});
     bsm.disabled=false;
-    if(r.ok){ toast(`Model ${m.name} saved`); editingModel=null; await loadModels(); render(); }
+    if(r.ok){ toast(`Model ${m.lumioModel} saved`); editingModel=null; modelPrefill=null; await loadModels(); render(); }
     else toast(r.error||'Save failed','err');
   };
   const bcm=document.getElementById('btnCancelModel');
-  if(bcm) bcm.onclick=()=>{ editingModel=null; render(); };
+  if(bcm) bcm.onclick=()=>{ editingModel=null; modelPrefill=null; render(); };
+  document.querySelectorAll('.useSuggestBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const sg=modelSuggestions.find(x=>x.name===btn.getAttribute('data-name'));
+      if(!sg) return;
+      editingModel=null;
+      modelPrefill={name:sg.name,code:sg.code||'',maxD:sg.maxD||''};
+      render();
+      const f=document.getElementById('m_lumioModel');
+      if(f){ f.scrollIntoView({behavior:'smooth',block:'center'}); f.focus({preventScroll:true}); }
+    };
+  });
   document.querySelectorAll('.editModelBtn').forEach(btn=>{
-    btn.onclick=()=>{ editingModel=btn.getAttribute('data-name'); render(); document.getElementById('m_name')?.scrollIntoView({behavior:'smooth',block:'center'}); };
+    btn.onclick=()=>{ editingModel=btn.getAttribute('data-name'); modelPrefill=null; render(); const f=document.getElementById('m_lumioModel'); if(f){ f.scrollIntoView({behavior:'smooth',block:'center'}); f.focus({preventScroll:true}); } };
   });
   document.querySelectorAll('.delModelBtn').forEach(btn=>{
     btn.onclick=async()=>{
@@ -973,13 +1117,33 @@ function bindEvents(){
     };
   });
 
+  // Lot browser filters + selection
+  const fb=document.getElementById('fBatch');
+  if(fb) fb.onchange=()=>{ view.batch=fb.value; selLot=null; render(); };
+  document.querySelectorAll('.fStatus').forEach(b=>{ b.onclick=()=>{ view.status=b.getAttribute('data-k'); render(); }; });
+  const fs=document.getElementById('fSearch');
+  if(fs) fs.oninput=()=>{ const pos=fs.selectionStart; view.q=fs.value; render(); const n=document.getElementById('fSearch'); if(n){ n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} } };
+  document.querySelectorAll('.lotTile').forEach(btn=>{
+    btn.onclick=()=>{
+      const lot=batches[parseInt(btn.getAttribute('data-ri'))];
+      const k=lot.batchName+'||'+lot.lotNumber;
+      selLot=(selLot===k)?null:k;
+      render();
+      if(selLot){
+        document.querySelector('.lot-detail')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+        if((lot.status==='Closed'||lot.result)&&!lotUnits[k]) loadLotUnits(lot);
+      }
+    };
+  });
+  document.querySelectorAll('.lotCloseBtn').forEach(b=>{ b.onclick=()=>{ selLot=null; render(); }; });
+
   // Delete Batch
   document.querySelectorAll('.delBatchBtn').forEach(btn=>{
     btn.onclick=async()=>{
       const name=btn.getAttribute('data-name');
       if(!confirm(`Delete ALL lots in batch "${name}"? Cannot be undone.`)) return;
       const r=await api('deleteBatch',{batchName:name});
-      if(r.ok){ await loadBatches(); render(); toast(`Batch "${name}" deleted`); }
+      if(r.ok){ selLot=null; if(view.batch===name) view.batch=''; await loadBatches(); render(); toast(`Batch "${name}" deleted`); }
       else toast(r.error||'Error','err');
     };
   });
@@ -991,7 +1155,7 @@ function bindEvents(){
       const lot=batches[ri];
       if(!confirm(`Delete lot "${lot.lotNumber}"?`)) return;
       const r=await api('deleteLot',{batchName:lot.batchName,lotNumber:lot.lotNumber});
-      if(r.ok){ await loadBatches(); render(); toast('Lot deleted'); }
+      if(r.ok){ selLot=null; await loadBatches(); render(); toast('Lot deleted'); }
       else toast(r.error||'Error','err');
     };
   });
@@ -1192,7 +1356,7 @@ function bindEvents(){
     if(r.ok){
       clearDraft(activeLot);
       toast(`${activeLot.lotNumber}: ${lotResult} | FG Pass: ${fgPassQty}`);
-      activeLot=null; activeSpec=null; samples=[]; expandedSample=null;
+      activeLot=null; activeSpec=null; samples=[]; expandedSample=null; lotUnits={};
       await loadBatches(); render();
     } else { saveDraft(); toast(r.error||'Save failed — draft kept locally','err'); }
   };
