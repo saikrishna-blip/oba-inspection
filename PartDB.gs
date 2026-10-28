@@ -1436,13 +1436,12 @@ function doGet(e) {
   const token = String((e && e.parameter && e.parameter.t) || '');
   const sess = portalSession_(token);
   if (!((sess && sess.role === 'admin') || ownerVisitor_())) {
-    return HtmlService.createHtmlOutput(
-      '<!DOCTYPE html><html><body style="font-family:Segoe UI,Roboto,Arial,sans-serif;background:#f6f8fb;margin:0;padding:40px;text-align:center">' +
-      '<h2 style="margin:0 0 8px">BOM management is for admins</h2>' +
-      '<p style="color:#5f6368">Sign in to LUMIO Quality Management - Projector with an admin account and open BOM management from there.' +
-      (sess ? '' : ' If you were signed in, your session may have expired.') + '</p></body></html>')
-      .setTitle('Access denied')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    // Plain text, not an HTML page: an HtmlService page would let anyone call this script's
+    // server functions from the browser console, so people without access get no page at all.
+    return ContentService.createTextOutput(
+      'BOM management is for admins. Sign in to LUMIO Quality Management - Projector with an admin account ' +
+      'and open BOM management from there.' + (sess ? '' : ' If you were signed in, your session may have expired.'))
+      .setMimeType(ContentService.MimeType.TEXT);
   }
 
   const key = String((e && e.parameter && e.parameter.page) || '').toLowerCase();

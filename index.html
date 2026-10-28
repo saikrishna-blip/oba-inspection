@@ -2,12 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src https://script.google.com https://script.googleusercontent.com; frame-src https://script.google.com https://*.googleusercontent.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LUMIO Quality Management - Projector</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>html.framed body{display:none!important}</style>
 <script>
+/* never run inside another site's frame (clickjacking) */
+if(window.top!==window.self){ document.documentElement.className+=' framed'; try{ window.top.location=window.self.location.href; }catch(e){} }
 /* theme before first paint: saved choice, else the device setting */
 (function(){try{var s=localStorage.getItem('lqm_theme');var d=s?s==='dark':matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('theme-dark');}catch(e){}})();
 </script>
@@ -514,6 +519,7 @@ const LOGO_SRC='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAyAAAADICAMAAAAnUX
 // STATE
 // ═══════════════════════════════════════════════════════════
 let API = localStorage.getItem('oba_api')||'';
+if(API && !/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(API)){ API=''; localStorage.removeItem('oba_api'); }
 let user = null;          // {username,role,name}
 let batches = [];         // all batch/lot rows from backend
 let activeLot = null;     // lot object being inspected
@@ -533,6 +539,7 @@ let selLot = null;          // "batch||lot" of the lot opened in the detail pane
 let lotUnits = {};          // cache of sample results per lot
 let dataScan = null;        // duplicate-serial check result (admin)
 let recSearch = {q:'', loading:false, res:null};  // record lookup (admin)
+let userList = null;        // admin: users (no passwords)
 let bomModels = [];         // models in the BOM sheet (BOM_CONTROL)
 let activeBom = null;       // BOM verification in progress
 let bomResult = null;       // {batch, loading, data} verification result being viewed
@@ -623,7 +630,7 @@ function restoreSession(){
   }catch(e){}
   return false;
 }
-function resetApp(){ introDone=false; activeBom=null; bomResult=null; dataScan=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; saveSession(); }
+function resetApp(){ introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; saveSession(); }
 let expiredShown=false;
 async function api(action,data={}){
   data.action=action;
@@ -633,7 +640,6 @@ async function api(action,data={}){
     const text=await r.text();
     // If response starts with < it is an HTML error page (script not deployed / URL wrong)
     if(text.trim().startsWith('<')){
-      console.error('Apps Script returned HTML instead of JSON. URL may be wrong or script needs redeployment.');
       return {ok:false, error:'Backend error: The Apps Script URL is invalid or the script needs to be redeployed. Please check the URL and redeploy as a New Version.'};
     }
     const res=JSON.parse(text);
@@ -683,7 +689,7 @@ async function loadModels(){
     modelUsage=r.usage||{};
     modelSuggestions=r.suggestions||[];
   }
-  else console.warn('getModels failed:',r.error);
+  else toast(r.error||'Could not load models','err');
 }
 async function loadBomList(){
   const r=await api('getBomList');
@@ -901,6 +907,7 @@ const PAGE_INFO={
   models:{t:'Models and black dot spec',d:'Each model has its own serial code and black dot limits. Inspections use these values straight away.'},
   data:{t:'Data records',d:'Each serial number is recorded once. Check for older duplicates or look up any record.'},
   users:{t:'Users',d:'Inspectors can do BOM verification and sampling. Admins also manage batches, models, data and BOMs.'},
+  account:{t:'Change your password',d:'Use at least 8 characters. Other devices signed in to your account are signed out.'},
   reports:{t:'Reports',d:'Download every inspection record, or open the batch summary.'}
 };
 function routeFromHash(){
@@ -945,6 +952,7 @@ function accountMenu(){
     <div class="dd-menu" role="menu">
       <div class="dd-head"><b>${esc(user.name)}</b><span>${user.role==='admin'?'Admin':'Inspector'}, ${esc(user.username)}</span></div>
       <div class="dd-sep"></div>
+      <button class="dd-item navGo" data-go="account" role="menuitem">Change password</button>
       <button id="btnRefreshMenu" class="dd-item" role="menuitem">Refresh data</button>
       <button id="btnLogout" class="dd-item dd-danger" role="menuitem">Log out</button>
     </div></div>`;
@@ -977,6 +985,7 @@ function buildDashboard(){
   if(isAdmin&&page==='models') return shell(pageHead('models')+`<div class="rv" style="--i:1">${buildModelsPanel()}</div>`);
   if(isAdmin&&page==='data') return shell(pageHead('data')+`<div class="rv" style="--i:1">${buildDataPanel()}</div>`);
   if(isAdmin&&page==='users') return shell(pageHead('users')+buildUsersCard());
+  if(page==='account') return shell(pageHead('account')+buildAccountCard());
   if(isAdmin&&page==='reports') return shell(pageHead('reports')+buildReportsCard());
   return shell(buildOverview(isAdmin));
 }
@@ -1023,19 +1032,36 @@ function buildCreateCard(){
     </div>`;
 }
 function buildUsersCard(){
-  return `<div class="card narrow rv" style="--i:1">
+  const list=userList==null?`<div class="text-muted">Loading users…</div>`:(userList.error?`<div class="err">${esc(userList.error)}</div>`:`
+    <div style="overflow-x:auto"><table class="res-table"><thead><tr><th>Username</th><th>Name</th><th>Role</th><th></th></tr></thead><tbody>
+    ${userList.map(u=>`<tr><td class="mono">${esc(u.username)}</td><td>${esc(u.name)}</td><td>${u.role==='admin'?'Admin':'Inspector'}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm resetPwBtn" data-u="${esc(u.username)}">Reset password</button>
+      ${u.username.toLowerCase()===String(user.username).toLowerCase()?'':`<button class="btn btn-ghost btn-sm delUserBtn" data-u="${esc(u.username)}" style="color:var(--fail)">Remove</button>`}</td></tr>`).join('')}
+    </tbody></table></div>`);
+  return `<div class="card rv" style="--i:1">${list}</div>
+    <div class="card narrow rv" style="--i:2">
       <div class="card-sub">Add a user</div>
       <div class="form-2">
-        <div class="fg"><label class="lbl" for="uUser">Username</label><input id="uUser" class="field" type="text" autocomplete="off"></div>
-        <div class="fg"><label class="lbl" for="uPass">Password</label><input id="uPass" class="field" type="text" autocomplete="off"></div>
+        <div class="fg"><label class="lbl" for="uUser">Username</label><input id="uUser" class="field" type="text" autocomplete="off" maxlength="32"></div>
+        <div class="fg"><label class="lbl" for="uPass">Password</label><input id="uPass" class="field" type="password" autocomplete="new-password" minlength="8"></div>
       </div>
-      <div class="fg"><label class="lbl" for="uName">Full Name</label><input id="uName" class="field" type="text"></div>
+      <div class="fg"><label class="lbl" for="uName">Full Name</label><input id="uName" class="field" type="text" maxlength="80"></div>
       <div class="fg"><label class="lbl" for="uRole">Role</label>
         <select id="uRole" class="field"><option value="inspector">Inspector</option><option value="admin">Admin</option></select></div>
       <button id="btnAddUser" class="btn btn-primary btn-full">Add User</button>
       <div id="addUserMsg" class="text-muted hidden" style="margin-top:8px;font-size:13px"></div>
+      <div class="text-muted" style="margin-top:10px;font-size:12.5px">Usernames: 3 to 32 letters, numbers, dot, dash or underscore. Passwords: at least 8 characters. Passwords are stored only as a salted hash, so nobody can read them, admins included.</div>
     </div>`;
 }
+function buildAccountCard(){
+  return `<div class="card narrow rv" style="--i:1">
+    <div class="fg"><label class="lbl" for="cpCur">Current password</label><input id="cpCur" class="field" type="password" autocomplete="current-password"></div>
+    <div class="fg"><label class="lbl" for="cpNew">New password</label><input id="cpNew" class="field" type="password" autocomplete="new-password" minlength="8"></div>
+    <div class="fg"><label class="lbl" for="cpNew2">New password again</label><input id="cpNew2" class="field" type="password" autocomplete="new-password" minlength="8"></div>
+    <button id="btnChangePw" class="btn btn-primary btn-full">Change password</button>
+  </div>`;
+}
+async function loadUsers(){ const r=await api('listUsers'); userList=r.ok?r.users:{error:r.error||'Could not load users'}; if(page==='users') render(); }
 function buildReportsCard(){
   return `<div class="report-grid rv" style="--i:1">
       <button id="btnCSV" class="tool-card"><span class="tc-t">Download CSV report</span><span class="tc-d">Every inspection record as a spreadsheet file.</span></button>
@@ -1175,9 +1201,9 @@ function buildBomMgmt(){
         <button class="btn btn-ghost btn-sm navGo" data-go="bom">← All BOM tools</button>
         <div class="tool-title">${esc(tool.t)}</div>
         <span style="flex:1"></span>
-        <a class="btn btn-ghost btn-sm" href="${esc(toolUrl(tool.k))}" target="_blank" rel="noopener">Open in new tab</a>
+        <a class="btn btn-ghost btn-sm" href="${esc(toolUrl(tool.k))}" target="_blank" rel="noopener noreferrer">Open in new tab</a>
       </div>
-      <iframe class="tool-frame" src="${esc(toolUrl(tool.k))}" title="${esc(tool.t)}"></iframe>
+      <iframe class="tool-frame" src="${esc(toolUrl(tool.k))}" title="${esc(tool.t)}" referrerpolicy="no-referrer"></iframe>
     </div>`;
   }
   return `<div class="page">${head}<div class="main ${introDone?'':'intro'}">
@@ -1199,8 +1225,8 @@ function buildFlow(g,isAdmin){
   const draft=loadBomDraft(g.name);
   const canVerify=!!bm;
   const startLbl=draft?'Resume BOM verification':(s==='Failed'?'Verify again':'Start BOM verification');
-  if(s==='Passed'){ cls='s-pass'; txt=`Passed, all parts matched${verRef?` (${verRef})`:''}`; }
-  else if(s==='Failed'){ cls='s-fail'; txt=`Failed, deviations found${verRef?` (${verRef})`:''}. Sampling is on hold.`; }
+  if(s==='Passed'){ cls='s-pass'; txt=`Passed, all parts matched${verRef?` (${esc(verRef)})`:''}`; }
+  else if(s==='Failed'){ cls='s-fail'; txt=`Failed, deviations found${verRef?` (${esc(verRef)})`:''}. Sampling is on hold.`; }
   else if(s==='Pending'){ cls='s-wait'; txt=canVerify?`Check all ${bm.parts} BOM parts of ${esc(bm.model)} for this batch`:`No BOM found for ${esc(modelLabel(g.model))}. Set its Lumio model number to a BOM tab name.`; }
   else if(s==='Waived'){ cls='s-na'; txt='Not required (waived by admin)'; }
   else { cls='s-na'; txt='Not required (batch created before the BOM step)'; }
@@ -1226,7 +1252,7 @@ function buildBomResult(){
   if(!r.data||!r.data.found) return `<div class="bom-result"><div class="res-wrap text-muted">No verification record found.</div></div>`;
   const v=r.data.verification, items=r.data.items.slice().sort((a,b)=>(a.result==='Matched')-(b.result==='Matched'));
   return `<div class="bom-result">
-    <div class="ld-head"><div><div class="ld-title">${esc(v.verId)}: ${esc(v.result)}</div><div class="text-muted" style="margin-top:4px">${esc(v.model)}, BOM revision ${esc(v.rev)} (${esc(v.bomStatus)}), ${v.partsChecked} parts, verified by ${esc(v.by)} on ${esc(v.time)}${v.remarks?`. Remarks: ${esc(v.remarks)}`:''}</div></div>
+    <div class="ld-head"><div><div class="ld-title">${esc(v.verId)}: ${esc(v.result)}</div><div class="text-muted" style="margin-top:4px">${esc(v.model)}, BOM revision ${esc(v.rev)} (${esc(v.bomStatus)}), ${esc(v.partsChecked)} parts, verified by ${esc(v.by)} on ${esc(v.time)}${v.remarks?`. Remarks: ${esc(v.remarks)}`:''}</div></div>
       <button class="btn btn-ghost btn-sm bomViewClose">Close</button></div>
     <div class="res-wrap"><div style="overflow-x:auto"><table class="res-table"><thead><tr><th>Part</th><th>Description</th><th>BOM QPS</th><th>Found part</th><th>Found QPS</th><th>Result</th><th>Remark</th></tr></thead><tbody>
     ${items.map(i=>`<tr class="${i.result==='Matched'?'':'row-bad'}"><td style="font-family:var(--code);white-space:nowrap">${esc(i.partNo)}</td><td>${esc(i.description)}</td><td>${esc(i.bomQps)}</td><td style="font-family:var(--code);white-space:nowrap" class="${i.lotPartNo!==i.partNo?'bad':''}">${esc(i.lotPartNo)}</td><td class="${String(i.lotQps)!==String(i.bomQps)?'bad':''}">${esc(i.lotQps)}</td><td class="${i.result==='Matched'?'':'bad'}">${esc(i.result)}</td><td>${esc(i.remark)}</td></tr>`).join('')}
@@ -1574,8 +1600,8 @@ function buildInspection(){
       <div class="samp-num-badge">${i+1}</div>
 
       <div class="samp-serial-wrap">
-        <input class="samp-serial-inp sSerial ${s.serialError?'err-field':''}" data-i="${i}" type="text" value="${s.serial}" placeholder="${activeSpec?activeSpec.code:'????'}${String(lot.prodMonthCode||'????').padStart(4,'0')}0000001">
-        ${s.serialError?`<div class="err" style="margin-top:3px">${s.serialError}</div>`:''}
+        <input class="samp-serial-inp sSerial ${s.serialError?'err-field':''}" data-i="${i}" type="text" value="${esc(s.serial)}" placeholder="${activeSpec?activeSpec.code:'????'}${String(lot.prodMonthCode||'????').padStart(4,'0')}0000001">
+        ${s.serialError?`<div class="err" style="margin-top:3px">${esc(s.serialError)}</div>`:''}
       </div>
 
       <div class="samp-toggles">
@@ -1604,9 +1630,9 @@ function buildInspection(){
         </div>
         ${!s.bdNoDot?`
         <div class="bd-grid">
-          <div><label class="lbl">D (mm)</label><input class="field mono sBDF" data-i="${i}" data-f="bdD" type="number" step="0.01" value="${s.bdD}" placeholder="e.g. 1.2"></div>
-          <div><label class="lbl">N (spots)</label><input class="field mono sBDF" data-i="${i}" data-f="bdN" type="number" value="${s.bdN}" placeholder="e.g. 2"></div>
-          <div><label class="lbl">DS (mm)</label><input class="field mono sBDF" data-i="${i}" data-f="bdDS" type="number" step="0.1" value="${s.bdDS}" placeholder="e.g. 20"></div>
+          <div><label class="lbl">D (mm)</label><input class="field mono sBDF" data-i="${i}" data-f="bdD" type="number" step="0.01" value="${esc(s.bdD)}" placeholder="e.g. 1.2"></div>
+          <div><label class="lbl">N (spots)</label><input class="field mono sBDF" data-i="${i}" data-f="bdN" type="number" value="${esc(s.bdN)}" placeholder="e.g. 2"></div>
+          <div><label class="lbl">DS (mm)</label><input class="field mono sBDF" data-i="${i}" data-f="bdDS" type="number" step="0.1" value="${esc(s.bdDS)}" placeholder="e.g. 20"></div>
           <div><label class="lbl">Area</label>
             <select class="field mono sBDF" data-i="${i}" data-f="bdArea">
               <option value="A" ${s.bdArea==='A'?'selected':''}>Area A</option>
@@ -1617,7 +1643,7 @@ function buildInspection(){
             <div class="bd-result ${bd.ok?'bd-ok':'bd-fail'}" ${bd.incomplete?'style="background:var(--minor-bg);border-color:var(--minor-line);color:var(--minor)"':''}>${bd.incomplete?'… INCOMPLETE':(bd.ok?'✓ OK':'✗ FAIL')}<br>${bd.reason}</div>
           </div>
         </div>`:`<div class="text-pass" style="font-size:13px;font-family:var(--num)">✓ No Black Dot — Acceptable</div>`}
-        <input class="samp-remark-inp sRemark" data-i="${i}" type="text" value="${s.remark||''}" placeholder="Optional remark or defect description">
+        <input class="samp-remark-inp sRemark" data-i="${i}" type="text" value="${esc(s.remark||'')}" placeholder="Optional remark or defect description">
       </div>`:''}
     </div>`;
   });
@@ -1651,7 +1677,9 @@ function buildInspection(){
 function bindEvents(){
   // Setup
   const bs=document.getElementById('btnSetup');
-  if(bs) bs.onclick=()=>{ const v=document.getElementById('apiInput').value.trim(); if(!v){toast('Enter URL','err');return;} API=v; localStorage.setItem('oba_api',v); render(); };
+  if(bs) bs.onclick=()=>{ const v=document.getElementById('apiInput').value.trim();
+    if(!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(v)){ toast('Paste the Apps Script web app URL (https://script.google.com/macros/s/…/exec)','err'); return; }
+    API=v; localStorage.setItem('oba_api',v); render(); };
 
   // Login
   const bl=document.getElementById('btnLogin');
@@ -1673,7 +1701,7 @@ function bindEvents(){
         err.textContent=r.error||'Login failed';
         err.classList.remove('hidden');
         if((r.error||'').includes('Apps Script')||(r.error||'').includes('redeployed')){
-          err.innerHTML=r.error+'<br><br><b>Fix:</b> In Apps Script → Deploy → Manage deployments → pencil icon → New version → Deploy. Then copy the new URL here.';
+          err.innerHTML=esc(r.error)+'<br><br><b>Fix:</b> In Apps Script → Deploy → Manage deployments → pencil icon → New version → Deploy. Then copy the new URL here.';
         }
       }
     }catch(e){ err.textContent='Network error: '+e.message; err.classList.remove('hidden'); }
@@ -1727,17 +1755,11 @@ function bindEvents(){
     const prodMonthCode2=month2?mmyy(month2):'';
     msgEl.textContent='Creating lots…'; msgEl.classList.remove('hidden');
     try{
-      // Try new API first, fall back to old if script not yet updated
-      let r=await api('createBatch',{batchName,batchQty,model,prodMonthCode,prodMonthCode2,createdBy:user.username});
-      if(!r.ok && (r.error||'').toLowerCase().includes('unknown')){
-        // Old script fallback: createKit
-        r=await api('createKit',{kitName:batchName,kitSize:batchQty,lotSize:90,sampleSize:13,bdMax:getModel(model).maxD,model,prodMonthCode,prodMonthCode2,createdBy:user.username});
-        if(r.ok) r.batchQty=batchQty;
-      }
+      const r=await api('createBatch',{batchName,batchQty,model,prodMonthCode,prodMonthCode2});
       if(r.ok){
         const lots=r.lotsCreated;
         const rem=batchQty%90;
-        msgEl.innerHTML=`✓ <b>${batchName}</b>: <b>${lots} lots</b> created.<br>
+        msgEl.innerHTML=`✓ <b>${esc(batchName)}</b>: <b>${esc(lots)} lots</b> created.<br>
           Batch Qty: <b>${batchQty}</b> | Each lot: 90 units | Sample: 13${rem>0?`<br>Last lot: ${rem} units (still 13 samples)`:''}`;
         msgEl.classList.remove('hidden');
         document.getElementById('bName').value='';
@@ -1759,8 +1781,40 @@ function bindEvents(){
     const name=document.getElementById('uName').value.trim();
     const role=document.getElementById('uRole').value;
     if(!username||!password||!name){ toast('Fill all user fields','err'); return; }
+    if(password.length<8){ toast('Password must be at least 8 characters','err'); return; }
+    bau.disabled=true;
     const r=await api('addUser',{username,password,name,role});
-    if(r.ok){ toast(`User ${username} added`); document.getElementById('addUserMsg').textContent=`✓ ${username} added as ${role}`; document.getElementById('addUserMsg').classList.remove('hidden'); document.getElementById('uUser').value=''; document.getElementById('uPass').value=''; document.getElementById('uName').value=''; }
+    bau.disabled=false;
+    if(r.ok){ toast(`User ${username} added`); loadUsers(); document.getElementById('addUserMsg').textContent=`✓ ${username} added as ${role}`; document.getElementById('addUserMsg').classList.remove('hidden'); document.getElementById('uUser').value=''; document.getElementById('uPass').value=''; document.getElementById('uName').value=''; }
+    else toast(r.error||'Error','err');
+  };
+
+  // Users: reset password / remove ; own password change
+  if(page==='users'&&userList===null&&user&&user.role==='admin'&&!activeLot&&!activeBom){ userList=undefined; loadUsers(); }
+  document.querySelectorAll('.resetPwBtn').forEach(b=>{ b.onclick=async()=>{
+    const u=b.getAttribute('data-u');
+    const pw=prompt(`New password for ${u} (at least 8 characters). Their other sessions are signed out.`);
+    if(pw===null) return;
+    if(pw.trim().length<8){ toast('Password must be at least 8 characters','err'); return; }
+    const r=await api('resetPassword',{username:u,password:pw.trim()});
+    r.ok?toast(`Password for ${u} changed`):toast(r.error||'Error','err');
+  }; });
+  document.querySelectorAll('.delUserBtn').forEach(b=>{ b.onclick=async()=>{
+    const u=b.getAttribute('data-u');
+    if(!confirm(`Remove user ${u}? They are signed out and can no longer log in.`)) return;
+    const r=await api('deleteUser',{username:u});
+    if(r.ok){ toast(`User ${u} removed`); loadUsers(); } else toast(r.error||'Error','err');
+  }; });
+  const bcp=document.getElementById('btnChangePw');
+  if(bcp) bcp.onclick=async()=>{
+    const cur=document.getElementById('cpCur').value.trim(), n1=document.getElementById('cpNew').value.trim(), n2=document.getElementById('cpNew2').value.trim();
+    if(!cur||!n1){ toast('Fill in all fields','err'); return; }
+    if(n1.length<8){ toast('New password must be at least 8 characters','err'); return; }
+    if(n1!==n2){ toast('The two new passwords do not match','err'); return; }
+    bcp.disabled=true;
+    const r=await api('changePassword',{currentPassword:cur,newPassword:n1});
+    bcp.disabled=false;
+    if(r.ok){ session.token=r.token; session.expiresAt=r.expiresAt; saveSession(); toast('Password changed'); go('home'); }
     else toast(r.error||'Error','err');
   };
 
@@ -2195,19 +2249,20 @@ function bindEvents(){
 // ═══════════════════════════════════════════════════════════
 // CSV
 // ═══════════════════════════════════════════════════════════
+function csvCell(v){
+  let t=String(v==null?'':v);
+  if(/^[=+\-@\t\r]/.test(t)) t="'"+t;       // spreadsheet apps must not run it as a formula
+  return '"'+t.replace(/"/g,'""')+'"';
+}
 function downloadCSV(){
   const groups=groupBatches();
-  let csv='IS2500 OBA Batch Inspection Report\n';
-  csv+=`Generated: ${new Date().toLocaleString()}\n\n`;
-  csv+='BatchName,LotNumber,Model,ProdMonth,BatchQty,LotSize,SampleSize,Status,Result,FGPassQty\n';
-  groups.forEach(g=>{
-    g.lots.forEach(l=>{
-      csv+=`"${l.batchName}","${l.lotNumber}","${l.model||'-'}","${mmyyDisp(l.prodMonthCode)}",${l.batchQty},${l.lotSize},${l.sampleSize},"${l.status}","${l.result||'Pending'}",${l.fgPassQty||0}\n`;
-    });
-  });
+  const rows=[['LUMIO Quality Management - Projector, inspection report'],[`Generated: ${new Date().toLocaleString()}`],[],
+    ['BatchName','LotNumber','Model','ProdMonth','BatchQty','LotSize','SampleSize','Status','Result','FGPassQty']];
+  groups.forEach(g=>g.lots.forEach(l=>rows.push([l.batchName,l.lotNumber,l.model||'-',mmyyDisp(l.prodMonthCode),l.batchQty,l.lotSize,l.sampleSize,l.status,l.result||'Pending',l.fgPassQty||0])));
+  const csv=rows.map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n';
   const a=document.createElement('a');
-  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-  a.download=`OBA_Report_${Date.now()}.csv`;
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent('\ufeff'+csv);
+  a.download=`LUMIO_QM_Report_${new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
@@ -2253,11 +2308,11 @@ function showSummary(){
       <div style="padding:14px 18px;border-bottom:1px solid var(--line)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
           <div>
-            <div style="font-size:14px;font-weight:700;color:var(--ink);font-family:var(--num)">${g.name}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--ink);font-family:var(--num)">${esc(g.name)}</div>
             <div style="font-size:12.5px;color:var(--ink-3);font-family:var(--num);margin-top:3px">
-              Model: <b style="color:var(--ink-2)">${g.model||'-'}</b> &nbsp;|&nbsp;
+              Model: <b style="color:var(--ink-2)">${esc(g.model||'-')}</b> &nbsp;|&nbsp;
               Prod Month: <b style="color:var(--ink-2)">${mmyyDisp(g.prodMonthCode)}${g.prodMonthCode2?' / '+mmyyDisp(g.prodMonthCode2):''}</b> &nbsp;|&nbsp;
-              Batch Qty: <b style="color:var(--ink-2)">${g.batchQty}</b> &nbsp;|&nbsp;
+              Batch Qty: <b style="color:var(--ink-2)">${esc(g.batchQty)}</b> &nbsp;|&nbsp;
               Total Lots: <b style="color:var(--ink-2)">${g.totalLots}</b>
             </div>
           </div>
@@ -2302,12 +2357,12 @@ function showSummary(){
       const stBg=lot.status==='Open'?'background:var(--open-bg);color:var(--open)':'background:var(--line);color:var(--ink-3)';
       html+=`<tr style="border-bottom:1px solid var(--paper);${idx%2===0?'':'background:var(--paper)'}">
         <td style="padding:8px 14px;color:var(--ink-3)">${idx+1}</td>
-        <td style="padding:8px 14px;color:var(--ink);font-weight:700">${lot.lotNumber}</td>
-        <td style="padding:8px 10px;text-align:center;color:var(--ink-2)">${lot.lotSize}</td>
-        <td style="padding:8px 10px;text-align:center;color:var(--ink-2)">${lot.sampleSize}</td>
-        <td style="padding:8px 10px;text-align:center"><span style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px;${stBg}">${lot.status}</span></td>
-        <td style="padding:8px 10px;text-align:center">${lot.result?`<span style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px;${resBg}">${lot.result}</span>`:'<span style="color:var(--ink-3)">—</span>'}</td>
-        <td style="padding:8px 10px;text-align:center;font-weight:700;color:${lot.fgPassQty>0?'var(--pass)':'var(--ink-3)'}">${lot.fgPassQty>0?lot.fgPassQty:'—'}</td>
+        <td style="padding:8px 14px;color:var(--ink);font-weight:700">${esc(lot.lotNumber)}</td>
+        <td style="padding:8px 10px;text-align:center;color:var(--ink-2)">${esc(lot.lotSize)}</td>
+        <td style="padding:8px 10px;text-align:center;color:var(--ink-2)">${esc(lot.sampleSize)}</td>
+        <td style="padding:8px 10px;text-align:center"><span style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px;${stBg}">${esc(lot.status)}</span></td>
+        <td style="padding:8px 10px;text-align:center">${lot.result?`<span style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px;${resBg}">${esc(lot.result)}</span>`:'<span style="color:var(--ink-3)">—</span>'}</td>
+        <td style="padding:8px 10px;text-align:center;font-weight:700;color:${lot.fgPassQty>0?'var(--pass)':'var(--ink-3)'}">${lot.fgPassQty>0?esc(lot.fgPassQty):'—'}</td>
       </tr>`;
     });
     html+=`<tr style="background:var(--sunk);font-weight:700">
@@ -2318,6 +2373,7 @@ function showSummary(){
   });
 
   document.getElementById('summaryContent').innerHTML=html;
+  const bpr=document.getElementById('btnPrint'); if(bpr) bpr.onclick=()=>window.print();
   // Copy logo src
   const mainLogo=document.querySelector('.logo img');
   const summLogo=document.getElementById('summLogoImg');
@@ -2362,7 +2418,7 @@ if(API && restoreSession()){ routeFromHash(); render(); loadAll().then(()=>rende
     </div>
     <div class="hdr-right">
       <button id="btnCloseSummary" class="btn btn-ghost btn-sm">← Back</button>
-      <button id="btnPrint" class="btn btn-primary btn-sm" onclick="window.print()">🖨 Print</button>
+      <button id="btnPrint" class="btn btn-primary btn-sm">🖨 Print</button>
     </div>
   </header>
   <div style="max-width:1200px;margin:0 auto;padding:24px" id="summaryContent"></div>

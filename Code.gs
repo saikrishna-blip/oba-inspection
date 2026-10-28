@@ -1,6 +1,5 @@
 /****************************************************
- * IS2500 OBA Batch Inspection — Google Apps Script
- * SIMPLE VERSION - No switch, just if/else
+ * LUMIO Quality Management - Projector — Google Apps Script backend
  * v4: Models + Black Dot spec are stored in the "Models" sheet
  *     and managed by admin from the app (nothing hardcoded).
  ****************************************************/
@@ -21,7 +20,15 @@ var PARTDB_URL   = "https://script.google.com/macros/s/AKfycbyPiE-gcrUZH7cEA6KKB
 var SESSION_HOURS = 12;
 // Actions anyone signed in may call; every other action except login needs the admin role.
 var MEMBER_ACTIONS = ["logout","getBatches","getModels","getBomList","getBom","getBomVerification",
-                      "checkSerial","submitLot","submitBomVerification","getLotUnits"];
+                      "checkSerial","submitLot","submitBomVerification","getLotUnits","changePassword"];
+
+// Security settings
+var PW_ITERATIONS    = 10000;   // PBKDF2-HMAC-SHA256 rounds for stored passwords
+var PW_MIN_LENGTH    = 8;
+var LOGIN_MAX_FAILS  = 5;       // failed logins per username ...
+var LOGIN_LOCK_SECS  = 900;     // ... locks that username for 15 minutes
+var RATE_PER_MINUTE  = 120;     // API calls per signed-in session per minute
+var MAX_BODY_CHARS   = 500000;  // largest request accepted
 
 // Batches sheet stage columns (1-based)
 var COL_BOM_STATUS = 16;   // "", Pending, Passed, Failed, Waived  ("" = created before the BOM step)
@@ -56,29 +63,9 @@ function setup(){
   ]);
   getOrCreateSheet("Users", ["Username","Password","Role","Name"]);
   modelsSheet_();
-
-  var users = getOrCreateSheet("Users", []);
-  if(users.getLastRow() < 2){
-    users.appendRow(["admin","admin123","admin","Administrator"]);
-    users.appendRow(["Rahul","Rahul123","inspector","Rahul C"]);
-    users.appendRow(["inspector1","insp123","inspector","Inspector 1"]);
-    users.appendRow(["saikrishna","Sai@1996","inspector","Appireddy Sai Krishna"]);
-  }
+  // No default accounts are created. Add the first admin by hand in the Users sheet
+  // (any password; it is hashed automatically at the first login).
   return "Setup done";
-}
-
-function testCreateBatch(){
-  var m = readModels_()[0];
-  if(!m){ Logger.log("Add a model in the app first"); return; }
-  var result = createBatch({
-    batchName: "TEST_BATCH",
-    batchQty: 200,
-    model: m.name,
-    prodMonthCode: "0626",
-    createdBy: "admin"
-  });
-  Logger.log(JSON.stringify(result));
-  return result;
 }
 
 function doGet(e){
@@ -89,22 +76,27 @@ function doGet(e){
 
 function doPost(e){
   try {
-    var raw  = e.postData.contents;
-    var data = JSON.parse(raw);
-    var action = data.action;
+    var raw  = (e && e.postData && e.postData.contents) || "";
+    if(raw.length > MAX_BODY_CHARS) return json_({ok:false, error:"Request is too large."});
+    var data;
+    try { data = JSON.parse(raw); } catch(pe) { return json_({ok:false, error:"Bad request."}); }
+    if(!data || typeof data !== "object" || Array.isArray(data)) return json_({ok:false, error:"Bad request."});
+    var action = String(data.action || "");
     var result = {ok:false, error:"Unknown action: " + action};
 
     // Every action except login needs a valid session; most need the admin role.
     if(action !== "login"){
       var sess = sessionFor_(data.token);
       if(!sess) return json_({ok:false, auth:true, error:"Your session has expired. Please log in again."});
+      if(!rateOk_("r_" + sha256_(data.token).slice(0, 32), RATE_PER_MINUTE, 60))
+        return json_({ok:false, error:"Too many requests. Wait a minute and try again."});
       if(MEMBER_ACTIONS.indexOf(action) === -1 && sess.role !== "admin")
         return json_({ok:false, error:"Only an admin can do this."});
       data._session = sess;
       // record who did it from the session, not from what the browser sent
       if(action === "submitLot") data.inspector = sess.name;
       if(action === "submitBomVerification") data.by = sess.name;
-      if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage"].indexOf(action) > -1){
+      if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser"].indexOf(action) > -1){
         data.createdBy = sess.username; data.updatedBy = sess.username; data.by = sess.username;
       }
     }
@@ -114,6 +106,18 @@ function doPost(e){
     }
     if(action === "addUser"){
       result = addUser(data);
+    }
+    if(action === "listUsers"){
+      result = listUsers();
+    }
+    if(action === "resetPassword"){
+      result = resetPassword(data);
+    }
+    if(action === "deleteUser"){
+      result = deleteUser(data);
+    }
+    if(action === "changePassword"){
+      result = changePassword(data);
     }
     if(action === "getBatches"){
       result = getBatches();
@@ -135,9 +139,6 @@ function doPost(e){
     }
     if(action === "submitLot"){
       result = submitLot(data);
-    }
-    if(action === "getMaster"){
-      result = getMaster();
     }
     if(action === "getModels"){
       result = getModels();
@@ -187,25 +188,135 @@ function doPost(e){
       .setMimeType(ContentService.MimeType.JSON);
 
   } catch(err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ok:false, error:"Server error: " + err.toString()}))
-      .setMimeType(ContentService.MimeType.JSON);
+    // details go to the Apps Script execution log only, never to the browser
+    console.error("doPost failed: " + (err && err.stack || err));
+    return json_({ok:false, error:"Server error. Please try again, or ask an admin to check the Apps Script log."});
   }
 }
 
 function login(d){
+  var username = String(d.username || "").trim();
+  var password = String(d.password || "");
+  if(!username || !password || username.length > 64 || password.length > 200)
+    return {ok:false, error:"Invalid username or password"};
+  var failKey = "lf_" + sha256_(username.toLowerCase()).slice(0, 40);
+  var cache = CacheService.getScriptCache();
+  var fails = Number(cache.get(failKey) || 0);
+  if(fails >= LOGIN_MAX_FAILS)
+    return {ok:false, error:"Too many failed attempts for this username. Try again in 15 minutes."};
+
+  migratePasswords_();
   var rows = getOrCreateSheet("Users",[]).getDataRange().getValues();
+  var row = null;
   for(var i = 1; i < rows.length; i++){
-    if(String(rows[i][0]) === String(d.username) && String(rows[i][1]) === String(d.password)){
-      var role = String(rows[i][2]||"inspector").trim().toLowerCase();
-      var s = createSession_(String(rows[i][0]), String(rows[i][3]||rows[i][0]), role);
-      var out = {ok:true, username:rows[i][0], role:role, name:rows[i][3], token:s.token, expiresAt:s.expiresAt};
-      if(role === "admin"){ out.partdbUrl = PARTDB_URL; out.bomSheetUrl = "https://docs.google.com/spreadsheets/d/" + BOM_SS_ID + "/edit"; }
-      return out;
-    }
+    if(String(rows[i][0]).trim() === username){ row = rows[i]; break; }
   }
-  return {ok:false, error:"Invalid username or password"};
+  // the same amount of work whether or not the user exists, so timing does not reveal usernames
+  var ok = row ? verifyPassword_(password, String(row[1])) : (verifyPassword_(password, DUMMY_HASH_()) && false);
+  if(!ok){
+    cache.put(failKey, String(fails + 1), LOGIN_LOCK_SECS);
+    return {ok:false, error:"Invalid username or password"};
+  }
+  cache.remove(failKey);
+  if(!isHashed_(String(row[1]))){   // a password typed into the sheet by hand: store it hashed now
+    var ush = getOrCreateSheet("Users",[]), uv = ush.getDataRange().getValues(), ui = findUserRow_(uv, username);
+    if(ui > -1) ush.getRange(ui + 1, 2).setNumberFormat("@").setValue(hashPassword_(password));
+  }
+  var role = String(row[2]||"inspector").trim().toLowerCase() === "admin" ? "admin" : "inspector";
+  var s = createSession_(String(row[0]).trim(), String(row[3]||row[0]), role);
+  var out = {ok:true, username:String(row[0]).trim(), role:role, name:String(row[3]||row[0]), token:s.token, expiresAt:s.expiresAt};
+  if(role === "admin"){ out.partdbUrl = PARTDB_URL; out.bomSheetUrl = "https://docs.google.com/spreadsheets/d/" + BOM_SS_ID + "/edit"; }
+  return out;
 }
+
+/* ---------------- passwords ----------------
+ * Stored as  pbkdf2$<iterations>$<salt base64>$<hash base64>  (PBKDF2-HMAC-SHA256, 32-byte key).
+ * Plain-text passwords left from before are converted the first time anyone logs in. */
+function toArr_(b){ return Array.prototype.slice.call(b); }
+function bytesOf_(str){ return toArr_(Utilities.newBlob(String(str)).getBytes()); }
+function pbkdf2_(password, saltBytes, iterations){
+  var pw = bytesOf_(password);
+  var u = toArr_(Utilities.computeHmacSha256Signature(toArr_(saltBytes).concat([0, 0, 0, 1]), pw));
+  var t = u.slice();
+  for(var i = 1; i < iterations; i++){
+    u = toArr_(Utilities.computeHmacSha256Signature(u, pw));
+    for(var j = 0; j < t.length; j++) t[j] ^= u[j];
+  }
+  return t.map(function(b){ return ((b << 24) >> 24); });   // keep signed bytes for base64Encode
+}
+function randomBytes_(n){
+  var hex = "";
+  while(hex.length < n * 2) hex += Utilities.getUuid().replace(/-/g, "");
+  var out = [];
+  for(var i = 0; i < n; i++) out.push(((parseInt(hex.substr(i * 2, 2), 16)) << 24) >> 24);
+  return out;
+}
+function hashPassword_(password){
+  var salt = randomBytes_(16);
+  return "pbkdf2$" + PW_ITERATIONS + "$" + Utilities.base64Encode(salt) + "$" +
+         Utilities.base64Encode(pbkdf2_(password, salt, PW_ITERATIONS));
+}
+function isHashed_(stored){ return /^pbkdf2\$\d+\$[^$]+\$[^$]+$/.test(String(stored)); }
+function sameText_(a, b){
+  a = String(a); b = String(b);
+  var diff = a.length ^ b.length;
+  for(var i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+function verifyPassword_(password, stored){
+  stored = String(stored || "");
+  if(!isHashed_(stored)) return stored !== "" && sameText_(password, stored);   // not converted yet
+  var p = stored.split("$");
+  var iters = Number(p[1]);
+  if(!(iters >= 1 && iters <= 1000000)) return false;
+  var calc = Utilities.base64Encode(pbkdf2_(password, Utilities.base64Decode(p[2]), iters));
+  return sameText_(calc, p[3]);
+}
+var DUMMY_HASH_CACHE_ = null;
+function DUMMY_HASH_(){
+  if(!DUMMY_HASH_CACHE_) DUMMY_HASH_CACHE_ = "pbkdf2$" + PW_ITERATIONS + "$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  return DUMMY_HASH_CACHE_;
+}
+/* Converts any plain-text password in the Users sheet to a hash (runs once, then only when needed). */
+function migratePasswords_(){
+  var props = PropertiesService.getScriptProperties();
+  var sh = getOrCreateSheet("Users",[]);
+  var stamp = String(sh.getLastRow());
+  if(props.getProperty("pwMigrated") === stamp) return 0;
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try{
+    var v = sh.getDataRange().getValues(), n = 0;
+    for(var i = 1; i < v.length; i++){
+      var cur = String(v[i][1] == null ? "" : v[i][1]);
+      if(cur !== "" && !isHashed_(cur)){
+        sh.getRange(i + 1, 2).setNumberFormat("@").setValue(hashPassword_(cur));
+        n++;
+      }
+    }
+    props.setProperty("pwMigrated", String(sh.getLastRow()));
+    return n;
+  } finally { lock.releaseLock(); }
+}
+
+/* ---------------- request limits + input safety ---------------- */
+function rateOk_(key, max, windowSecs){
+  var cache = CacheService.getScriptCache();
+  var bucket = key + "_" + Math.floor(Date.now() / (windowSecs * 1000));
+  var n = Number(cache.get(bucket) || 0) + 1;
+  cache.put(bucket, String(n), windowSecs + 5);
+  return n <= max;
+}
+/* Text going into a sheet cell: never let it start a formula (=, +, -, @), cap its length. */
+function safe_(v, maxLen){
+  if(v === null || v === undefined) return "";
+  if(typeof v === "number" || typeof v === "boolean" || v instanceof Date) return v;
+  var t = String(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+  if(maxLen && t.length > maxLen) t = t.substring(0, maxLen);
+  if(/^[=+\-@\t\r]/.test(t)) t = "'" + t;
+  return t;
+}
+var NAME_RE_ = /^[A-Za-z0-9][A-Za-z0-9 _.\-\/()#&]{0,79}$/;
 
 function json_(o){
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
@@ -264,6 +375,16 @@ function sessionFor_(token){
   }
   return null;
 }
+/* Ends every session of one user (password reset, user removed). */
+function revokeSessions_(username){
+  var sh = sessionsSheet_(), v = sh.getDataRange().getValues(), cache = CacheService.getScriptCache();
+  for(var i = 1; i < v.length; i++){
+    if(String(v[i][1]) === String(username) && v[i][5] instanceof Date && v[i][5] > new Date()){
+      sh.getRange(i+1, 6).setValue(new Date(0));
+      cache.remove("s_" + String(v[i][0]));
+    }
+  }
+}
 function logout(d){
   var h = sha256_(String(d.token||""));
   CacheService.getScriptCache().remove("s_" + h);
@@ -274,9 +395,89 @@ function logout(d){
   return {ok:true};
 }
 
+function findUserRow_(v, username){
+  for(var i = 1; i < v.length; i++) if(String(v[i][0]).trim().toLowerCase() === String(username).trim().toLowerCase()) return i;
+  return -1;
+}
+function pwProblem_(pw){
+  pw = String(pw || "");
+  if(pw.length < PW_MIN_LENGTH) return "Password must be at least " + PW_MIN_LENGTH + " characters";
+  if(pw.length > 200) return "Password is too long";
+  return "";
+}
 function addUser(d){
-  getOrCreateSheet("Users",[]).appendRow([d.username, d.password, d.role||"inspector", d.name]);
-  return {ok:true};
+  var username = String(d.username || "").trim(), name = String(d.name || "").trim();
+  var role = String(d.role || "inspector").toLowerCase();
+  if(!/^[A-Za-z0-9._-]{3,32}$/.test(username)) return {ok:false, error:"Username: 3 to 32 letters, numbers, dot, dash or underscore"};
+  if(!name || name.length > 80) return {ok:false, error:"Full name is required (up to 80 characters)"};
+  if(["inspector","admin"].indexOf(role) === -1) return {ok:false, error:"Role must be inspector or admin"};
+  var p = pwProblem_(d.password); if(p) return {ok:false, error:p};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var sh = getOrCreateSheet("Users",[]);
+    if(findUserRow_(sh.getDataRange().getValues(), username) > -1) return {ok:false, error:"Username " + username + " already exists"};
+    sh.appendRow([username, hashPassword_(String(d.password)), role, safe_(name, 80)]);
+    sh.getRange(sh.getLastRow(), 2).setNumberFormat("@");
+    PropertiesService.getScriptProperties().setProperty("pwMigrated", String(sh.getLastRow()));
+    return {ok:true};
+  } finally { lock.releaseLock(); }
+}
+function listUsers(){
+  var v = getOrCreateSheet("Users",[]).getDataRange().getValues(), out = [];
+  for(var i = 1; i < v.length; i++){
+    if(String(v[i][0]).trim() === "") continue;
+    out.push({username:String(v[i][0]).trim(), name:String(v[i][3]||""), role:String(v[i][2]||"inspector").toLowerCase() === "admin" ? "admin" : "inspector"});
+  }
+  return {ok:true, users:out};
+}
+function resetPassword(d){
+  var p = pwProblem_(d.password); if(p) return {ok:false, error:p};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var sh = getOrCreateSheet("Users",[]), v = sh.getDataRange().getValues();
+    var i = findUserRow_(v, d.username);
+    if(i < 0) return {ok:false, error:"User not found"};
+    sh.getRange(i + 1, 2).setNumberFormat("@").setValue(hashPassword_(String(d.password)));
+    revokeSessions_(String(v[i][0]).trim());
+    return {ok:true};
+  } finally { lock.releaseLock(); }
+}
+function deleteUser(d){
+  var me = d._session ? d._session.username : "";
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var sh = getOrCreateSheet("Users",[]), v = sh.getDataRange().getValues();
+    var i = findUserRow_(v, d.username);
+    if(i < 0) return {ok:false, error:"User not found"};
+    var uname = String(v[i][0]).trim();
+    if(uname.toLowerCase() === String(me).toLowerCase()) return {ok:false, error:"You cannot remove your own account"};
+    sh.deleteRow(i + 1);
+    PropertiesService.getScriptProperties().setProperty("pwMigrated", String(sh.getLastRow()));
+    revokeSessions_(uname);
+    return {ok:true};
+  } finally { lock.releaseLock(); }
+}
+function changePassword(d){
+  var me = d._session.username;
+  var p = pwProblem_(d.newPassword); if(p) return {ok:false, error:p};
+  var failKey = "cp_" + sha256_(me.toLowerCase()).slice(0, 40), cache = CacheService.getScriptCache();
+  var fails = Number(cache.get(failKey) || 0);
+  if(fails >= LOGIN_MAX_FAILS) return {ok:false, error:"Too many wrong attempts. Try again in 15 minutes."};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var sh = getOrCreateSheet("Users",[]), v = sh.getDataRange().getValues();
+    var i = findUserRow_(v, me);
+    if(i < 0) return {ok:false, error:"User not found"};
+    if(!verifyPassword_(String(d.currentPassword || ""), String(v[i][1]))){
+      cache.put(failKey, String(fails + 1), LOGIN_LOCK_SECS);
+      return {ok:false, error:"Current password is wrong"};
+    }
+    cache.remove(failKey);
+    sh.getRange(i + 1, 2).setNumberFormat("@").setValue(hashPassword_(String(d.newPassword)));
+    revokeSessions_(String(v[i][0]).trim());
+    var s = createSession_(String(v[i][0]).trim(), d._session.name, d._session.role);
+    return {ok:true, token:s.token, expiresAt:s.expiresAt};
+  } finally { lock.releaseLock(); }
 }
 
 function getBatches(){
@@ -319,10 +520,16 @@ function createBatch(d){
   var model     = String(d.model||"");
   var pm        = String(d.prodMonthCode||"");
   var pm2       = String(d.prodMonthCode2||"");
-  var by        = String(d.createdBy||"");
+  var by        = safe_(String(d.createdBy||""), 64);
 
   if(!batchName) return {ok:false, error:"Batch Name is required"};
-  if(batchQty < 1) return {ok:false, error:"Batch Quantity must be greater than 0"};
+  if(!NAME_RE_.test(batchName)) return {ok:false, error:"Batch Name: up to 80 letters, numbers, spaces and _ - . / ( ) # &, starting with a letter or number"};
+  if(batchQty < 1 || batchQty > 1000000) return {ok:false, error:"Batch Quantity must be between 1 and 1000000"};
+  if(pm && !/^\d{4}$/.test(pm)) return {ok:false, error:"Production month is not valid"};
+  if(pm2 && !/^\d{4}$/.test(pm2)) return {ok:false, error:"Production month 2 is not valid"};
+  var existing = getOrCreateSheet("Batches",[]).getDataRange().getValues();
+  for(var x = 1; x < existing.length; x++)
+    if(String(existing[x][0]).trim().toLowerCase() === batchName.toLowerCase()) return {ok:false, error:"A batch named " + batchName + " already exists"};
   var spec = findModel_(model);
   if(!spec) return {ok:false, error:"Model \"" + model + "\" not found. Add it in Models first."};
   var bdMax = spec.maxD;
@@ -360,11 +567,16 @@ function updateLot(d){
   var rows  = sheet.getDataRange().getValues();
   for(var i = 1; i < rows.length; i++){
     if(rows[i][0] === d.batchName && rows[i][1] === d.lotNumber){
-      if(d.status        !== undefined) sheet.getRange(i+1, 6).setValue(d.status);
-      if(d.bdMax         !== undefined) sheet.getRange(i+1, 5).setValue(d.bdMax);
-      if(d.model         !== undefined) sheet.getRange(i+1, 12).setValue(d.model);
-      if(d.prodMonthCode !== undefined) sheet.getRange(i+1, 13).setValue(d.prodMonthCode);
-      if(d.prodMonthCode2!== undefined) sheet.getRange(i+1, 15).setValue(d.prodMonthCode2);
+      if(d.status !== undefined && ["Open","Closed"].indexOf(String(d.status)) === -1) return {ok:false, error:"Status must be Open or Closed"};
+      if(d.bdMax !== undefined && (isNaN(Number(d.bdMax)) || Number(d.bdMax) < 0)) return {ok:false, error:"Black dot limit is not valid"};
+      if(d.model !== undefined && !findModel_(d.model)) return {ok:false, error:"Model not found"};
+      if(d.prodMonthCode !== undefined && !/^'?\d{0,4}$/.test(String(d.prodMonthCode))) return {ok:false, error:"Production month is not valid"};
+      if(d.prodMonthCode2 !== undefined && !/^'?\d{0,4}$/.test(String(d.prodMonthCode2))) return {ok:false, error:"Production month 2 is not valid"};
+      if(d.status        !== undefined) sheet.getRange(i+1, 6).setValue(String(d.status));
+      if(d.bdMax         !== undefined) sheet.getRange(i+1, 5).setValue(Number(d.bdMax));
+      if(d.model         !== undefined) sheet.getRange(i+1, 12).setValue(safe_(d.model, 80));
+      if(d.prodMonthCode !== undefined) sheet.getRange(i+1, 13).setValue(safe_(d.prodMonthCode, 5));
+      if(d.prodMonthCode2!== undefined) sheet.getRange(i+1, 15).setValue(safe_(d.prodMonthCode2, 5));
       return {ok:true};
     }
   }
@@ -403,24 +615,33 @@ function checkSerial(d){
 }
 
 function submitLot(d){
-  // Guard: check if this lot is already closed to prevent duplicate submissions
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try{ return submitLotLocked_(d); } finally { lock.releaseLock(); }
+}
+function submitLotLocked_(d){
+  // The lot must exist and still be open; everything about the lot is read from the sheet
   var bsh   = getOrCreateSheet("Batches",[]);
   var bRows = bsh.getDataRange().getValues();
+  var lotRow = -1;
   for(var i=1;i<bRows.length;i++){
-    if(String(bRows[i][0])===String(d.batchName) &&
-       String(bRows[i][1])===String(d.lotNumber) &&
-       String(bRows[i][5])==='Closed'){
-      return {ok:false, error:'This lot is already submitted and closed. Duplicate submission blocked.'};
-    }
+    if(String(bRows[i][0])===String(d.batchName) && String(bRows[i][1])===String(d.lotNumber)){ lotRow = i; break; }
   }
+  if(lotRow < 0) return {ok:false, error:"Lot not found. Refresh and try again."};
+  if(String(bRows[lotRow][5])==='Closed')
+    return {ok:false, error:'This lot is already submitted and closed. Duplicate submission blocked.'};
   // Flow gate: sampling needs BOM verification passed (or waived) for batches created with the flow
-  for(var g=1; g<bRows.length; g++){
-    if(String(bRows[g][0]) !== String(d.batchName)) continue;
-    var bs = String(bRows[g][COL_BOM_STATUS-1]||"");
-    if(bs === "Pending" || bs === "Failed")
-      return {ok:false, error:"BOM verification for " + d.batchName + " is " + (bs === "Pending" ? "not done yet" : "failed") + ". Sampling can start after BOM verification passes."};
-    break;
-  }
+  var bs = String(bRows[lotRow][COL_BOM_STATUS-1]||"");
+  if(bs === "Pending" || bs === "Failed")
+    return {ok:false, error:"BOM verification for " + d.batchName + " is " + (bs === "Pending" ? "not done yet" : "failed") + ". Sampling can start after BOM verification passes."};
+
+  var lotResult = String(d.lotResult||"");
+  if(lotResult !== "PASS" && lotResult !== "FAIL") return {ok:false, error:"Lot result must be PASS or FAIL"};
+  var lotSize = Number(bRows[lotRow][2]) || FIXED_LOT;
+  var sampleSize = Number(bRows[lotRow][3]) || FIXED_SAMPLE;
+  var units = Array.isArray(d.units) ? d.units : [];
+  if(units.length !== sampleSize) return {ok:false, error:"Expected " + sampleSize + " samples, got " + units.length};
+  var fgPassQty = lotResult === "PASS" ? lotSize : 0;
 
   var master = getOrCreateSheet("Master",[]);
   if(master.getRange(1, 19).getValue() === "") master.getRange(1, 19).setValue("BDSpec");
@@ -432,46 +653,34 @@ function submitLot(d){
     var sx = normSerial_(mRows[x][4]);
     if(sx && !existing[sx]) existing[sx] = String(mRows[x][3]||"");
   }
-  (d.units||[]).forEach(function(u){
-    var su = normSerial_(u.serial);
-    if(!su) return;
+  for(var k = 0; k < units.length; k++){
+    var su = normSerial_(units[k] && units[k].serial);
+    if(!/^[A-Z0-9]{1,40}$/.test(su)) return {ok:false, error:"Sample " + (k+1) + ": serial number is missing or not valid"};
     if(seen[su]) clash.push(su + " (repeated in this lot)");
     else if(existing[su]) clash.push(su + " (already recorded in " + existing[su] + ")");
     seen[su] = true;
-  });
+  }
   if(clash.length) return {ok:false, error:"Duplicate serial number, nothing was saved: " + clash.join(", ")};
 
-  var units = d.units || [];
-  for(var i = 0; i < units.length; i++){
-    var u = units[i];
-    var sampleTs = u.inspectedAt ? new Date(u.inspectedAt) : new Date();
-    master.appendRow([
-      sampleTs, d.inspector, d.batchName, d.lotNumber, u.serial,
-      u.aes, u.general, u.func, u.screen, u.bd,
-      u.remark, u.sampleResult, d.lotResult,
-      d.batchQty||"", d.totalLots||"",
-      d.model||"", d.prodMonthCode||"", d.fgPassQty||0,
-      d.bdSpec||""
-    ]);
-  }
+  var pf = function(v){ return String(v) === "Pass" ? "Pass" : "Fail"; };
+  var out = units.map(function(u){
+    var ts = u.inspectedAt ? new Date(u.inspectedAt) : new Date();
+    if(isNaN(ts.getTime()) || ts > new Date(Date.now() + 86400000)) ts = new Date();
+    return [ts, safe_(d.inspector, 80), String(bRows[lotRow][0]), String(bRows[lotRow][1]), safe_(normSerial_(u.serial), 40),
+      pf(u.aes), pf(u.general), pf(u.func), pf(u.screen), safe_(u.bd, 300),
+      safe_(u.remark, 500), pf(u.sampleResult), lotResult,
+      Number(bRows[lotRow][9]) || "", Number(bRows[lotRow][10]) || "",
+      safe_(bRows[lotRow][11], 80), safe_(d.prodMonthCode, 5), fgPassQty,
+      safe_(d.bdSpec, 500)];
+  });
+  master.getRange(master.getLastRow() + 1, 1, out.length, out[0].length).setValues(out);
 
-  var sheet = getOrCreateSheet("Batches",[]);
-  var rows  = sheet.getDataRange().getValues();
-  for(var j = 1; j < rows.length; j++){
-    if(rows[j][0] === d.batchName && rows[j][1] === d.lotNumber){
-      sheet.getRange(j+1, 6).setValue("Closed");
-      sheet.getRange(j+1, 9).setValue(d.lotResult);
-      sheet.getRange(j+1, 14).setValue(d.fgPassQty||0);
-      break;
-    }
-  }
+  bsh.getRange(lotRow+1, 6).setValue("Closed");
+  bsh.getRange(lotRow+1, 9).setValue(lotResult);
+  bsh.getRange(lotRow+1, 14).setValue(fgPassQty);
   return {ok:true};
 }
 
-function getMaster(){
-  var rows = getOrCreateSheet("Master",[]).getDataRange().getValues();
-  return {ok:true, rows:rows.slice(1)};
-}
 /****************************************************
  * MODELS + BLACK DOT SPEC  (sheet: "Models")
  * name | code | maxD | smallD | maxN | minDS | nA | nB | nAB | updatedBy | updatedAt | lumioModel
@@ -585,6 +794,8 @@ function saveModel(d){
   var lumio = String(m.lumioModel||"").trim();
   if(!name) return {ok:false, error:"Model name is required"};
   if(!lumio) return {ok:false, error:"Lumio model number is required"};
+  if(!NAME_RE_.test(name)) return {ok:false, error:"Model name: up to 80 letters, numbers, spaces and _ - . / ( ) # &"};
+  if(!NAME_RE_.test(lumio)) return {ok:false, error:"Lumio model number: up to 80 letters, numbers, spaces and _ - . / ( ) # &"};
   if(!/^\d{4}$/.test(code)) return {ok:false, error:"Serial code must be exactly 4 digits"};
   for(var k = 0; k < MODEL_NUM_COLS.length; k++){
     var key = MODEL_NUM_COLS[k];
@@ -609,7 +820,7 @@ function saveModel(d){
     if(original && rowIdx === -1) return {ok:false, error:"Model to edit not found - refresh and try again"};
 
     var row = [name, code, Number(m.maxD), Number(m.smallD), Number(m.maxN), Number(m.minDS),
-               Number(m.nA), Number(m.nB), Number(m.nAB), d.updatedBy||"", new Date(), lumio];
+               Number(m.nA), Number(m.nB), Number(m.nAB), safe_(d.updatedBy||"", 64), new Date(), lumio];
     var target;
     if(rowIdx === -1){
       sh.appendRow(row);
@@ -724,7 +935,7 @@ function approveSerial(d){
   var s = normSerial_(d.serial);
   if(!/^\d{15}$/.test(s)) return {ok:false, error:"Serial number must be 15 digits"};
   if(readExceptions_()[s]) return {ok:true, already:true};
-  exceptionsSheet_().appendRow(["'" + s, String(d.reason||"Kept in more than one lot"), String(d.by||""), new Date()]);
+  exceptionsSheet_().appendRow(["'" + s, safe_(d.reason||"Kept in more than one lot", 200), safe_(d.by||"", 64), new Date()]);
   return {ok:true};
 }
 
@@ -790,7 +1001,7 @@ function removeDuplicates(d){
       arch.appendRow(rows[0].concat(["RemovedAt","RemovedBy","KeptMasterRow"]));
       arch.setFrozenRows(1);
     }
-    var keepRows = [rows[0]], moved = [], now = new Date(), by = String(d.by||"");
+    var keepRows = [rows[0]], moved = [], now = new Date(), by = safe_(d.by||"", 64);
     // first pass: final row number of each kept record after cleanup
     var newRowOf = {}, n = 1;
     for(var i = 1; i < rows.length; i++){ if(!(i in f.dupIdx)){ n++; newRowOf[i] = n; } }
@@ -883,7 +1094,7 @@ function getBomList(){
     });
     return {ok:true, models:models};
   }catch(e){
-    return {ok:false, error:"Cannot open the BOM sheet: " + e.message};
+    console.error(e); return {ok:false, error:"Cannot open the BOM sheet. Ask an admin to check access to it."};
   }
 }
 
@@ -920,7 +1131,7 @@ function getBom(d){
     var ctl = bomControl_(ss)[model] || {model:model, status:"", rev:""};
     return {ok:true, model:model, control:ctl, parts:parts};
   }catch(e){
-    return {ok:false, error:"Cannot open the BOM sheet: " + e.message};
+    console.error(e); return {ok:false, error:"Cannot open the BOM sheet. Ask an admin to check access to it."};
   }
 }
 
@@ -956,10 +1167,13 @@ function submitBomVerification(d){
   lock.waitLock(30000);
   try{
     // batch must exist and still need BOM verification
-    var bv = getOrCreateSheet("Batches",[]).getDataRange().getValues(), cur = null;
-    for(var b = 1; b < bv.length; b++){ if(String(bv[b][0]) === batchName){ cur = String(bv[b][COL_BOM_STATUS-1]||""); break; } }
+    var bv = getOrCreateSheet("Batches",[]).getDataRange().getValues(), cur = null, bModel = "";
+    for(var b = 1; b < bv.length; b++){ if(String(bv[b][0]) === batchName){ cur = String(bv[b][COL_BOM_STATUS-1]||""); bModel = String(bv[b][11]||""); break; } }
     if(cur === null) return {ok:false, error:"Batch " + batchName + " not found"};
     if(cur === "Passed") return {ok:false, error:"BOM verification for this batch has already passed."};
+    if(cur !== "Pending" && cur !== "Failed") return {ok:false, error:"This batch does not need BOM verification."};
+    var spec = findModel_(bModel);
+    if(!spec || spec.lumioModel !== model) return {ok:false, error:"This batch must be verified against the BOM of its own model" + (spec && spec.lumioModel ? " (" + spec.lumioModel + ")" : "") + "."};
 
     var ss = bomSS_();
     var parts = readBom_(ss, model);
@@ -986,7 +1200,7 @@ function submitBomVerification(d){
         dev++;
         if(!String(it.remark||"").trim()) throw new Error("Remark is required for deviation on " + p.partNo);
       }
-      rows.push({p:p, lotPn:lotPn, lotQ:isNaN(lotQ) ? "" : lotQ, remark:String(it.remark||""), res:res});
+      rows.push({p:p, lotPn:safe_(lotPn, 80), lotQ:isNaN(lotQ) ? "" : lotQ, remark:safe_(it.remark||"", 500), res:res});
     });
 
     var log = ss.getSheetByName("BOM_VERIFY_LOG");
@@ -995,10 +1209,10 @@ function submitBomVerification(d){
     var verId = nextVerId_(log);
     var when = Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd HH:mm:ss");
     var result = dev === 0 ? "All matched" : "Deviation";
-    log.appendRow([verId, when, model, batchName, ctl.rev, String(ctl.status).toLowerCase() === "locked" ? "Locked" : "Not locked", parts.length, dev, result,
-                   String(d.by||""), String(d.remarks||"")]);
+    log.appendRow([verId, when, model, safe_(batchName, 80), ctl.rev, String(ctl.status).toLowerCase() === "locked" ? "Locked" : "Not locked", parts.length, dev, result,
+                   safe_(d.by||"", 80), safe_(d.remarks||"", 1000)]);
     var detail = rows.map(function(r){
-      return [verId, model, batchName, ctl.rev, r.p.partNo, r.p.description, r.p.imageUrl, r.p.qps,
+      return [verId, model, safe_(batchName, 80), ctl.rev, safe_(r.p.partNo, 80), safe_(r.p.description, 500), safe_(r.p.imageUrl, 500), r.p.qps,
               r.lotPn, r.lotQ, r.remark, r.res];
     });
     det.getRange(det.getLastRow()+1, 1, detail.length, detail[0].length).setValues(detail);
@@ -1007,7 +1221,10 @@ function submitBomVerification(d){
     setBomStatus_(batchName, status, verId);
     return {ok:true, verId:verId, status:status, partsChecked:parts.length, deviations:dev, result:result};
   }catch(e){
-    return {ok:false, error:String(e.message||e)};
+    var msg = String(e && e.message || e);
+    if(/^Remark is required/.test(msg)) return {ok:false, error:msg};
+    console.error("submitBomVerification failed: " + (e && e.stack || e));
+    return {ok:false, error:"Could not save the BOM verification. Please try again."};
   }finally{
     lock.releaseLock();
   }
@@ -1038,7 +1255,7 @@ function getBomVerification(d){
     }
     return {ok:true, found:true, verification:head, items:items};
   }catch(e){
-    return {ok:false, error:"Cannot open the BOM sheet: " + e.message};
+    console.error(e); return {ok:false, error:"Cannot open the BOM sheet. Ask an admin to check access to it."};
   }
 }
 
@@ -1046,6 +1263,6 @@ function getBomVerification(d){
 function setBatchStage(d){
   var st = String(d.bomStatus||"");
   if(["Waived","Pending"].indexOf(st) === -1) return {ok:false, error:"Unsupported status"};
-  var n = setBomStatus_(String(d.batchName||""), st, st === "Waived" ? ("Waived by " + String(d.by||"admin")) : "");
+  var n = setBomStatus_(String(d.batchName||""), st, st === "Waived" ? safe_("Waived by " + String(d.by||"admin"), 80) : "");
   return n ? {ok:true, lots:n} : {ok:false, error:"Batch not found"};
 }
