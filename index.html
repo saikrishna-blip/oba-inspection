@@ -914,7 +914,7 @@ const MODULES=[
 ];
 const PAGE_MODULE={create:'createbatch',models:'models',data:'data',reports:'reports',bom:'bommgmt'};
 function isAdminUser(){ return !!user&&user.role==='admin'; }
-function can(k){ return isAdminUser()||(!!user&&Array.isArray(user.access)&&user.access.includes(k)); }
+function can(k){ if(isAdminUser()) return true; if(!user) return false; const a=Array.isArray(user.access)?user.access:['bomverify','sampling']; return a.includes(k); }
 function pageAllowed(p){ if(p==='users') return isAdminUser(); const m=PAGE_MODULE[p]; return !m||can(m); }
 const PAGE_INFO={
   home:{t:'Overview'},
@@ -1729,7 +1729,7 @@ function bindEvents(){
     try{
       const r=await api('login',{username:u,password:p});
       if(r.ok){
-        user={username:r.username,role:r.role,name:r.name,access:r.access||[]};
+        user={username:r.username,role:r.role,name:r.name,access:Array.isArray(r.access)?r.access:['bomverify','sampling']};
         session={token:r.token,expiresAt:r.expiresAt,partdbUrl:r.partdbUrl||'',bomSheetUrl:r.bomSheetUrl||''};
         routeFromHash(); introDone=false; saveSession();
         render(); // show dashboard immediately
