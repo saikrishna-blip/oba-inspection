@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IS2500 OBA Inspection</title>
+<title>LUMIO Quality Management - Projector</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
@@ -149,6 +149,55 @@ select.field{cursor:pointer;appearance:none;background-image:linear-gradient(45d
 .ok-note{background:var(--pass-bg);border:1px solid var(--pass-line);color:var(--pass);border-radius:10px;padding:12px 16px;font-weight:600}
 .res-table tr.row-muted td{color:var(--ink-3);background:var(--paper)}
 
+/* ── Batch flow ──────────────────────────────────────── */
+.flow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--line);background:var(--paper)}
+.step{display:flex;gap:12px;align-items:flex-start;padding:14px 20px;border-right:1px solid var(--line);position:relative}
+.step:last-child{border-right:none}
+.step-n{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--num);font-weight:700;font-size:15px;border:2px solid var(--line-strong);color:var(--ink-3);background:var(--panel)}
+.step-t{font-weight:700;font-size:14.5px;color:var(--ink)}
+.step-s{font-size:13px;color:var(--ink-3);margin-top:1px;line-height:1.4}
+.step-a{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.step.s-pass .step-n{background:var(--lime);border-color:var(--lime-deep);color:var(--ink)}
+.step.s-pass .step-s{color:var(--pass)}
+.step.s-fail .step-n{background:var(--fail);border-color:var(--fail);color:#fff}
+.step.s-fail .step-s{color:var(--fail)}
+.step.s-wait .step-n{border-color:var(--open);color:var(--open);background:var(--open-bg)}
+.step.s-wait .step-s{color:var(--open)}
+.step.s-na .step-n,.step.s-soon .step-n{border-style:dashed}
+.step.s-lock{opacity:.75}
+.lot-tile.t-lock{border:1.5px dashed var(--line-strong);background:var(--sunk);color:var(--ink-3)}
+.bom-result{margin:0 20px 18px;border:1px solid var(--line-strong);border-radius:12px;background:var(--panel);overflow:hidden;animation:fadeIn .18s ease both}
+
+/* ── BOM verification screen ─────────────────────────── */
+.bom-meter{height:10px;background:#2E362F;border-radius:99px;overflow:hidden;display:flex;margin-top:12px;min-width:260px}
+.bom-meter i{display:block;height:100%}
+.bom-list{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.bom-row{display:grid;grid-template-columns:72px minmax(0,1fr) 90px auto;gap:14px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+.bom-row:last-child{border-bottom:none}
+.bom-row.r-match{background:#FAFDF6}
+.bom-row.r-diff{background:var(--fail-row)}
+.bom-img{width:72px;height:72px;border-radius:8px;border:1px solid var(--line);background:var(--sunk);object-fit:contain;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink-3);text-align:center;overflow:hidden}
+.bom-img img{width:100%;height:100%;object-fit:contain;background:#fff}
+.bom-pn{font-family:var(--code);font-size:13.5px;color:var(--ink);font-weight:500}
+.bom-desc{font-size:14px;color:var(--ink-2);margin-top:2px;line-height:1.35}
+.bom-meta{font-size:12.5px;color:var(--ink-3);margin-top:3px}
+.bom-qps{text-align:center}
+.bom-qps b{display:block;font-family:var(--num);font-size:24px;line-height:1;color:var(--ink)}
+.bom-qps span{font-size:12px;color:var(--ink-3)}
+.bom-act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.bom-act .btn.on-match{background:var(--lime);border-color:var(--lime-deep);color:var(--ink)}
+.bom-act .btn.on-diff{background:var(--fail);border-color:var(--fail);color:#fff}
+.bom-diff{grid-column:2 / -1;display:grid;grid-template-columns:1fr 120px 2fr;gap:8px}
+@media (max-width:760px){
+  .flow{grid-template-columns:1fr}
+  .step{border-right:none;border-bottom:1px solid var(--line)}
+  .bom-row{grid-template-columns:56px minmax(0,1fr)}
+  .bom-img{width:56px;height:56px}
+  .bom-qps{grid-column:1;text-align:left}
+  .bom-act{grid-column:2;justify-content:flex-start}
+  .bom-diff{grid-column:1 / -1;grid-template-columns:1fr}
+}
+
 /* ── Inspection: sample tray (signature) ──────────────── */
 .bench{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center;background:var(--ink);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:16px}
 .bench-title{font-family:var(--num);font-size:24px;font-weight:700;letter-spacing:-.01em}
@@ -268,6 +317,9 @@ let selLot = null;          // "batch||lot" of the lot opened in the detail pane
 let lotUnits = {};          // cache of sample results per lot
 let dataScan = null;        // duplicate-serial check result (admin)
 let recSearch = {q:'', loading:false, res:null};  // record lookup (admin)
+let bomModels = [];         // models in the BOM sheet (BOM_CONTROL)
+let activeBom = null;       // BOM verification in progress
+let bomResult = null;       // {batch, loading, data} verification result being viewed
 const LOT_SIZE   = 90;
 const SAMPLE_N   = 13;
 
@@ -385,7 +437,14 @@ async function loadModels(){
   }
   else console.warn('getModels failed:',r.error);
 }
-async function loadAll(){ await Promise.all([loadBatches(),loadModels()]); }
+async function loadBomList(){
+  const r=await api('getBomList');
+  bomModels=r.ok?(r.models||[]):[];
+}
+async function loadAll(){ await Promise.all([loadBatches(),loadModels(),loadBomList()]); }
+function bomFor(modelName){ const m=getModel(modelName); return m&&m.lumioModel?bomModels.find(b=>b.model===m.lumioModel)||null:null; }
+function batchBom(batchName){ const l=batches.find(b=>b.batchName===batchName); return l?(l.bomStatus||''):''; }
+function samplingLocked(batchName){ const s=batchBom(batchName); return s==='Pending'||s==='Failed'; }
 
 async function loadBatches(){
   let r=await api('getBatches');
@@ -439,7 +498,8 @@ function groupBatches(){
     const failLots   = lots.filter(l=>l.result==='FAIL').length;
     const fgTotal    = lots.reduce((s,l)=>s+Number(l.fgPassQty||0),0);
     return{name,lots,batchQty,totalLots,completed,pending,passLots,failLots,fgTotal,
-           model:lots[0].model||'',prodMonthCode:lots[0].prodMonthCode||'',prodMonthCode2:lots[0].prodMonthCode2||''};
+           model:lots[0].model||'',prodMonthCode:lots[0].prodMonthCode||'',prodMonthCode2:lots[0].prodMonthCode2||'',
+           bomStatus:lots[0].bomStatus||'',bomVerId:lots[0].bomVerId||''};
   });
 }
 
@@ -539,6 +599,7 @@ function buildPage(){
   if(!API)          return buildSetup();
   if(!user)         return buildLogin();
   if(activeLot)     return buildInspection();
+  if(activeBom)     return buildBomVerify();
   return buildDashboard();
 }
 
@@ -548,7 +609,7 @@ function buildSetup(){
   <div class="card" style="max-width:440px;width:100%">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
       <div class="logo"><img src="data:image/png;base64,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" alt="Lumio"></div>
-      <div><div class="hdr-title">OBA batch inspection</div><div class="hdr-sub">Connect to your backend</div></div>
+      <div><div class="hdr-title">LUMIO Quality Management - Projector</div><div class="hdr-sub">Connect to your backend</div></div>
     </div>
     <div class="fg"><label class="lbl">Apps Script Web App URL</label>
       <input id="apiInput" class="field" type="text" placeholder="https://script.google.com/macros/s/…/exec">
@@ -564,7 +625,7 @@ function buildLogin(){
   <div class="card" style="max-width:380px;width:100%">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
       <div class="logo"><img src="data:image/png;base64,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" alt="Lumio"></div>
-      <div><div class="hdr-title">OBA batch inspection</div><div class="hdr-sub">Sign in to continue</div></div>
+      <div><div class="hdr-title">LUMIO Quality Management - Projector</div><div class="hdr-sub">Sign in to continue</div></div>
     </div>
     <div class="fg"><label class="lbl">Username</label><input id="lUser" class="field" type="text" placeholder="Username"></div>
     <div class="fg"><label class="lbl">Password</label><input id="lPass" class="field" type="password" placeholder="Password"></div>
@@ -589,8 +650,8 @@ function buildDashboard(){
   <header class="hdr">
     <div class="hdr-left">
       <div class="logo"><img src="data:image/png;base64,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" alt="Lumio"></div>
-      <div><div class="hdr-title">OBA batch inspection</div>
-        <div class="hdr-sub">IS 2500 level G2, lots of 90, 13 samples each</div>
+      <div><div class="hdr-title">LUMIO Quality Management - Projector</div>
+        <div class="hdr-sub">Batch flow: BOM verification, FAI inspection, sampling inspection (IS 2500 level G2)</div>
       </div>
     </div>
     <div class="hdr-right">
@@ -676,7 +737,8 @@ function buildDashboard(){
     groups.filter(g=>!view.batch||g.name===view.batch).forEach(g=>{
       const pct2=g.totalLots?Math.round(g.completed/g.totalLots*100):0;
       const lots=g.lots.filter(matches);
-      const nextOpen=!isAdmin?g.lots.find(l=>l.status==='Open'):null;
+      const locked=g.bomStatus==='Pending'||g.bomStatus==='Failed';
+      const nextOpen=(!isAdmin&&!locked)?g.lots.find(l=>l.status==='Open'):null;
       html+=`<div class="batch-group fade">
       <div class="batch-hdr">
         <div>
@@ -695,15 +757,17 @@ function buildDashboard(){
           ${nextOpen?`<button class="btn btn-primary btn-sm startBtn" data-ri="${batches.indexOf(nextOpen)}">Inspect next open lot (${esc(lotNo(nextOpen))})</button>`:''}
           ${isAdmin?`<button class="btn btn-ghost btn-sm delBatchBtn" data-name="${esc(g.name)}" style="color:var(--fail)">Delete batch</button>`:''}
         </div>
-      </div>`;
+      </div>
+      ${buildFlow(g,isAdmin)}`;
       if(!lots.length){
         html+=`<div class="lot-empty">No lots in this batch match the filter.</div>`;
       } else {
         html+=`<div class="lot-grid" role="list">${lots.map(l=>{
           const ri=batches.indexOf(l), st=stOf(l), key=l.batchName+'||'+l.lotNumber;
           const draft=(!isAdmin&&l.status==='Open')?loadDraft(l):null;
-          const cls=draft?'t-draft':'t-'+st;
-          const word=draft?'Draft':st==='pass'?'Pass':st==='fail'?'Fail':st==='open'?'Open':'Closed';
+          const cls=draft?'t-draft':(st==='open'&&locked)?'t-lock':'t-'+st;
+          const lk=st==='open'&&locked;
+          const word=draft?'Draft':lk?'Locked':st==='pass'?'Pass':st==='fail'?'Fail':st==='open'?'Open':'Closed';
           return `<button class="lot-tile ${cls} lotTile ${selLot===key?'sel':''}" data-ri="${ri}" role="listitem" aria-pressed="${selLot===key}" title="${esc(l.lotNumber)}: ${word}"><span class="lt-no">${esc(lotNo(l))}</span><span class="lt-st">${word}</span></button>`;
         }).join('')}</div>`;
       }
@@ -713,9 +777,150 @@ function buildDashboard(){
     });
   }
   html+=`</div></div>
-  <footer class="pg-footer">Lumio OBA inspection, IS 2500 level G2</footer>
+  <footer class="pg-footer">LUMIO Quality Management - Projector</footer>
   </div>`;
   return html;
+}
+
+// ─── BATCH FLOW STRIP ─────────────────────────────────────
+function buildFlow(g,isAdmin){
+  const s=g.bomStatus, bm=bomFor(g.model);
+  let cls='s-na', txt='', act='';
+  const verRef=g.bomVerId&&/^VER-/.test(g.bomVerId)?g.bomVerId:'';
+  const draft=loadBomDraft(g.name);
+  const canVerify=!!bm;
+  const startLbl=draft?'Resume BOM verification':(s==='Failed'?'Verify again':'Start BOM verification');
+  if(s==='Passed'){ cls='s-pass'; txt=`Passed, all parts matched${verRef?` (${verRef})`:''}`; }
+  else if(s==='Failed'){ cls='s-fail'; txt=`Failed, deviations found${verRef?` (${verRef})`:''}. Sampling is on hold.`; }
+  else if(s==='Pending'){ cls='s-wait'; txt=canVerify?`Check all ${bm.parts} BOM parts of ${esc(bm.model)} for this batch`:`No BOM found for ${esc(modelLabel(g.model))}. Set its Lumio model number to a BOM tab name.`; }
+  else if(s==='Waived'){ cls='s-na'; txt='Not required (waived by admin)'; }
+  else { cls='s-na'; txt='Not required (batch created before the BOM step)'; }
+  if((s==='Pending'||s==='Failed')&&canVerify) act+=`<button class="btn btn-primary btn-sm bomStartBtn" data-batch="${esc(g.name)}">${startLbl}</button>`;
+  if(verRef) act+=`<button class="btn btn-ghost btn-sm bomViewBtn" data-batch="${esc(g.name)}" data-ver="${esc(verRef)}">${bomResult&&bomResult.batch===g.name?'Hide result':'View result'}</button>`;
+  if(isAdmin&&(s==='Pending'||s==='Failed')) act+=`<button class="btn btn-ghost btn-sm bomStageBtn" data-batch="${esc(g.name)}" data-st="Waived">Waive</button>`;
+  if(isAdmin&&(s===''||s==='Waived')) act+=`<button class="btn btn-ghost btn-sm bomStageBtn" data-batch="${esc(g.name)}" data-st="Pending">Require BOM check</button>`;
+  const locked=s==='Pending'||s==='Failed';
+  const sampTxt=locked?'Locked until BOM verification passes':`${g.completed} of ${g.totalLots} lots inspected`;
+  const sampCls=locked?'s-lock':(g.completed===g.totalLots&&g.totalLots?(g.failLots?'s-fail':'s-pass'):'s-wait');
+  let h=`<div class="flow" aria-label="Batch inspection flow">
+    <div class="step ${cls}"><div class="step-n">1</div><div><div class="step-t">BOM verification</div><div class="step-s">${txt}</div>${act?`<div class="step-a">${act}</div>`:''}</div></div>
+    <div class="step s-soon"><div class="step-n">2</div><div><div class="step-t">FAI inspection</div><div class="step-s">Coming soon. Not required yet.</div></div></div>
+    <div class="step ${sampCls}"><div class="step-n">3</div><div><div class="step-t">Sampling inspection</div><div class="step-s">${sampTxt}</div></div></div>
+  </div>`;
+  if(bomResult&&bomResult.batch===g.name) h+=buildBomResult();
+  return h;
+}
+function buildBomResult(){
+  const r=bomResult;
+  if(r.loading) return `<div class="bom-result"><div class="res-wrap text-muted">Loading verification…</div></div>`;
+  if(r.error) return `<div class="bom-result"><div class="res-wrap err">${esc(r.error)}</div></div>`;
+  if(!r.data||!r.data.found) return `<div class="bom-result"><div class="res-wrap text-muted">No verification record found.</div></div>`;
+  const v=r.data.verification, items=r.data.items.slice().sort((a,b)=>(a.result==='Matched')-(b.result==='Matched'));
+  return `<div class="bom-result">
+    <div class="ld-head"><div><div class="ld-title">${esc(v.verId)}: ${esc(v.result)}</div><div class="text-muted" style="margin-top:4px">${esc(v.model)}, BOM revision ${esc(v.rev)} (${esc(v.bomStatus)}), ${v.partsChecked} parts, verified by ${esc(v.by)} on ${esc(v.time)}${v.remarks?`. Remarks: ${esc(v.remarks)}`:''}</div></div>
+      <button class="btn btn-ghost btn-sm bomViewClose">Close</button></div>
+    <div class="res-wrap"><div style="overflow-x:auto"><table class="res-table"><thead><tr><th>Part</th><th>Description</th><th>BOM QPS</th><th>Found part</th><th>Found QPS</th><th>Result</th><th>Remark</th></tr></thead><tbody>
+    ${items.map(i=>`<tr class="${i.result==='Matched'?'':'row-bad'}"><td style="font-family:var(--code);white-space:nowrap">${esc(i.partNo)}</td><td>${esc(i.description)}</td><td>${esc(i.bomQps)}</td><td style="font-family:var(--code);white-space:nowrap" class="${i.lotPartNo!==i.partNo?'bad':''}">${esc(i.lotPartNo)}</td><td class="${String(i.lotQps)!==String(i.bomQps)?'bad':''}">${esc(i.lotQps)}</td><td class="${i.result==='Matched'?'':'bad'}">${esc(i.result)}</td><td>${esc(i.remark)}</td></tr>`).join('')}
+    </tbody></table></div></div></div>`;
+}
+
+// ─── BOM VERIFICATION SCREEN ──────────────────────────────
+function bomDraftKey(batch){ return 'oba_bomdraft_'+(user?user.username:'anon')+'_'+batch; }
+function loadBomDraft(batch){ try{ const r=localStorage.getItem(bomDraftKey(batch)); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function saveBomDraft(){ if(!activeBom) return; try{ localStorage.setItem(bomDraftKey(activeBom.batch),JSON.stringify({model:activeBom.model,items:activeBom.items,remarks:activeBom.remarks,savedAt:new Date().toISOString()})); }catch(e){} }
+function clearBomDraft(batch){ try{ localStorage.removeItem(bomDraftKey(batch)); }catch(e){} }
+function bomCounts(){
+  const a=activeBom; let match=0,diff=0;
+  a.parts.forEach(p=>{ const it=a.items[p.partNo]; if(it&&it.state==='match') match++; else if(it&&it.state==='diff') diff++; });
+  return {match,diff,todo:a.parts.length-match-diff,total:a.parts.length};
+}
+function bomItemValid(p,it){ return it&&it.state==='diff'?String(it.lotPartNo||'').trim()!==''&&String(it.lotQps??'').trim()!==''&&String(it.remark||'').trim()!=='':!!(it&&it.state==='match'); }
+function bomInvalid(){ return activeBom.parts.filter(p=>activeBom.items[p.partNo]&&activeBom.items[p.partNo].state==='diff'&&!bomItemValid(p,activeBom.items[p.partNo])).length; }
+function bomTallyHtml(){
+  const c=bomCounts(), invalid=bomInvalid();
+  return `<div>Checked: <b class="${c.todo?'t-warn':'t-ok'}">${c.total-c.todo}/${c.total}</b></div>
+      <div>Deviations: <b class="${c.diff?'t-fail':'t-ok'}">${c.diff}</b></div>
+      ${invalid?`<div class="t-fail">${invalid} deviation${invalid===1?'':'s'} missing part number, QPS or remark</div>`:''}`;
+}
+function updateBomFooter(){
+  const btn=document.getElementById('btnBomSubmit'), tally=document.getElementById('bomTally');
+  if(!btn||!activeBom) return;
+  const c=bomCounts(), ready=c.todo===0&&bomInvalid()===0, a=activeBom;
+  if(tally) tally.innerHTML=bomTallyHtml();
+  btn.className='btn '+(ready?(c.diff?'btn-danger':'btn-primary'):'');
+  btn.disabled=!(ready&&!a.saving);
+  btn.textContent=a.saving?'Saving…':ready?(c.diff?`Submit with ${c.diff} deviation${c.diff===1?'':'s'}`:'Submit, all parts matched'):(c.todo?`Check all ${c.total} parts to submit`:'Complete the deviation details');
+}
+function buildBomVerify(){
+  const a=activeBom, c=bomCounts(), g=groupBatches().find(x=>x.name===a.batch)||{};
+  const logo=document.querySelector('.logo')?document.querySelector('.logo').outerHTML:'';
+  const invalid=a.parts.filter(p=>a.items[p.partNo]&&a.items[p.partNo].state==='diff'&&!bomItemValid(p,a.items[p.partNo])).length;
+  const ready=c.todo===0&&invalid===0;
+  const q=a.q.trim().toLowerCase();
+  const shown=a.parts.filter(p=>{
+    const it=a.items[p.partNo]||{}; const st=it.state||'';
+    if(a.filter==='todo'&&st) return false;
+    if(a.filter==='match'&&st!=='match') return false;
+    if(a.filter==='diff'&&st!=='diff') return false;
+    return !q||p.partNo.toLowerCase().includes(q)||p.description.toLowerCase().includes(q);
+  });
+  const pct=k=>c.total?(k/c.total*100).toFixed(2):0;
+  let h=`<div class="page">
+  <header class="hdr">
+    <div class="hdr-left">${logo}
+      <div><div class="hdr-title">BOM verification</div><div class="hdr-sub">${esc(a.batch)}</div></div>
+    </div>
+    <div class="hdr-right"><span class="text-muted">${esc(user.name)}</span><button id="btnBomBack" class="btn btn-ghost btn-sm" title="Your progress is saved as a draft">← Back to batches</button></div>
+  </header>
+  <div class="main">
+  <section class="bench fade" style="grid-template-columns:1fr">
+    <div>
+      <div class="bench-title">${esc(a.batch)}</div>
+      <div class="bench-sub">${esc(modelLabel(g.model))}, BOM ${esc(a.model)} revision ${esc(a.control.rev)} (${esc(a.control.status||'status unknown')}), batch of ${g.batchQty||'?'} units in ${g.totalLots||'?'} lots.<br>Check every part in the BOM against the material for this batch. A part matches when the part number (or an approved alternate) and quantity per set agree.</div>
+      <div class="verdict">
+        <div><b>${c.total-c.todo}/${c.total}</b>Checked</div>
+        <div><b class="${c.match?'v-ok':''}">${c.match}</b>Matched</div>
+        <div><b class="${c.diff?'v-bad':''}">${c.diff}</b>Deviations</div>
+        <div><b class="${c.todo?'':(c.diff?'v-bad':'v-ok')}">${c.todo?'In progress':(c.diff?'Fails':'Passes')}</b>BOM result</div>
+      </div>
+      <div class="bom-meter" aria-hidden="true"><i style="width:${pct(c.match)}%;background:var(--lime)"></i><i style="width:${pct(c.diff)}%;background:#E2533F"></i></div>
+    </div>
+  </section>
+  <div class="lot-toolbar" style="grid-template-columns:auto minmax(200px,1fr) auto">
+    <div><span class="lbl">Show parts</span><div class="seg" role="group" aria-label="Filter parts">${[['all','All',c.total],['todo','To check',c.todo],['match','Matched',c.match],['diff','Deviations',c.diff]].map(([k,l,n])=>`<button class="seg-btn bomFilter ${a.filter===k?'on':''}" data-k="${k}" aria-pressed="${a.filter===k}">${l}<span>${n}</span></button>`).join('')}</div></div>
+    <div><label class="lbl" for="bomQ">Find a part</label><input id="bomQ" class="field" type="search" value="${esc(a.q)}" placeholder="Part number or description"></div>
+    <div>${c.todo?`<button id="bomAllMatch" class="btn btn-ghost">Mark ${c.todo} unchecked as matching</button>`:''}</div>
+  </div>
+  <div class="bom-list">
+  ${shown.length?shown.map(p=>{
+    const it=a.items[p.partNo]||{}; const st=it.state||'';
+    const img=p.imageUrl?`<img src="${esc(p.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='No image'">`:'No image';
+    return `<div class="bom-row ${st==='match'?'r-match':st==='diff'?'r-diff':''}">
+      <div class="bom-img">${img}</div>
+      <div><div class="bom-pn">${esc(p.partNo)}</div><div class="bom-desc">${esc(p.description)}</div><div class="bom-meta">${esc(p.supplier||'')}${p.uom?', '+esc(p.uom):''}${p.alternates.length?`. Alternates: <span style="font-family:var(--code)">${p.alternates.map(esc).join(', ')}</span>`:''}</div></div>
+      <div class="bom-qps"><b>${esc(p.qps)}</b><span>QPS</span></div>
+      <div class="bom-act">
+        <button class="btn btn-sm btn-ghost bomMark ${st==='match'?'on-match':''}" data-pn="${esc(p.partNo)}" data-st="match" aria-pressed="${st==='match'}">Matches BOM</button>
+        <button class="btn btn-sm btn-ghost bomMark ${st==='diff'?'on-diff':''}" data-pn="${esc(p.partNo)}" data-st="diff" aria-pressed="${st==='diff'}">Different</button>
+      </div>
+      ${st==='diff'?`<div class="bom-diff">
+        <div><label class="lbl">Part number found</label><input class="field bomF" data-pn="${esc(p.partNo)}" data-f="lotPartNo" value="${esc(it.lotPartNo||'')}" placeholder="As found on the part"></div>
+        <div><label class="lbl">QPS found</label><input class="field bomF mono" data-pn="${esc(p.partNo)}" data-f="lotQps" type="number" step="any" min="0" value="${esc(it.lotQps??'')}"></div>
+        <div><label class="lbl">Remark (required)</label><input class="field bomF" data-pn="${esc(p.partNo)}" data-f="remark" value="${esc(it.remark||'')}" placeholder="What is different"></div>
+      </div>`:''}
+    </div>`;}).join(''):`<div class="lot-empty">No parts match this filter.</div>`}
+  </div>
+  <div class="insp-footer">
+    <div class="insp-tally" id="bomTally">${bomTallyHtml()}</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <input id="bomRemarks" class="field" type="text" style="width:260px" value="${esc(a.remarks||'')}" placeholder="Remarks (optional)">
+      <button id="btnBomSubmit" class="btn" disabled style="min-width:220px"></button>
+    </div>
+  </div>
+  </div>
+  <footer class="pg-footer">LUMIO Quality Management - Projector</footer>
+  </div>`;
+  return h;
 }
 
 // ─── LOT DETAIL ───────────────────────────────────────────
@@ -728,7 +933,8 @@ function buildLotDetail(lot,isAdmin){
     <div class="ld-head">
       <div><div class="ld-title">${esc(lot.lotNumber)}</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${st}${draft?`<span class="badge badge-open">Draft, ${draft.samples.filter(s=>s.serial).length} of ${draft.samples.length} samples</span>`:''}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${!isAdmin&&lot.status==='Open'?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume inspection':'Start inspection'}</button>`:''}
+        ${!isAdmin&&lot.status==='Open'&&samplingLocked(lot.batchName)?`<span class="text-muted">Sampling starts after BOM verification passes</span>`:''}
+        ${!isAdmin&&lot.status==='Open'&&!samplingLocked(lot.batchName)?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume inspection':'Start inspection'}</button>`:''}
         ${isAdmin?`<button class="btn btn-ghost btn-sm editBtn" data-ri="${ri}">Edit lot</button><button class="btn btn-ghost btn-sm delLotBtn" data-ri="${ri}" style="color:var(--fail)">Delete lot</button>`:''}
         <button class="btn btn-ghost btn-sm lotCloseBtn" aria-label="Close lot details">Close</button>
       </div>
@@ -838,7 +1044,7 @@ function buildModelsPanel(){
   let rows=models.map(m=>{
     const u=modelUsage[m.name];
     return `<tr style="border-top:1px solid var(--line)">
-      <td style="${td};color:var(--ink);font-weight:600">${m.lumioModel?esc(m.lumioModel):'<span class="text-fail">Missing — edit to add</span>'}</td>
+      <td style="${td};color:var(--ink);font-weight:600">${m.lumioModel?esc(m.lumioModel):'<span class="text-fail">Missing — edit to add</span>'}${m.lumioModel?(bomModels.find(b=>b.model===m.lumioModel)?`<div class="text-pass" style="font-size:12px;font-weight:500">BOM linked, ${bomModels.find(b=>b.model===m.lumioModel).parts} parts</div>`:'<div class="text-warn" style="font-size:12px;font-weight:500">No BOM tab with this name</div>'):''}</td>
       <td style="${td};color:var(--ink)">${esc(m.name)}</td>
       <td style="${td}" class="mono">${esc(m.code)}</td>
       <td style="${td}" class="mono">${m.maxD} / ${m.smallD}</td>
@@ -882,7 +1088,7 @@ function buildModelsPanel(){
     <div id="modelForm" style="font-size:16px;font-weight:700;color:var(--ink);margin:6px 0 12px">${em?'Edit '+esc(em.lumioModel||em.name):(modelPrefill?'Add '+esc(modelPrefill.name)+' from existing data':'Add a model')}</div>
     ${modelPrefill&&!em?`<div class="text-muted" style="margin:-6px 0 12px">Model name, serial code and black dot fail limit were copied from your data. Fill in the Lumio model number and the remaining limits.</div>`:''}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:12px">
-      <div><label class="lbl" for="m_lumioModel">Lumio model number</label><input id="m_lumioModel" class="field" type="text" value="${v('lumioModel')}" placeholder="As printed on the product"><div class="text-muted" style="font-size:12px;margin-top:3px">Shown to inspectors</div></div>
+      <div><label class="lbl" for="m_lumioModel">Lumio model number</label><input id="m_lumioModel" class="field" type="text" list="bomModelList" value="${v('lumioModel')}" placeholder="e.g. as in the BOM sheet"><datalist id="bomModelList">${bomModels.map(b=>`<option value="${esc(b.model)}">`).join('')}</datalist><div class="text-muted" style="font-size:12px;margin-top:3px">Must match a BOM tab for BOM verification</div></div>
       <div><label class="lbl" for="m_name">Model name</label><input id="m_name" class="field" type="text" value="${v('name')}" placeholder="Name used in batches"><div class="text-muted" style="font-size:12px;margin-top:3px">Must match existing batches</div></div>
       <div><label class="lbl" for="m_code">Serial code (4 digits)</label><input id="m_code" class="field mono" type="text" inputmode="numeric" maxlength="4" value="${v('code')}" placeholder="First 4 digits"><div class="text-muted" style="font-size:12px;margin-top:3px">First 4 digits of serial</div></div>
       ${nf('m_maxD','Fail if D &gt; (mm)','e.g. 2.4','0.01','Any dot bigger fails')}
@@ -912,7 +1118,7 @@ function buildInspection(){
   <header class="hdr">
     <div class="hdr-left">
       <div class="logo"><img src="data:image/png;base64,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" alt="Lumio"></div>
-      <div><div class="hdr-title">Lot inspection</div>
+      <div><div class="hdr-title">Sampling inspection</div>
         <div class="hdr-sub">${esc(lot.batchName)}</div>
       </div>
     </div>
@@ -1026,7 +1232,7 @@ function buildInspection(){
   </div>
 
   </div>
-  <footer class="pg-footer">IS2500 OBA Inspection | © 2026</footer>
+  <footer class="pg-footer">LUMIO Quality Management - Projector</footer>
   </div>`;
   return html;
 }
@@ -1070,7 +1276,7 @@ function bindEvents(){
 
   // Logout
   const blo=document.getElementById('btnLogout');
-  if(blo) blo.onclick=()=>{ dataScan=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; render(); };
+  if(blo) blo.onclick=()=>{ activeBom=null; bomResult=null; dataScan=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; render(); };
 
   // Refresh
   const br=document.getElementById('btnRefresh');
@@ -1181,6 +1387,94 @@ function bindEvents(){
       else toast(r.error||'Delete failed','err');
     };
   });
+
+  // Batch flow: BOM verification
+  document.querySelectorAll('.bomStartBtn').forEach(b=>{
+    b.onclick=async()=>{
+      const batch=b.getAttribute('data-batch');
+      const lot=batches.find(x=>x.batchName===batch); const bm=lot?bomFor(lot.model):null;
+      if(!bm){ toast('No BOM linked to this model','err'); return; }
+      b.disabled=true; b.textContent='Loading BOM…';
+      const r=await api('getBom',{model:bm.model});
+      if(!r.ok){ toast(r.error||'Could not load the BOM','err'); b.disabled=false; render(); return; }
+      if(r.control&&r.control.status&&r.control.status.toLowerCase()!=='locked'){ toast(`BOM ${bm.model} is ${r.control.status}. It must be locked before verification.`,'err'); render(); return; }
+      const d=loadBomDraft(batch);
+      let items={}, remarks='';
+      if(d&&d.model===bm.model&&d.items){
+        const n=Object.keys(d.items).length;
+        if(confirm(`A saved draft exists for this batch (${n} parts checked, saved ${new Date(d.savedAt).toLocaleString()}).\n\nResume it? (Cancel = start fresh)`)){ items=d.items; remarks=d.remarks||''; }
+        else clearBomDraft(batch);
+      }
+      // keep only parts that are still in the BOM
+      const valid={}; r.parts.forEach(p=>{ if(items[p.partNo]) valid[p.partNo]=items[p.partNo]; });
+      activeBom={batch, model:bm.model, control:r.control||{}, parts:r.parts, items:valid, remarks, filter:'all', q:''};
+      bomResult=null; render(); window.scrollTo(0,0);
+    };
+  });
+  document.querySelectorAll('.bomViewBtn').forEach(b=>{
+    b.onclick=async()=>{
+      const batch=b.getAttribute('data-batch'), ver=b.getAttribute('data-ver');
+      if(bomResult&&bomResult.batch===batch){ bomResult=null; render(); return; }
+      bomResult={batch,loading:true}; render();
+      const r=await api('getBomVerification',{verId:ver});
+      bomResult=r.ok?{batch,data:r}:{batch,error:r.error||'Could not load the verification'};
+      render();
+    };
+  });
+  document.querySelectorAll('.bomViewClose').forEach(b=>{ b.onclick=()=>{ bomResult=null; render(); }; });
+  document.querySelectorAll('.bomStageBtn').forEach(b=>{
+    b.onclick=async()=>{
+      const batch=b.getAttribute('data-batch'), st=b.getAttribute('data-st');
+      const msg=st==='Waived'?`Waive BOM verification for ${batch}?\n\nSampling will be allowed without a BOM check.`:`Require BOM verification for ${batch}?\n\nSampling of its open lots will be locked until BOM verification passes.`;
+      if(!confirm(msg)) return;
+      const r=await api('setBatchStage',{batchName:batch,bomStatus:st,by:user.username});
+      if(r.ok){ toast(st==='Waived'?'BOM verification waived':'BOM verification required'); await loadBatches(); render(); }
+      else toast(r.error||'Could not change the batch','err');
+    };
+  });
+  // BOM verification screen
+  const bbk=document.getElementById('btnBomBack');
+  if(bbk) bbk.onclick=()=>{ saveBomDraft(); toast('Draft saved, resume anytime from the batch'); activeBom=null; render(); };
+  document.querySelectorAll('.bomFilter').forEach(b=>{ b.onclick=()=>{ activeBom.filter=b.getAttribute('data-k'); render(); }; });
+  const bq=document.getElementById('bomQ');
+  if(bq) bq.oninput=()=>{ const pos=bq.selectionStart; activeBom.q=bq.value; render(); const n=document.getElementById('bomQ'); if(n){ n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} } };
+  document.querySelectorAll('.bomMark').forEach(b=>{
+    b.onclick=()=>{
+      const pn=b.getAttribute('data-pn'), st=b.getAttribute('data-st'), p=activeBom.parts.find(x=>x.partNo===pn);
+      const cur=activeBom.items[pn]||{};
+      if(cur.state===st){ delete activeBom.items[pn]; }
+      else if(st==='match'){ activeBom.items[pn]={state:'match',lotPartNo:p.partNo,lotQps:p.qps,remark:''}; }
+      else { activeBom.items[pn]={state:'diff',lotPartNo:cur.state==='diff'?cur.lotPartNo:'',lotQps:cur.state==='diff'?cur.lotQps:p.qps,remark:cur.remark||''}; }
+      saveBomDraft(); render();
+      if(st==='diff'&&activeBom.items[pn]) document.querySelector(`.bomF[data-pn="${CSS.escape(pn)}"][data-f="lotPartNo"]`)?.focus();
+    };
+  });
+  document.querySelectorAll('.bomF').forEach(el=>{
+    el.oninput=()=>{ const it=activeBom.items[el.getAttribute('data-pn')]; if(it){ it[el.getAttribute('data-f')]=el.value; saveBomDraft(); updateBomFooter(); } };
+  });
+  const bam=document.getElementById('bomAllMatch');
+  if(bam) bam.onclick=()=>{
+    const todo=activeBom.parts.filter(p=>!activeBom.items[p.partNo]);
+    if(!confirm(`Mark ${todo.length} unchecked part${todo.length===1?'':'s'} as matching the BOM?\n\nOnly do this after you have physically checked them.`)) return;
+    todo.forEach(p=>{ activeBom.items[p.partNo]={state:'match',lotPartNo:p.partNo,lotQps:p.qps,remark:''}; });
+    saveBomDraft(); render();
+  };
+  updateBomFooter();
+  const brm=document.getElementById('bomRemarks');
+  if(brm) brm.oninput=()=>{ activeBom.remarks=brm.value; saveBomDraft(); };
+  const bsb=document.getElementById('btnBomSubmit');
+  if(bsb) bsb.onclick=async()=>{
+    const c=bomCounts();
+    if(!confirm(c.diff?`Submit BOM verification with ${c.diff} deviation${c.diff===1?'':'s'}?\n\nThe batch will be marked as failed and sampling stays on hold.`:`Submit BOM verification for ${activeBom.batch}?\n\nAll ${c.total} parts matched. Sampling will be unlocked.`)) return;
+    activeBom.saving=true; render();
+    const items=activeBom.parts.map(p=>{ const it=activeBom.items[p.partNo]; return {partNo:p.partNo,lotPartNo:it.lotPartNo,lotQps:it.lotQps,remark:it.remark||''}; });
+    const r=await api('submitBomVerification',{batchName:activeBom.batch,model:activeBom.model,items,by:user.name,remarks:activeBom.remarks||''});
+    if(r.ok){
+      clearBomDraft(activeBom.batch);
+      toast(`${r.verId}: ${r.result}. ${r.status==='Passed'?'Sampling unlocked.':'Sampling on hold.'}`, r.status==='Passed'?'ok':'err');
+      activeBom=null; await loadBatches(); render();
+    } else { activeBom.saving=false; saveBomDraft(); render(); toast(r.error||'Could not save, draft kept','err'); }
+  };
 
   // Lot browser filters + selection
   const fb=document.getElementById('fBatch');
@@ -1301,6 +1595,7 @@ function bindEvents(){
     btn.onclick=()=>{
       const ri=parseInt(btn.getAttribute('data-ri'));
       const lot=batches[ri];
+      if(samplingLocked(lot.batchName)){ toast('Sampling starts after BOM verification passes for this batch','err'); return; }
       const spec=getModel(lot.model);
       if(!spec){ toast(`Model "${lot.model}" has no spec — ask admin to add it`,'err'); return; }
       activeSpec=spec; lotRemarksVal='';
@@ -1605,6 +1900,7 @@ function showSummary(){
 
 window.addEventListener('beforeunload', ()=>{
   if(activeLot && samples.length) saveDraft();
+  if(activeBom) saveBomDraft();
 });
 
 render();
@@ -1615,7 +1911,7 @@ render();
   <header class="hdr">
     <div class="hdr-left">
       <div class="logo"><img src="" alt="Lumio" id="summLogoImg"></div>
-      <div><div class="hdr-title">Inspection summary</div>
+      <div><div class="hdr-title">Sampling summary</div>
         <div class="hdr-sub">IS 2500 level G2, lots of 90, 13 samples each</div>
       </div>
     </div>

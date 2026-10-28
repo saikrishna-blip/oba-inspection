@@ -9,6 +9,16 @@ var SS_ID        = "1WC6WGmwiqqytYobfoM9P4dP1RIptj5Rj17LSYtP_8tI";
 var FIXED_LOT    = 90;
 var FIXED_SAMPLE = 13;
 
+// BOM reference spreadsheet (Lumio_Part_Reference_DB): BOM tabs per model,
+// BOM_CONTROL, BOM_VERIFY_LOG, LOT_BOM_DETAIL
+var BOM_SS_ID    = "11BFVHMfnDGymLNYfBNLp9CRKIAE0X5fLX8qX-R8DeYk";
+var TZ           = "Asia/Kolkata";
+
+// Batches sheet stage columns (1-based)
+var COL_BOM_STATUS = 16;   // "", Pending, Passed, Failed, Waived  ("" = created before the BOM step)
+var COL_BOM_VER    = 17;   // Ver_ID of the verification that set the status
+var COL_FAI_STATUS = 18;   // reserved for FAI inspection
+
 function getSpreadsheet(){
   return SpreadsheetApp.openById(SS_ID);
 }
@@ -64,7 +74,7 @@ function testCreateBatch(){
 
 function doGet(e){
   return ContentService
-    .createTextOutput(JSON.stringify({ok:true, msg:"IS2500 OBA API running", version:"v3"}))
+    .createTextOutput(JSON.stringify({ok:true, msg:"LUMIO Quality Management - Projector API running", version:"v5"}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -129,6 +139,21 @@ function doPost(e){
     if(action === "approveSerial"){
       result = approveSerial(data);
     }
+    if(action === "getBomList"){
+      result = getBomList();
+    }
+    if(action === "getBom"){
+      result = getBom(data);
+    }
+    if(action === "submitBomVerification"){
+      result = submitBomVerification(data);
+    }
+    if(action === "getBomVerification"){
+      result = getBomVerification(data);
+    }
+    if(action === "setBatchStage"){
+      result = setBatchStage(data);
+    }
 
     return ContentService
       .createTextOutput(JSON.stringify(result))
@@ -181,7 +206,10 @@ function getBatches(){
       model         : String(r[11]||""),
       prodMonthCode : rawPM,
       fgPassQty     : isNaN(Number(r[13])) ? 0 : Number(r[13]),
-      prodMonthCode2: rawPM2
+      prodMonthCode2: rawPM2,
+      bomStatus     : String(r[COL_BOM_STATUS-1]||""),
+      bomVerId      : String(r[COL_BOM_VER-1]||""),
+      faiStatus     : String(r[COL_FAI_STATUS-1]||"")
     });
   }
   return {ok:true, batches:out};
@@ -205,6 +233,7 @@ function createBatch(d){
   var remainder = batchQty % FIXED_LOT;
   var total     = fullLots + (remainder > 0 ? 1 : 0);
   var sheet     = getOrCreateSheet("Batches",[]);
+  ensureStageHeaders_(sheet);
   var now       = new Date();
 
   for(var i = 1; i <= fullLots; i++){
@@ -212,7 +241,7 @@ function createBatch(d){
       batchName,
       batchName + " Lot " + i,
       FIXED_LOT, FIXED_SAMPLE, bdMax, "Open", by, now, "",
-      batchQty, total, model, "'" + pm, "", "'" + pm2
+      batchQty, total, model, "'" + pm, "", "'" + pm2, "Pending", "", ""
     ]);
   }
 
@@ -221,7 +250,7 @@ function createBatch(d){
       batchName,
       batchName + " Lot " + (fullLots + 1),
       remainder, FIXED_SAMPLE, bdMax, "Open", by, now, "",
-      batchQty, total, model, "'" + pm, "", "'" + pm2
+      batchQty, total, model, "'" + pm, "", "'" + pm2, "Pending", "", ""
     ]);
   }
 
@@ -285,6 +314,14 @@ function submitLot(d){
        String(bRows[i][5])==='Closed'){
       return {ok:false, error:'This lot is already submitted and closed. Duplicate submission blocked.'};
     }
+  }
+  // Flow gate: sampling needs BOM verification passed (or waived) for batches created with the flow
+  for(var g=1; g<bRows.length; g++){
+    if(String(bRows[g][0]) !== String(d.batchName)) continue;
+    var bs = String(bRows[g][COL_BOM_STATUS-1]||"");
+    if(bs === "Pending" || bs === "Failed")
+      return {ok:false, error:"BOM verification for " + d.batchName + " is " + (bs === "Pending" ? "not done yet" : "failed") + ". Sampling can start after BOM verification passes."};
+    break;
   }
 
   var master = getOrCreateSheet("Master",[]);
@@ -698,4 +735,218 @@ function searchRecords(d){
   scan(getOrCreateSheet("Master",[]), "Active");
   scan(getSpreadsheet().getSheetByName("Duplicates"), "Removed duplicate");
   return {ok:true, records: out, truncated: out.length >= 300};
+}
+
+/****************************************************
+ * BATCH FLOW: 1 BOM verification  ->  2 FAI (later)  ->  3 Sampling
+ * BOM data lives in the BOM reference spreadsheet (BOM_SS_ID).
+ * Each verification is written to BOM_VERIFY_LOG + LOT_BOM_DETAIL there,
+ * in the same format as earlier verifications.
+ ****************************************************/
+function ensureStageHeaders_(sheet){
+  var h = sheet.getRange(1, COL_BOM_STATUS, 1, 3).getValues()[0];
+  if(h[0] === "") sheet.getRange(1, COL_BOM_STATUS).setValue("BOMStatus");
+  if(h[1] === "") sheet.getRange(1, COL_BOM_VER).setValue("BOMVerId");
+  if(h[2] === "") sheet.getRange(1, COL_FAI_STATUS).setValue("FAIStatus");
+}
+function bomSS_(){ return SpreadsheetApp.openById(BOM_SS_ID); }
+function headerIndex_(row){
+  var m = {};
+  row.forEach(function(h, i){ m[String(h).trim().toLowerCase()] = i; });
+  return m;
+}
+function bomControl_(ss){
+  var sh = ss.getSheetByName("BOM_CONTROL");
+  var out = {};
+  if(!sh) return out;
+  var v = sh.getDataRange().getValues();
+  var h = headerIndex_(v[0]);
+  for(var i = 1; i < v.length; i++){
+    var m = String(v[i][h["model"]]||"").trim();
+    if(!m) continue;
+    out[m] = {model:m, status:String(v[i][h["status"]]||""), rev:String(v[i][h["rev"]]),
+              lockedBy:String(v[i][h["locked_by"]]||""),
+              lockedOn: v[i][h["locked_on"]] instanceof Date ? v[i][h["locked_on"]].toISOString() : String(v[i][h["locked_on"]]||""),
+              lastEcn:String(v[i][h["last_ecn"]]||"")};
+  }
+  return out;
+}
+
+function getBomList(){
+  try{
+    var ss = bomSS_();
+    var ctl = bomControl_(ss);
+    var models = Object.keys(ctl).map(function(k){
+      var c = ctl[k];
+      var tab = ss.getSheetByName(k);
+      c.hasTab = !!tab;
+      c.parts = tab ? Math.max(tab.getLastRow() - 1, 0) : 0;
+      return c;
+    });
+    return {ok:true, models:models};
+  }catch(e){
+    return {ok:false, error:"Cannot open the BOM sheet: " + e.message};
+  }
+}
+
+function readBom_(ss, model){
+  var tab = ss.getSheetByName(model);
+  if(!tab) return null;
+  var v = tab.getDataRange().getValues();
+  var h = headerIndex_(v[0]);
+  var parts = [];
+  for(var i = 1; i < v.length; i++){
+    var pn = String(v[i][h["part_no"]]||"").trim();
+    if(!pn) continue;
+    var altRaw = h["alternate part"] !== undefined ? String(v[i][h["alternate part"]]||"") : "";
+    parts.push({
+      partNo: pn,
+      description: String(v[i][h["part_description"]]||""),
+      imageUrl: String(v[i][h["image_url"]]||""),
+      alternates: altRaw.split(/[,;\/\n]+/).map(function(x){ return x.trim(); }).filter(String),
+      supplier: String(v[i][h["supplier"]]||""),
+      uom: String(v[i][h["uom"]]||""),
+      qps: Number(v[i][h["qps"]])
+    });
+  }
+  return parts;
+}
+
+function getBom(d){
+  var model = String(d.model||"").trim();
+  if(!model) return {ok:false, error:"No BOM model given. Set the Lumio model number for this model."};
+  try{
+    var ss = bomSS_();
+    var parts = readBom_(ss, model);
+    if(!parts) return {ok:false, error:"No BOM tab named \"" + model + "\" in the BOM sheet."};
+    var ctl = bomControl_(ss)[model] || {model:model, status:"", rev:""};
+    return {ok:true, model:model, control:ctl, parts:parts};
+  }catch(e){
+    return {ok:false, error:"Cannot open the BOM sheet: " + e.message};
+  }
+}
+
+function nextVerId_(log){
+  var v = log.getDataRange().getValues(), max = 0;
+  for(var i = 1; i < v.length; i++){
+    var m = String(v[i][0]||"").match(/(\d+)\s*$/);
+    if(m) max = Math.max(max, Number(m[1]));
+  }
+  return "VER-" + ("0000" + (max + 1)).slice(-4);
+}
+
+function setBomStatus_(batchName, status, verId){
+  var sh = getOrCreateSheet("Batches",[]);
+  ensureStageHeaders_(sh);
+  var v = sh.getDataRange().getValues();
+  var n = 0;
+  for(var i = 1; i < v.length; i++){
+    if(String(v[i][0]) !== String(batchName)) continue;
+    sh.getRange(i+1, COL_BOM_STATUS, 1, 2).setValues([[status, verId||""]]);
+    n++;
+  }
+  return n;
+}
+
+function submitBomVerification(d){
+  var batchName = String(d.batchName||"").trim();
+  var model = String(d.model||"").trim();
+  var items = d.items || [];
+  if(!batchName || !model) return {ok:false, error:"Batch and BOM model are required"};
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try{
+    // batch must exist and still need BOM verification
+    var bv = getOrCreateSheet("Batches",[]).getDataRange().getValues(), cur = null;
+    for(var b = 1; b < bv.length; b++){ if(String(bv[b][0]) === batchName){ cur = String(bv[b][COL_BOM_STATUS-1]||""); break; } }
+    if(cur === null) return {ok:false, error:"Batch " + batchName + " not found"};
+    if(cur === "Passed") return {ok:false, error:"BOM verification for this batch has already passed."};
+
+    var ss = bomSS_();
+    var parts = readBom_(ss, model);
+    if(!parts) return {ok:false, error:"No BOM tab named \"" + model + "\" in the BOM sheet."};
+    var ctl = bomControl_(ss)[model] || {status:"", rev:""};
+    if(ctl.status && ctl.status.toLowerCase() !== "locked")
+      return {ok:false, error:"The BOM for " + model + " is " + ctl.status + " (being changed). Lock it before verifying."};
+
+    var byPart = {};
+    items.forEach(function(it){ byPart[String(it.partNo||"").trim()] = it; });
+    var missing = parts.filter(function(p){ return !byPart[p.partNo]; });
+    if(missing.length) return {ok:false, error:missing.length + " BOM parts were not checked (BOM may have changed). Reload the BOM and check again."};
+
+    var rows = [], dev = 0;
+    parts.forEach(function(p){
+      var it = byPart[p.partNo];
+      var lotPn = String(it.lotPartNo||"").trim();
+      var lotQ = Number(it.lotQps);
+      var okPn = lotPn === p.partNo || p.alternates.indexOf(lotPn) > -1;
+      var okQ = !isNaN(lotQ) && Math.abs(lotQ - p.qps) < 1e-9;
+      var res = okPn && okQ ? "Matched" : "Deviation";
+      if(res === "Deviation"){
+        dev++;
+        if(!String(it.remark||"").trim()) throw new Error("Remark is required for deviation on " + p.partNo);
+      }
+      rows.push({p:p, lotPn:lotPn, lotQ:isNaN(lotQ) ? "" : lotQ, remark:String(it.remark||""), res:res});
+    });
+
+    var log = ss.getSheetByName("BOM_VERIFY_LOG");
+    var det = ss.getSheetByName("LOT_BOM_DETAIL");
+    if(!log || !det) return {ok:false, error:"BOM_VERIFY_LOG or LOT_BOM_DETAIL tab missing in the BOM sheet"};
+    var verId = nextVerId_(log);
+    var when = Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd HH:mm:ss");
+    var result = dev === 0 ? "All matched" : (dev + " deviation" + (dev === 1 ? "" : "s"));
+    log.appendRow([verId, when, model, batchName, ctl.rev, ctl.status, parts.length, dev, result,
+                   String(d.by||""), String(d.remarks||"")]);
+    var detail = rows.map(function(r){
+      return [verId, model, batchName, ctl.rev, r.p.partNo, r.p.description, r.p.imageUrl, r.p.qps,
+              r.lotPn, r.lotQ, r.remark, r.res];
+    });
+    det.getRange(det.getLastRow()+1, 1, detail.length, detail[0].length).setValues(detail);
+
+    var status = dev === 0 ? "Passed" : "Failed";
+    setBomStatus_(batchName, status, verId);
+    return {ok:true, verId:verId, status:status, partsChecked:parts.length, deviations:dev, result:result};
+  }catch(e){
+    return {ok:false, error:String(e.message||e)};
+  }finally{
+    lock.releaseLock();
+  }
+}
+
+function getBomVerification(d){
+  try{
+    var ss = bomSS_();
+    var log = ss.getSheetByName("BOM_VERIFY_LOG"), det = ss.getSheetByName("LOT_BOM_DETAIL");
+    if(!log || !det) return {ok:false, error:"Verification tabs missing in the BOM sheet"};
+    var want = String(d.verId||""), batch = String(d.batchName||"");
+    var lv = log.getDataRange().getValues(), head = null;
+    for(var i = lv.length - 1; i >= 1; i--){
+      if((want && String(lv[i][0]) === want) || (!want && batch && String(lv[i][3]) === batch)){
+        head = {verId:String(lv[i][0]), time: lv[i][1] instanceof Date ? Utilities.formatDate(lv[i][1], TZ, "yyyy-MM-dd HH:mm:ss") : String(lv[i][1]),
+                model:String(lv[i][2]), lot:String(lv[i][3]), rev:String(lv[i][4]), bomStatus:String(lv[i][5]),
+                partsChecked:Number(lv[i][6]), deviations:Number(lv[i][7]), result:String(lv[i][8]),
+                by:String(lv[i][9]), remarks:String(lv[i][10]||"")};
+        break;
+      }
+    }
+    if(!head) return {ok:true, found:false};
+    var dv = det.getDataRange().getValues(), items = [];
+    for(var j = 1; j < dv.length; j++){
+      if(String(dv[j][0]) !== head.verId) continue;
+      items.push({partNo:String(dv[j][4]), description:String(dv[j][5]), imageUrl:String(dv[j][6]),
+                  bomQps:dv[j][7], lotPartNo:String(dv[j][8]), lotQps:dv[j][9], remark:String(dv[j][10]||""), result:String(dv[j][11])});
+    }
+    return {ok:true, found:true, verification:head, items:items};
+  }catch(e){
+    return {ok:false, error:"Cannot open the BOM sheet: " + e.message};
+  }
+}
+
+/* Admin: change a batch's BOM step (Waived = not required, Pending = require verification) */
+function setBatchStage(d){
+  var st = String(d.bomStatus||"");
+  if(["Waived","Pending"].indexOf(st) === -1) return {ok:false, error:"Unsupported status"};
+  var n = setBomStatus_(String(d.batchName||""), st, st === "Waived" ? ("Waived by " + String(d.by||"admin")) : "");
+  return n ? {ok:true, lots:n} : {ok:false, error:"Batch not found"};
 }
