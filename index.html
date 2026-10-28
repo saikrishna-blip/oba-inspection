@@ -160,16 +160,10 @@ let samples = [];         // array of sample state objects
 let expandedSample = null; // index of sample with expanded BD/remark panel open
 let toastTimer = null;
 
-const MODEL_CODE = {
-  LH1G:    '1217',
-  LH3G:    '1218',
-  LH3G_NEW:'1213'
-};
-const ALL_MODELS = [
-  {key:'LH1G',     code:'1217', label:'LH1G  (Code: 1217)'},
-  {key:'LH3G',     code:'1218', label:'LH3G  (Code: 1218)'},
-  {key:'LH3G_NEW', code:'1213', label:'LH3G New  (Code: 1213)'},
-];
+let models = [];            // loaded from backend "Models" sheet — managed by admin
+let activeSpec = null;      // Black Dot spec of the model being inspected
+let editingModel = null;    // name of model being edited in admin panel
+let lotRemarksVal = '';     // lot remarks kept across re-renders
 const LOT_SIZE   = 90;
 const SAMPLE_N   = 13;
 
@@ -197,7 +191,7 @@ function saveDraft(){
   try{
     localStorage.setItem(draftKey(activeLot), JSON.stringify({
       lot:activeLot, samples:samples,
-      lotRemarks:document.getElementById('lotRemarks')?.value||'',
+      lotRemarks:lotRemarksVal,
       savedAt:new Date().toISOString()
     }));
   }catch(e){ /* storage full or blocked - ignore */ }
@@ -252,6 +246,34 @@ async function api(action,data={}){
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// MODELS (all model data comes from backend — nothing hardcoded)
+// ═══════════════════════════════════════════════════════════
+function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function getModel(name){ return models.find(m=>m.name===name)||null; }
+function normModel(m){
+  return {
+    name:String(m.name||'').trim(),
+    code:String(m.code||'').trim().padStart(4,'0'),
+    maxD:Number(m.maxD), smallD:Number(m.smallD),
+    maxN:Number(m.maxN), minDS:Number(m.minDS),
+    nA:Number(m.nA), nB:Number(m.nB), nAB:Number(m.nAB)
+  };
+}
+function specText(m){
+  if(!m) return 'No spec';
+  return `Not visible @2m → OK | D>${m.maxD}mm → FAIL | N>${m.maxN} → FAIL | DS<${m.minDS}mm (when N>1) → FAIL | D≤${m.smallD}mm → OK | ${m.smallD}<D≤${m.maxD}mm → Area A N≤${m.nA} / Area B N≤${m.nB} / A+B N≤${m.nAB}`;
+}
+function modelOptions(selected){
+  return models.map(m=>`<option value="${esc(m.name)}" ${m.name===selected?'selected':''}>${esc(m.name)}  (Code: ${esc(m.code)})</option>`).join('');
+}
+async function loadModels(){
+  const r=await api('getModels');
+  if(r.ok) models=(r.models||[]).map(normModel).filter(m=>m.name);
+  else console.warn('getModels failed:',r.error);
+}
+async function loadAll(){ await Promise.all([loadBatches(),loadModels()]); }
+
 async function loadBatches(){
   let r=await api('getBatches');
   if(!r.ok && (r.error||'').toLowerCase().includes('unknown')){
@@ -263,7 +285,7 @@ async function loadBatches(){
         lotNumber:k.lotNumber||'',
         lotSize:Number(k.lotSize)||90,
         sampleSize:Number(k.sampleSize)||13,
-        bdMax:Number(k.bdMax)||2.4,
+        bdMax:Number(k.bdMax)||0,
         status:k.status||'Open',
         createdBy:k.createdBy||'',
         createdAt:k.createdAt||'',
@@ -315,10 +337,10 @@ function validateSerial(serial,model,prodMonthCode,batchUsed,prodMonthCode2){
   const s=(serial||'').trim().toUpperCase();
   if(!/^\d{15}$/.test(s)) return 'Must be exactly 15 digits';
   // Model code: first 4 digits
-  const exp=MODEL_CODE[model]||'';
-  if(exp && s.substring(0,4)!==exp){
-    const modelLabel=(ALL_MODELS.find(m=>m.key===model)||{}).label||model;
-    return `Model code must be ${exp} for ${modelLabel} — got ${s.substring(0,4)}`;
+  const md=getModel(model);
+  if(!md) return `Model "${model}" not found in model list — ask admin to add it`;
+  if(s.substring(0,4)!==md.code){
+    return `Model code must be ${md.code} for ${model} — got ${s.substring(0,4)}`;
   }
   // Month codes: digits 5-8 (MMYY)
   let pmc=String(prodMonthCode||'').trim(); if(pmc.length===3) pmc='0'+pmc;
@@ -338,22 +360,28 @@ function validateSerial(serial,model,prodMonthCode,batchUsed,prodMonthCode2){
 }
 
 // ═══════════════════════════════════════════════════════════
-// BLACK DOT LOGIC (per IS2500 standard)
+// BLACK DOT LOGIC — limits come from the model's spec (admin-defined)
 // ═══════════════════════════════════════════════════════════
-function evalBD(s){
+function evalBD(s,spec){
+  spec=spec||activeSpec;
   if(s.bdNoDot) return {ok:true,reason:'No Black Dot — Acceptable'};
   if(!s.bdVisible) return {ok:true,reason:'Not visible at 2m — Acceptable (any quantity)'};
-  const D=parseFloat(s.bdD)||0, N=parseInt(s.bdN)||0, DS=parseFloat(s.bdDS)||0;
-  if(D>2.4) return {ok:false,reason:`D=${D}mm > 2.4mm — FAIL (Major)`};
-  if(N>3)   return {ok:false,reason:`N=${N} > 3 — FAIL`};
-  if(DS<15) return {ok:false,reason:`DS=${DS}mm < 15mm — FAIL`};
-  if(D<=1.28) return {ok:true,reason:`D=${D}mm ≤ 1.28mm, N=${N}, DS=${DS}mm — OK`};
-  // 1.28 < D <= 2.4: area rules
+  if(!spec) return {ok:false,reason:'No Black Dot spec for this model — ask admin'};
+  const D=parseFloat(s.bdD), N=parseInt(s.bdN), DS=parseFloat(s.bdDS);
+  // Incomplete entry → sample stays PENDING (not a false FAIL)
+  if(!(D>0))  return {ok:false,incomplete:true,reason:'Enter D (mm)'};
+  if(!(N>=1)) return {ok:false,incomplete:true,reason:'Enter N (spots)'};
+  if(N>1 && !(DS>=0) ) return {ok:false,incomplete:true,reason:'Enter DS (mm) — needed when N>1'};
+  if(D>spec.maxD) return {ok:false,reason:`D=${D}mm > ${spec.maxD}mm — FAIL`};
+  if(N>spec.maxN) return {ok:false,reason:`N=${N} > ${spec.maxN} — FAIL`};
+  if(N>1 && DS<spec.minDS) return {ok:false,reason:`DS=${DS}mm < ${spec.minDS}mm — FAIL`};
+  const dsTxt=N>1?`, DS=${DS}mm`:'';
+  if(D<=spec.smallD) return {ok:true,reason:`D=${D}mm ≤ ${spec.smallD}mm, N=${N}${dsTxt} — OK`};
+  // smallD < D <= maxD : area rules
   const area=s.bdArea||'A';
-  if(area==='A'){ if(N<=1) return {ok:true,reason:`D=${D}mm in Area A, N=${N}≤1 — OK`}; return {ok:false,reason:`Area A: N=${N}>1 — FAIL`}; }
-  if(area==='B'){ if(N<=3) return {ok:true,reason:`D=${D}mm in Area B, N=${N}≤3 — OK`}; return {ok:false,reason:`Area B: N=${N}>3 — FAIL`}; }
-  if(N<=3) return {ok:true,reason:`D=${D}mm in Area A+B, N=${N}≤3 — OK`};
-  return {ok:false,reason:`Area A+B: N=${N}>3 — FAIL`};
+  const lim=area==='A'?spec.nA:area==='B'?spec.nB:spec.nAB;
+  if(N<=lim) return {ok:true,reason:`D=${D}mm in Area ${area}, N=${N}≤${lim}${dsTxt} — OK`};
+  return {ok:false,reason:`Area ${area}: N=${N}>${lim} — FAIL`};
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -362,6 +390,7 @@ function evalBD(s){
 function sampleResult(s){
   if(!s.serial||s.serialError) return 'PENDING';
   const bd=evalBD(s);
+  if(bd.incomplete) return 'PENDING';
   const major=!s.generalPass||!s.funcPass||!s.screenPass||!bd.ok;
   const minor=!s.aestheticPass;
   if(major) return 'FAIL-MAJOR';
@@ -471,7 +500,7 @@ function buildDashboard(){
   <!-- INFO BANNER -->
   <div class="info-banner">
     <b>IS 2500 Standard:</b> Lot = 90 units | Sample = 13 units | Minor (Aesthetic): ≤1 defect → LOT PASS | Major (General / Functional / Screen / Black Dot): 0 allowed → any 1 = LOT FAIL<br>
-    <b>Black Dot:</b> Not visible @2m → OK | Visible @2m: D≤1.28mm N≤3 DS≥15mm → OK | 1.28<D≤2.4mm → Area A(N≤1) / Area B(N≤3) / A+B(N≤3) | D>2.4mm → FAIL
+    ${models.length?models.map(m=>`<b>Black Dot — ${esc(m.name)}:</b> ${specText(m)}`).join('<br>'):'<b>Black Dot:</b> No models defined yet'+(isAdmin?' — add one in "Models &amp; Black Dot Spec" below.':' — ask admin.')}
   </div>`;
 
   // ADMIN PANELS
@@ -480,14 +509,10 @@ function buildDashboard(){
     <!-- CREATE BATCH -->
     <div class="card">
       <div class="card-title">Create New Batch</div>
-      <div class="fg"><label class="lbl">Batch Name</label><input id="bName" class="field" type="text" placeholder="e.g. LH1G-JUN-2026"></div>
+      <div class="fg"><label class="lbl">Batch Name</label><input id="bName" class="field" type="text" placeholder="e.g. MODEL-JUN-2026"></div>
       <div class="fg"><label class="lbl">Batch Quantity (total units)</label><input id="bQty" class="field" type="number" placeholder="e.g. 2000" min="1"></div>
       <div class="fg"><label class="lbl">Model</label>
-        <select id="bModel" class="field">
-          <option value="LH1G">LH1G  (Code: 1217)</option>
-          <option value="LH3G">LH3G  (Code: 1218)</option>
-          <option value="LH3G_NEW">LH3G New  (Code: 1213)</option>
-        </select></div>
+        ${models.length?`<select id="bModel" class="field">${modelOptions('')}</select>`:`<div class="err">No models yet — add one in "Models &amp; Black Dot Spec" first.</div><input type="hidden" id="bModel" value="">`}</div>
       <div class="fg"><label class="lbl">Production Month 1</label><input id="bMonth" class="field" type="month"></div>
       <div class="fg"><label class="lbl">Production Month 2 <span style="color:#475569;font-weight:400">(optional)</span></label><input id="bMonth2" class="field" type="month"></div>
       <button id="btnCreateBatch" class="btn btn-primary btn-full">Create Batch</button>
@@ -515,6 +540,7 @@ function buildDashboard(){
       <button id="btnSummary" class="btn btn-ghost btn-full" style="margin-top:8px">📊 View Summary</button>
     </div>
     </div>`;
+    html+=buildModelsPanel();
   }
 
   // BATCH LIST
@@ -553,7 +579,7 @@ function buildDashboard(){
         html+=`<div class="lot-row">
           <div>
             <div class="lot-name">${lot.lotNumber}</div>
-            <div class="lot-meta">Lot Size: ${lot.lotSize} | Sample: ${lot.sampleSize} | BD Limit: >${lot.bdMax}mm = Fail</div>
+            <div class="lot-meta">Lot Size: ${lot.lotSize} | Sample: ${lot.sampleSize} | Model: ${esc(lot.model||'-')}${getModel(lot.model)?'':' <span class="text-fail">(not in model list)</span>'}</div>
           </div>
           <div class="lot-actions">
             <span class="badge ${lot.status==='Open'?'badge-open':'badge-closed'}">${lot.status}</span>
@@ -576,6 +602,56 @@ function buildDashboard(){
   return html;
 }
 
+// ─── MODELS PANEL (admin) ─────────────────────────────────
+function buildModelsPanel(){
+  const em=editingModel?getModel(editingModel):null;
+  const v=k=>em?esc(em[k]):'';
+  const nf=(id,label,ph,step,hint)=>`<div><label class="lbl">${label}</label><input id="${id}" class="field mono" type="number" step="${step}" min="0" value="${v(id.slice(2))}" placeholder="${ph}"><div class="text-muted" style="font-size:9px;margin-top:3px">${hint}</div></div>`;
+  let rows=models.map(m=>`<tr style="border-bottom:1px solid #1e293b">
+      <td style="padding:7px 10px;color:#e2e8f0;font-weight:700">${esc(m.name)}</td>
+      <td style="padding:7px 10px">${esc(m.code)}</td>
+      <td style="padding:7px 10px;text-align:center">${m.maxD}</td>
+      <td style="padding:7px 10px;text-align:center">${m.smallD}</td>
+      <td style="padding:7px 10px;text-align:center">${m.maxN}</td>
+      <td style="padding:7px 10px;text-align:center">${m.minDS}</td>
+      <td style="padding:7px 10px;text-align:center">${m.nA} / ${m.nB} / ${m.nAB}</td>
+      <td style="padding:7px 10px;text-align:right;white-space:nowrap">
+        <button class="btn btn-ghost btn-sm editModelBtn" data-name="${esc(m.name)}">Edit</button>
+        <button class="btn btn-danger btn-sm delModelBtn" data-name="${esc(m.name)}" style="padding:4px 8px">🗑</button>
+      </td></tr>`).join('');
+  if(!rows) rows=`<tr><td colspan="8" style="padding:14px;text-align:center;color:#475569">No models yet. Add your first model below.</td></tr>`;
+  return `<div class="card">
+    <div class="card-title">Models &amp; Black Dot Spec</div>
+    <div style="overflow-x:auto;margin-bottom:16px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:monospace;color:#94a3b8">
+        <thead><tr style="background:#060c18;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#64748b">
+          <th style="padding:7px 10px;text-align:left">Model</th><th style="padding:7px 10px;text-align:left">Serial Code</th>
+          <th style="padding:7px 10px">Fail if D &gt; (mm)</th><th style="padding:7px 10px">OK if D ≤ (mm)</th>
+          <th style="padding:7px 10px">Max N</th><th style="padding:7px 10px">Min DS (mm)</th>
+          <th style="padding:7px 10px">N limit A / B / A+B</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="font-size:11px;font-weight:800;color:#a5b4fc;margin-bottom:10px">${em?'Editing: '+esc(em.name):'Add New Model'}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px">
+      <div><label class="lbl">Model Name</label><input id="m_name" class="field" type="text" value="${v('name')}" placeholder="e.g. LH1G"><div class="text-muted" style="font-size:9px;margin-top:3px">Shown everywhere</div></div>
+      <div><label class="lbl">Serial Code (4 digits)</label><input id="m_code" class="field mono" type="text" maxlength="4" value="${v('code')}" placeholder="e.g. 1217"><div class="text-muted" style="font-size:9px;margin-top:3px">First 4 digits of serial</div></div>
+      ${nf('m_maxD','Fail if D &gt; (mm)','e.g. 2.4','0.01','Any dot bigger = FAIL')}
+      ${nf('m_smallD','OK if D ≤ (mm)','e.g. 1.28','0.01','Small dot, no area check')}
+      ${nf('m_maxN','Max N (spots)','e.g. 3','1','More spots = FAIL')}
+      ${nf('m_minDS','Min DS (mm)','e.g. 15','0.1','Spot spacing, when N&gt;1')}
+      ${nf('m_nA','Area A — max N','e.g. 1','1','For mid-size dots')}
+      ${nf('m_nB','Area B — max N','e.g. 3','1','For mid-size dots')}
+      ${nf('m_nAB','Area A+B — max N','e.g. 3','1','For mid-size dots')}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button id="btnSaveModel" class="btn btn-primary">${em?'Save Changes':'Add Model'}</button>
+      ${em?'<button id="btnCancelModel" class="btn btn-ghost">Cancel</button>':''}
+    </div>
+    <div class="text-muted" style="margin-top:10px;font-size:10px;line-height:1.6">Black Dot rule order: not visible @2m → OK · D &gt; Fail limit → FAIL · N &gt; Max N → FAIL · DS &lt; Min DS (only when N&gt;1) → FAIL · D ≤ OK limit → OK · otherwise the Area limit decides. Changes apply to inspections immediately.</div>
+  </div>`;
+}
+
 // ─── INSPECTION ───────────────────────────────────────────
 function buildInspection(){
   const lot=activeLot;
@@ -587,7 +663,7 @@ function buildInspection(){
     <div class="hdr-left">
       <div class="logo"><img src="data:image/png;base64,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" alt="Lumio"></div>
       <div><div class="hdr-title mono">${lot.batchName} — ${lot.lotNumber}</div>
-        <div class="hdr-sub">LOT SIZE: ${lot.lotSize} | SAMPLE: ${lot.sampleSize} | MODEL: ${lot.model} (${MODEL_CODE[lot.model]||lot.model}) | PROD: ${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' / '+mmyyDisp(lot.prodMonthCode2):''} | BD LIMIT: ≤${lot.bdMax}mm</div>
+        <div class="hdr-sub">LOT SIZE: ${lot.lotSize} | SAMPLE: ${lot.sampleSize} | MODEL: ${esc(lot.model)} (${activeSpec?activeSpec.code:'?'}) | PROD: ${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' / '+mmyyDisp(lot.prodMonthCode2):''} | BD: ${activeSpec?'OK ≤'+activeSpec.smallD+'mm · FAIL >'+activeSpec.maxD+'mm':'NO SPEC'}</div>
       </div>
     </div>
     <div class="hdr-right">
@@ -626,13 +702,13 @@ function buildInspection(){
     const isExpanded=expandedSample===i;
     const hasBDIssue=!s.bdNoDot;
     const bdBtnCls=s.bdNoDot?'':(bd.ok?'bd-active-ok':'bd-active-fail');
-    const bdBtnLabel=s.bdNoDot?'No BD':(s.bdVisible?(bd.ok?'BD ✓':'BD ✗'):'BD: Set');
+    const bdBtnLabel=s.bdNoDot?'No BD':(s.bdVisible?(bd.incomplete?'BD ?':(bd.ok?'BD ✓':'BD ✗')):'BD: Set');
 
     html+=`<div class="samp-row ${r.startsWith('FAIL')?'is-fail':''}">
       <div class="samp-num-badge">${i+1}</div>
 
       <div class="samp-serial-wrap">
-        <input class="samp-serial-inp sSerial ${s.serialError?'err-field':''}" data-i="${i}" type="text" value="${s.serial}" placeholder="${MODEL_CODE[lot.model]||'????'}${lot.prodMonthCode||'????'}0000001">
+        <input class="samp-serial-inp sSerial ${s.serialError?'err-field':''}" data-i="${i}" type="text" value="${s.serial}" placeholder="${activeSpec?activeSpec.code:'????'}${String(lot.prodMonthCode||'????').padStart(4,'0')}0000001">
         ${s.serialError?`<div class="err" style="margin-top:3px">${s.serialError}</div>`:''}
       </div>
 
@@ -652,6 +728,7 @@ function buildInspection(){
       <div class="samp-expand">
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px">
           <span class="lbl" style="margin-bottom:0">Black Dot Detail</span>
+          <span class="text-muted" style="font-size:9px;font-family:monospace">${esc(specText(activeSpec))}</span>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
             <input type="checkbox" class="sBDNoDot" data-i="${i}" ${s.bdNoDot?'checked':''}> No Black Dot
           </label>
@@ -671,7 +748,7 @@ function buildInspection(){
               <option value="A+B" ${s.bdArea==='A+B'?'selected':''}>Area A+B</option>
             </select></div>
           <div style="display:flex;align-items:flex-end">
-            <div class="bd-result ${bd.ok?'bd-ok':'bd-fail'}">${bd.ok?'✓ OK':'✗ FAIL'}<br>${bd.reason}</div>
+            <div class="bd-result ${bd.ok?'bd-ok':'bd-fail'}" ${bd.incomplete?'style="background:#3f2d05;border-color:#854d0e;color:#fbbf24"':''}>${bd.incomplete?'… INCOMPLETE':(bd.ok?'✓ OK':'✗ FAIL')}<br>${bd.reason}</div>
           </div>
         </div>`:`<div class="text-pass" style="font-size:11px;font-family:monospace">✓ No Black Dot — Acceptable</div>`}
         <input class="samp-remark-inp sRemark" data-i="${i}" type="text" value="${s.remark||''}" placeholder="Optional remark or defect description">
@@ -689,9 +766,9 @@ function buildInspection(){
       <div>Lot verdict: <b class="${passed?'t-ok':'t-fail'}">${passed?'✓ PASS':'✗ FAIL'}</b></div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
-      <input id="lotRemarks" class="field" type="text" style="width:260px" placeholder="General lot remarks (optional)">
+      <input id="lotRemarks" class="field" type="text" style="width:260px" value="${esc(lotRemarksVal)}" placeholder="General lot remarks (optional)">
       <button id="btnSubmitLot" class="btn ${allReady?(passed?'btn-primary':'btn-danger'):''}" ${allReady?'':'disabled'} style="min-width:200px">
-        ${allReady?(passed?'✓ Submit Lot — PASS':'⚠ Submit Lot — FAIL'):`Fill all ${samples.length} serials to submit`}
+        ${allReady?(passed?'✓ Submit Lot — PASS':'⚠ Submit Lot — FAIL'):`Complete all ${samples.length} samples to submit`}
       </button>
     </div>
   </div>
@@ -722,7 +799,7 @@ function bindEvents(){
       if(r.ok){
         user={username:r.username,role:r.role,name:r.name};
         render(); // show dashboard immediately
-        loadBatches().then(()=>render()); // load batches in background
+        loadAll().then(()=>render()); // load batches + models in background
       }
       else{
         err.textContent=r.error||'Login failed';
@@ -745,7 +822,7 @@ function bindEvents(){
 
   // Refresh
   const br=document.getElementById('btnRefresh');
-  if(br) br.onclick=async()=>{ await loadBatches(); render(); toast('Refreshed'); };
+  if(br) br.onclick=async()=>{ await loadAll(); render(); toast('Refreshed'); };
 
   // Create Batch
   const bcb=document.getElementById('btnCreateBatch');
@@ -758,6 +835,7 @@ function bindEvents(){
     const msgEl=document.getElementById('createMsg');
     if(!batchName){ toast('Enter Batch Name','err'); return; }
     if(batchQty<1){ toast('Enter Batch Quantity > 0','err'); return; }
+    if(!getModel(model)){ toast('Add a model first','err'); return; }
     const prodMonthCode=month?mmyy(month):'';
     const prodMonthCode2=month2?mmyy(month2):'';
     msgEl.textContent='Creating lots…'; msgEl.classList.remove('hidden');
@@ -766,7 +844,7 @@ function bindEvents(){
       let r=await api('createBatch',{batchName,batchQty,model,prodMonthCode,prodMonthCode2,createdBy:user.username});
       if(!r.ok && (r.error||'').toLowerCase().includes('unknown')){
         // Old script fallback: createKit
-        r=await api('createKit',{kitName:batchName,kitSize:batchQty,lotSize:90,sampleSize:13,bdMax:2.4,model,prodMonthCode,prodMonthCode2,createdBy:user.username});
+        r=await api('createKit',{kitName:batchName,kitSize:batchQty,lotSize:90,sampleSize:13,bdMax:getModel(model).maxD,model,prodMonthCode,prodMonthCode2,createdBy:user.username});
         if(r.ok) r.batchQty=batchQty;
       }
       if(r.ok){
@@ -798,6 +876,47 @@ function bindEvents(){
     if(r.ok){ toast(`User ${username} added`); document.getElementById('addUserMsg').textContent=`✓ ${username} added as ${role}`; document.getElementById('addUserMsg').classList.remove('hidden'); document.getElementById('uUser').value=''; document.getElementById('uPass').value=''; document.getElementById('uName').value=''; }
     else toast(r.error||'Error','err');
   };
+
+  // Models: save / edit / cancel / delete
+  const bsm=document.getElementById('btnSaveModel');
+  if(bsm) bsm.onclick=async()=>{
+    const g=id=>document.getElementById(id).value.trim();
+    const m={name:g('m_name'),code:g('m_code'),maxD:g('m_maxD'),smallD:g('m_smallD'),maxN:g('m_maxN'),minDS:g('m_minDS'),nA:g('m_nA'),nB:g('m_nB'),nAB:g('m_nAB')};
+    if(!m.name) return toast('Enter model name','err');
+    if(!/^\d{4}$/.test(m.code)) return toast('Serial code must be exactly 4 digits','err');
+    for(const k of ['maxD','smallD','maxN','minDS','nA','nB','nAB']){
+      if(m[k]===''||isNaN(Number(m[k]))||Number(m[k])<0) return toast('Fill all Black Dot fields with numbers ≥ 0','err');
+      m[k]=Number(m[k]);
+    }
+    if(!(m.maxD>0)) return toast('Fail D limit must be > 0','err');
+    if(m.smallD>m.maxD) return toast('"OK if D ≤" cannot be bigger than "Fail if D >"','err');
+    for(const k of ['maxN','nA','nB','nAB']) if(!Number.isInteger(m[k])) return toast('N values must be whole numbers','err');
+    if(m.nA>m.maxN||m.nB>m.maxN||m.nAB>m.maxN) return toast('Area N limits cannot exceed Max N','err');
+    const dupName=models.find(x=>x.name.toLowerCase()===m.name.toLowerCase()&&x.name!==editingModel);
+    if(dupName) return toast('A model with this name already exists','err');
+    const dupCode=models.find(x=>x.code===m.code&&x.name!==editingModel);
+    if(dupCode) return toast(`Serial code ${m.code} is already used by ${dupCode.name}`,'err');
+    bsm.disabled=true;
+    const r=await api('saveModel',{model:m,originalName:editingModel||'',updatedBy:user.username});
+    bsm.disabled=false;
+    if(r.ok){ toast(`Model ${m.name} saved`); editingModel=null; await loadModels(); render(); }
+    else toast(r.error||'Save failed','err');
+  };
+  const bcm=document.getElementById('btnCancelModel');
+  if(bcm) bcm.onclick=()=>{ editingModel=null; render(); };
+  document.querySelectorAll('.editModelBtn').forEach(btn=>{
+    btn.onclick=()=>{ editingModel=btn.getAttribute('data-name'); render(); document.getElementById('m_name')?.scrollIntoView({behavior:'smooth',block:'center'}); };
+  });
+  document.querySelectorAll('.delModelBtn').forEach(btn=>{
+    btn.onclick=async()=>{
+      const name=btn.getAttribute('data-name');
+      const inUse=batches.filter(b=>b.model===name&&b.status==='Open').length;
+      if(!confirm(`Delete model "${name}"?${inUse?`\n\nWARNING: ${inUse} open lot(s) use this model and cannot be inspected until it is added back.`:''}`)) return;
+      const r=await api('deleteModel',{name});
+      if(r.ok){ toast(`Model ${name} deleted`); if(editingModel===name) editingModel=null; await loadModels(); render(); }
+      else toast(r.error||'Delete failed','err');
+    };
+  });
 
   // Delete Batch
   document.querySelectorAll('.delBatchBtn').forEach(btn=>{
@@ -832,16 +951,15 @@ function bindEvents(){
       area.classList.remove('hidden');
       area.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:10px">
         <div><label class="lbl">Status</label><select id="eS${ri}" class="field"><option value="Open" ${lot.status==='Open'?'selected':''}>Open</option><option value="Closed" ${lot.status==='Closed'?'selected':''}>Closed</option></select></div>
-        <div><label class="lbl">BD Max (mm)</label><input id="eBD${ri}" class="field" type="number" step="0.01" value="${lot.bdMax}"></div>
-        <div><label class="lbl">Model</label><select id="eMD${ri}" class="field"><option value="LH1G" ${lot.model==='LH1G'?'selected':''}>LH1G (1217)</option><option value="LH3G" ${lot.model==='LH3G'?'selected':''}>LH3G (1218)</option><option value="LH3G_NEW" ${lot.model==='LH3G_NEW'?'selected':''}>LH3G New (1213)</option></select></div>
+        <div><label class="lbl">Model</label><select id="eMD${ri}" class="field">${modelOptions(lot.model)}${getModel(lot.model)?'':`<option value="${esc(lot.model)}" selected>${esc(lot.model)} (not in list)</option>`}</select></div>
         <div><label class="lbl">Prod Month 1</label><input id="ePM${ri}" class="field" type="month" value="${mmyyInp(lot.prodMonthCode)}"></div>
         <div><label class="lbl">Prod Month 2</label><input id="ePM2${ri}" class="field" type="month" value="${mmyyInp(lot.prodMonthCode2||'')}"></div>
       </div>
       <button class="btn btn-primary btn-sm saveLotEdit" data-ri="${ri}">Save Changes</button>`;
       area.querySelector('.saveLotEdit').onclick=async()=>{
         const status=document.getElementById('eS'+ri).value;
-        const bdMax=parseFloat(document.getElementById('eBD'+ri).value)||2.4;
         const model=document.getElementById('eMD'+ri).value;
+        const bdMax=getModel(model)?getModel(model).maxD:lot.bdMax;
         const pm=document.getElementById('ePM'+ri).value;
         const prodMonthCode=pm?mmyy(pm):lot.prodMonthCode;
         const pm2=document.getElementById('ePM2'+ri).value;
@@ -858,14 +976,17 @@ function bindEvents(){
     btn.onclick=()=>{
       const ri=parseInt(btn.getAttribute('data-ri'));
       const lot=batches[ri];
+      const spec=getModel(lot.model);
+      if(!spec){ toast(`Model "${lot.model}" has no spec — ask admin to add it`,'err'); return; }
+      activeSpec=spec; lotRemarksVal='';
       const draft=loadDraft(lot);
       if(draft && draft.samples && draft.samples.length){
         const filled=draft.samples.filter(s=>s.serial).length;
         if(confirm(`A saved draft exists for ${lot.lotNumber} (${filled}/${draft.samples.length} samples filled, saved ${new Date(draft.savedAt).toLocaleString()}).\n\nResume this draft? (Cancel = start fresh)`)){
           activeLot=lot; expandedSample=null;
           samples=draft.samples;
+          lotRemarksVal=draft.lotRemarks||'';
           render();
-          setTimeout(()=>{ const r=document.getElementById('lotRemarks'); if(r) r.value=draft.lotRemarks||''; },50);
           return;
         } else {
           clearDraft(lot);
@@ -893,7 +1014,7 @@ function bindEvents(){
   if(back) back.onclick=()=>{
     saveDraft();
     toast('Draft saved — resume anytime from this lot');
-    activeLot=null; samples=[]; expandedSample=null; render();
+    activeLot=null; activeSpec=null; samples=[]; expandedSample=null; render();
   };
 
   // Sample serial input
@@ -957,7 +1078,7 @@ function bindEvents(){
 
   // Lot-level remarks field also triggers save
   const lotRemarksEl=document.getElementById('lotRemarks');
-  if(lotRemarksEl) lotRemarksEl.onchange=()=>{ saveDraft(); };
+  if(lotRemarksEl) lotRemarksEl.oninput=()=>{ lotRemarksVal=lotRemarksEl.value; saveDraft(); };
 
   // Submit Lot
   const bsub=document.getElementById('btnSubmitLot');
@@ -965,7 +1086,7 @@ function bindEvents(){
     const {minor,major,passed}=tallyLot();
     const lotResult=passed?'PASS':'FAIL';
     const fgPassQty=passed?Number(activeLot.lotSize):0;
-    const lotRemarks=document.getElementById('lotRemarks')?.value||'';
+    const lotRemarks=lotRemarksVal;
 
     const units=samples.map(s=>{
       const bd=evalBD(s);
@@ -994,6 +1115,7 @@ function bindEvents(){
       batchName:activeLot.batchName,
       lotNumber:activeLot.lotNumber,
       lotResult,fgPassQty,
+      bdSpec:specText(activeSpec),
       batchQty:activeLot.batchQty,
       totalLots:activeLot.totalLots,
       model:activeLot.model,
@@ -1004,7 +1126,7 @@ function bindEvents(){
     if(r.ok){
       clearDraft(activeLot);
       toast(`${activeLot.lotNumber}: ${lotResult} | FG Pass: ${fgPassQty}`);
-      activeLot=null; samples=[]; expandedSample=null;
+      activeLot=null; activeSpec=null; samples=[]; expandedSample=null;
       await loadBatches(); render();
     } else { saveDraft(); toast(r.error||'Save failed — draft kept locally','err'); }
   };
