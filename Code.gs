@@ -126,6 +126,9 @@ function doPost(e){
     if(action === "searchRecords"){
       result = searchRecords(data);
     }
+    if(action === "approveSerial"){
+      result = approveSerial(data);
+    }
 
     return ContentService
       .createTextOutput(JSON.stringify(result))
@@ -558,11 +561,46 @@ function recOf_(r, rowNo){
   };
 }
 
-function findDuplicates_(rows){
+/* Serials an admin approved to stay in more than one lot (one record per lot). */
+function exceptionsSheet_(){
+  var ss = getSpreadsheet();
+  var sh = ss.getSheetByName("SerialExceptions");
+  if(!sh){
+    sh = ss.insertSheet("SerialExceptions");
+    sh.appendRow(["SerialNumber","Reason","ApprovedBy","ApprovedAt"]);
+    sh.getRange("A:A").setNumberFormat("@");
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function readExceptions_(){
+  var sh = getSpreadsheet().getSheetByName("SerialExceptions");
+  var out = {};
+  if(!sh) return out;
+  var v = sh.getDataRange().getValues();
+  for(var i = 1; i < v.length; i++){
+    var s = normSerial_(v[i][0]);
+    if(s) out[s] = {serial:s, reason:String(v[i][1]||""), by:String(v[i][2]||""),
+                    at: v[i][3] instanceof Date ? v[i][3].toISOString() : String(v[i][3]||"")};
+  }
+  return out;
+}
+function approveSerial(d){
+  var s = normSerial_(d.serial);
+  if(!/^\d{15}$/.test(s)) return {ok:false, error:"Serial number must be 15 digits"};
+  if(readExceptions_()[s]) return {ok:true, already:true};
+  exceptionsSheet_().appendRow(["'" + s, String(d.reason||"Kept in more than one lot"), String(d.by||""), new Date()]);
+  return {ok:true};
+}
+
+function findDuplicates_(rows, exc){
+  exc = exc || {};
   var bySerial = {}, order = [];
   for(var i = 1; i < rows.length; i++){
-    var s = normSerial_(rows[i][4]);
-    if(!s) continue;
+    var sn = normSerial_(rows[i][4]);
+    if(!sn) continue;
+    // Approved exceptions: duplicates are only checked inside the same lot
+    var s = exc[sn] ? sn + "||" + String(rows[i][3]||"") : sn;
     if(!bySerial[s]){ bySerial[s] = []; order.push(s); }
     bySerial[s].push(i);
   }
@@ -578,19 +616,23 @@ function findDuplicates_(rows){
     var keep = idx[0];
     var dups = idx.slice(1);
     dups.forEach(function(k){ dupIdx[k] = keep; });
-    groups.push({serial:s, keep:recOf_(rows[keep], keep+1), dups:dups.map(function(k){ return recOf_(rows[k], k+1); })});
+    groups.push({serial:s.split("||")[0], keep:recOf_(rows[keep], keep+1), dups:dups.map(function(k){ return recOf_(rows[k], k+1); })});
   });
-  return {groups:groups, dupIdx:dupIdx, unique:order.length};
+  var uniq = {};
+  order.forEach(function(k){ uniq[k.split("||")[0]] = true; });
+  return {groups:groups, dupIdx:dupIdx, unique:Object.keys(uniq).length};
 }
 
 function scanDuplicates(){
   var rows = getOrCreateSheet("Master",[]).getDataRange().getValues();
-  var f = findDuplicates_(rows);
+  var exc = readExceptions_();
+  var f = findDuplicates_(rows, exc);
   var extra = Object.keys(f.dupIdx).length;
   var archived = getSpreadsheet().getSheetByName("Duplicates");
   return {ok:true, totalRecords: rows.length - 1, uniqueSerials: f.unique,
           duplicateSerials: f.groups.length, extraRows: extra,
           archivedRows: archived ? Math.max(archived.getLastRow() - 1, 0) : 0,
+          exceptions: Object.keys(exc).map(function(k){ return exc[k]; }),
           groups: f.groups.slice(0, 500)};
 }
 
@@ -600,7 +642,7 @@ function removeDuplicates(d){
   try{
     var master = getOrCreateSheet("Master",[]);
     var rows = master.getDataRange().getValues();
-    var f = findDuplicates_(rows);
+    var f = findDuplicates_(rows, readExceptions_());
     var extra = Object.keys(f.dupIdx).length;
     if(extra === 0) return {ok:true, removed:0, message:"No duplicates found"};
     if(Number(d.expected) !== extra)

@@ -782,13 +782,16 @@ function buildDataPanel(){
       <div class="stat"><div class="stat-label">Serials recorded twice or more</div><div class="stat-val ${d.duplicateSerials?'text-fail':'text-pass'}">${d.duplicateSerials}</div></div>
       <div class="stat"><div class="stat-label">Extra copies</div><div class="stat-val ${d.extraRows?'text-fail':'text-pass'}">${d.extraRows}</div><div class="stat-sub">${d.archivedRows} moved out earlier</div></div>
     </div>`;
+    if((d.exceptions||[]).length){
+      scanHtml+=`<div class="text-muted" style="margin:-4px 0 14px">Approved to stay in more than one lot: ${d.exceptions.map(x=>`<span style="font-family:var(--code)">${esc(x.serial)}</span>`).join(', ')}. New inspections still can't reuse these serials.</div>`;
+    }
     if(!d.extraRows){
       scanHtml+=`<div class="ok-note">No duplicates. Every serial number is recorded once.</div>`;
     } else {
       const shown=d.groups.slice(0,100);
       scanHtml+=`<div style="overflow-x:auto"><table class="res-table">
-        <thead><tr><th>Serial number</th><th>Original, kept</th><th>Extra copies, will be moved</th></tr></thead>
-        <tbody>${shown.map(g=>`<tr><td style="font-family:var(--code);white-space:nowrap">${esc(g.serial)}</td><td>${brief(g.keep)}</td><td>${g.dups.map(brief).join('<div style="height:6px"></div>')}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>Serial number</th><th>Original, kept</th><th>Extra copies, will be moved</th><th></th></tr></thead>
+        <tbody>${shown.map(g=>{const cross=g.dups.some(x=>x.lot!==g.keep.lot);return `<tr><td style="font-family:var(--code);white-space:nowrap">${esc(g.serial)}${cross?'<br><span class="badge badge-open" style="margin-top:4px">In different lots</span>':''}</td><td>${brief(g.keep)}</td><td>${g.dups.map(brief).join('<div style="height:6px"></div>')}</td><td>${cross?`<button class="btn btn-ghost btn-sm approveSerialBtn" data-serial="${esc(g.serial)}" title="Keep one record in each lot and stop flagging this serial">Keep in both lots</button>`:''}</td></tr>`;}).join('')}</tbody>
       </table></div>
       ${d.groups.length>shown.length?`<div class="text-muted" style="margin-top:8px">Showing the first ${shown.length} of ${d.groups.length} serial numbers.</div>`:''}
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px">
@@ -1216,6 +1219,17 @@ function bindEvents(){
     if(r.ok){ toast(`${r.removed} duplicate ${r.removed===1?'copy':'copies'} moved to Duplicates`); lotUnits={}; dataScan={loading:true}; render(); const s=await api('scanDuplicates'); dataScan=s.ok?s:{error:s.error}; render(); }
     else { toast(r.error||'Could not move duplicates','err'); brd.disabled=false; }
   };
+  document.querySelectorAll('.approveSerialBtn').forEach(b=>{
+    b.onclick=async()=>{
+      const sn=b.getAttribute('data-serial');
+      if(!confirm(`Keep ${sn} in both lots?\n\nOne record stays in each lot and this serial stops being flagged. New inspections still can't use it again.`)) return;
+      b.disabled=true;
+      const r=await api('approveSerial',{serial:sn,by:user.username,reason:'Kept in more than one lot (admin decision)'});
+      if(!r.ok){ toast(r.error||'Could not approve','err'); b.disabled=false; return; }
+      toast(`${sn} kept in both lots`);
+      dataScan={loading:true}; render(); const s=await api('scanDuplicates'); dataScan=s.ok?s:{error:s.error}; render();
+    };
+  });
   const doRecSearch=async()=>{
     const q=(document.getElementById('recQ')?.value||'').trim();
     if(q.length<3){ toast('Type at least 3 characters','err'); return; }
