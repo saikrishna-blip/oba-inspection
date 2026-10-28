@@ -1432,15 +1432,15 @@ function doGet(e) {
     images:  { title: 'Part images and clean-up', html: getImagesToolsHtml_ }
   };
 
-  // Admins of the portal (valid session token) or the script owner only.
+  // Portal users with the BOM management module (admins always have it), or the script owner.
   const token = String((e && e.parameter && e.parameter.t) || '');
   const sess = portalSession_(token);
-  if (!((sess && sess.role === 'admin') || ownerVisitor_())) {
+  if (!((sess && sess.bomManagement) || ownerVisitor_())) {
     // Plain text, not an HTML page: an HtmlService page would let anyone call this script's
     // server functions from the browser console, so people without access get no page at all.
     return ContentService.createTextOutput(
-      'BOM management is for admins. Sign in to LUMIO Quality Management - Projector with an admin account ' +
-      'and open BOM management from there.' + (sess ? '' : ' If you were signed in, your session may have expired.'))
+      'BOM management needs the BOM management module. Sign in to LUMIO Quality Management - Projector ' +
+      'and open BOM management from there, or ask an admin for access.' + (sess ? '' : ' If you were signed in, your session may have expired.'))
       .setMimeType(ContentService.MimeType.TEXT);
   }
 
@@ -5064,11 +5064,14 @@ function portalSession_(token) {
   try {
     const sh = SpreadsheetApp.openById(PORTAL_SS_ID).getSheetByName('Sessions');
     if (!sh || sh.getLastRow() < 2) return null;
-    const v = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+    const v = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
     for (let i = v.length - 1; i >= 0; i--) {
       if (String(v[i][0]) !== hash) continue;
       if (!(v[i][5] instanceof Date) || v[i][5] <= new Date()) return null;
-      return { username: String(v[i][1]), name: String(v[i][2]), role: String(v[i][3]).toLowerCase() };
+      const role = String(v[i][3]).toLowerCase();
+      const acc = String(v[i][6] || '').toLowerCase().split(/[\s,;]+/);
+      return { username: String(v[i][1]), name: String(v[i][2]), role: role,
+               bomManagement: role === 'admin' || acc.indexOf('bommgmt') > -1 };
     }
   } catch (e) { Logger.log('Session check failed: ' + e.message); }
   return null;

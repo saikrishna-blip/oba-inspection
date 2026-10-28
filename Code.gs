@@ -18,9 +18,18 @@ var PARTDB_URL   = "https://script.google.com/macros/s/AKfycbyPiE-gcrUZH7cEA6KKB
 
 // Login sessions (sheet "Sessions"; the Part DB script reads it too)
 var SESSION_HOURS = 12;
-// Actions anyone signed in may call; every other action except login needs the admin role.
-var MEMBER_ACTIONS = ["logout","getBatches","getModels","getBomList","getBom","getBomVerification",
-                      "checkSerial","submitLot","submitBomVerification","getLotUnits","changePassword"];
+// Modules an admin can give each user (Users sheet, column E "Access", comma separated).
+// Admins always have every module. An empty cell means the original inspector set.
+var MODULES        = ["bomverify","sampling","reports","createbatch","models","data","bommgmt"];
+var DEFAULT_ACCESS = ["bomverify","sampling"];
+// Actions any signed-in user may call (reading, own password)
+var ALWAYS_ACTIONS = ["logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword"];
+// Actions unlocked by a module; everything not listed here or above is admin only
+var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify",
+                      checkSerial:"sampling", submitLot:"sampling",
+                      createBatch:"createbatch",
+                      saveModel:"models", deleteModel:"models",
+                      scanDuplicates:"data", searchRecords:"data", removeDuplicates:"data", approveSerial:"data"};
 
 // Security settings
 var PW_ITERATIONS    = 1000;    // PBKDF2-HMAC-SHA256 rounds (each round is slow in Apps Script: 1000 = about 1.5 s per login)
@@ -90,13 +99,13 @@ function doPost(e){
       if(!sess) return json_({ok:false, auth:true, error:"Your session has expired. Please log in again."});
       if(!rateOk_("r_" + sha256_(data.token).slice(0, 32), RATE_PER_MINUTE, 60))
         return json_({ok:false, error:"Too many requests. Wait a minute and try again."});
-      if(MEMBER_ACTIONS.indexOf(action) === -1 && sess.role !== "admin")
-        return json_({ok:false, error:"Only an admin can do this."});
+      if(!allowed_(sess, action))
+        return json_({ok:false, error: ACTION_MODULE[action] ? "You do not have access to this. Ask an admin to give you the " + moduleName_(ACTION_MODULE[action]) + " module." : "Only an admin can do this."});
       data._session = sess;
       // record who did it from the session, not from what the browser sent
       if(action === "submitLot") data.inspector = sess.name;
       if(action === "submitBomVerification") data.by = sess.name;
-      if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser"].indexOf(action) > -1){
+      if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser","setUserAccess"].indexOf(action) > -1){
         data.createdBy = sess.username; data.updatedBy = sess.username; data.by = sess.username;
       }
     }
@@ -109,6 +118,12 @@ function doPost(e){
     }
     if(action === "listUsers"){
       result = listUsers();
+    }
+    if(action === "setUserAccess"){
+      result = setUserAccess(data);
+    }
+    if(action === "whoami"){
+      result = whoami(data._session);
     }
     if(action === "resetPassword"){
       result = resetPassword(data);
@@ -224,9 +239,10 @@ function login(d){
     if(ui > -1) ush.getRange(ui + 1, 2).setNumberFormat("@").setValue(hashPassword_(password));
   }
   var role = String(row[2]||"inspector").trim().toLowerCase() === "admin" ? "admin" : "inspector";
-  var s = createSession_(String(row[0]).trim(), String(row[3]||row[0]), role);
-  var out = {ok:true, username:String(row[0]).trim(), role:role, name:String(row[3]||row[0]), token:s.token, expiresAt:s.expiresAt};
-  if(role === "admin"){ out.partdbUrl = PARTDB_URL; out.bomSheetUrl = "https://docs.google.com/spreadsheets/d/" + BOM_SS_ID + "/edit"; }
+  var access = parseAccess_(row[4], role);
+  var s = createSession_(String(row[0]).trim(), String(row[3]||row[0]), role, access);
+  var out = whoami({username:String(row[0]).trim(), name:String(row[3]||row[0]), role:role, access:access});
+  out.token = s.token; out.expiresAt = s.expiresAt;
   return out;
 }
 
@@ -323,8 +339,35 @@ function json_(o){
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
 
+/* ---------------- module access ---------------- */
+function parseAccess_(cell, role){
+  if(role === "admin") return MODULES.slice();
+  var t = String(cell == null ? "" : cell).trim().toLowerCase();
+  if(t === "") return DEFAULT_ACCESS.slice();
+  if(t === "none") return [];
+  return t.split(/[\s,;]+/).filter(function(m){ return MODULES.indexOf(m) > -1; });
+}
+function allowed_(sess, action){
+  if(sess.role === "admin") return true;
+  if(ALWAYS_ACTIONS.indexOf(action) > -1) return true;
+  var m = ACTION_MODULE[action];
+  return !!m && (sess.access || []).indexOf(m) > -1;
+}
+function moduleName_(m){
+  return {bomverify:"BOM verification", sampling:"Sampling inspection", reports:"Reports", createbatch:"Create batches",
+          models:"Models and black dot spec", data:"Data records", bommgmt:"BOM management"}[m] || m;
+}
+/* Who is signed in, and what they may use (the portal calls this on every refresh). */
+function whoami(sess){
+  var out = {ok:true, username:sess.username, name:sess.name, role:sess.role, access:sess.access || []};
+  if(sess.role === "admin" || out.access.indexOf("bommgmt") > -1){
+    out.partdbUrl = PARTDB_URL; out.bomSheetUrl = "https://docs.google.com/spreadsheets/d/" + BOM_SS_ID + "/edit";
+  }
+  return out;
+}
+
 /* ---------------- sessions ----------------
- * Sessions sheet: TokenHash | Username | Name | Role | CreatedAt | ExpiresAt
+ * Sessions sheet: TokenHash | Username | Name | Role | CreatedAt | ExpiresAt | Access
  * Only a SHA-256 hash of each token is stored. */
 function sha256_(s){
   return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s), Utilities.Charset.UTF_8)
@@ -334,12 +377,12 @@ function sessionsSheet_(){
   var sh = getSpreadsheet().getSheetByName("Sessions");
   if(!sh){
     sh = getSpreadsheet().insertSheet("Sessions");
-    sh.appendRow(["TokenHash","Username","Name","Role","CreatedAt","ExpiresAt"]);
+    sh.appendRow(["TokenHash","Username","Name","Role","CreatedAt","ExpiresAt","Access"]);
     sh.setFrozenRows(1);
   }
   return sh;
 }
-function createSession_(username, name, role){
+function createSession_(username, name, role, access){
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try{
@@ -347,15 +390,18 @@ function createSession_(username, name, role){
     var now = new Date();
     // drop expired sessions
     var v = sh.getDataRange().getValues();
+    var w = v[0].length;
+    if(String(v[0][6] || "") === ""){ sh.getRange(1, 7).setValue("Access"); }
     var keep = [v[0]];
     for(var i = 1; i < v.length; i++){ if(v[i][5] instanceof Date && v[i][5] > now) keep.push(v[i]); }
     if(keep.length !== v.length){
-      sh.getRange(1, 1, v.length, 6).clearContent();
-      sh.getRange(1, 1, keep.length, 6).setValues(keep);
+      sh.getRange(1, 1, v.length, w).clearContent();
+      sh.getRange(1, 1, keep.length, w).setValues(keep);
+      if(String(v[0][6] || "") === "") sh.getRange(1, 7).setValue("Access");
     }
     var token = Utilities.getUuid().replace(/-/g,"") + Utilities.getUuid().replace(/-/g,"");
     var exp = new Date(now.getTime() + SESSION_HOURS * 3600 * 1000);
-    sh.appendRow([sha256_(token), username, name, role, now, exp]);
+    sh.appendRow([sha256_(token), username, name, role, now, exp, (access && access.length) ? access.join(",") : "none"]);
     return {token:token, expiresAt:exp.toISOString()};
   } finally { lock.releaseLock(); }
 }
@@ -370,7 +416,8 @@ function sessionFor_(token){
   for(var i = v.length - 1; i >= 1; i--){
     if(String(v[i][0]) !== h) continue;
     if(!(v[i][5] instanceof Date) || v[i][5] <= new Date()) return null;
-    var s = {username:String(v[i][1]), name:String(v[i][2]), role:String(v[i][3]).toLowerCase()};
+    var role = String(v[i][3]).toLowerCase() === "admin" ? "admin" : "inspector";
+    var s = {username:String(v[i][1]), name:String(v[i][2]), role:role, access:parseAccess_(v[i][6], role)};
     cache.put("s_" + h, JSON.stringify(s), 300);
     return s;
   }
@@ -417,7 +464,9 @@ function addUser(d){
   try{
     var sh = getOrCreateSheet("Users",[]);
     if(findUserRow_(sh.getDataRange().getValues(), username) > -1) return {ok:false, error:"Username " + username + " already exists"};
-    sh.appendRow([username, hashPassword_(String(d.password)), role, safe_(name, 80)]);
+    var acc = Array.isArray(d.access) ? MODULES.filter(function(m){ return d.access.indexOf(m) > -1; }) : DEFAULT_ACCESS.slice();
+    if(String(sh.getRange(1, 5).getValue() || "") === "") sh.getRange(1, 5).setValue("Access");
+    sh.appendRow([username, hashPassword_(String(d.password)), role, safe_(name, 80), acc.length ? acc.join(",") : "none"]);
     sh.getRange(sh.getLastRow(), 2).setNumberFormat("@");
     return {ok:true};
   } finally { lock.releaseLock(); }
@@ -426,9 +475,45 @@ function listUsers(){
   var v = getOrCreateSheet("Users",[]).getDataRange().getValues(), out = [];
   for(var i = 1; i < v.length; i++){
     if(String(v[i][0]).trim() === "") continue;
-    out.push({username:String(v[i][0]).trim(), name:String(v[i][3]||""), role:String(v[i][2]||"inspector").toLowerCase() === "admin" ? "admin" : "inspector"});
+    var role = String(v[i][2]||"inspector").trim().toLowerCase() === "admin" ? "admin" : "inspector";
+    out.push({username:String(v[i][0]).trim(), name:String(v[i][3]||""), role:role, access:parseAccess_(v[i][4], role)});
   }
-  return {ok:true, users:out};
+  return {ok:true, users:out, modules:MODULES};
+}
+/* Admin: set a user's role and modules. Signed-in sessions of that user change at once. */
+function setUserAccess(d){
+  var role = String(d.role || "inspector").toLowerCase();
+  if(["inspector","admin"].indexOf(role) === -1) return {ok:false, error:"Role must be inspector or admin"};
+  var list = Array.isArray(d.access) ? d.access.map(String) : [];
+  for(var k = 0; k < list.length; k++) if(MODULES.indexOf(list[k]) === -1) return {ok:false, error:"Unknown module " + list[k]};
+  var access = MODULES.filter(function(m){ return list.indexOf(m) > -1; });
+  var me = d._session.username;
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var sh = getOrCreateSheet("Users",[]), v = sh.getDataRange().getValues();
+    if(String(v[0][4] || "") === "") sh.getRange(1, 5).setValue("Access");
+    var i = findUserRow_(v, d.username);
+    if(i < 0) return {ok:false, error:"User not found"};
+    var uname = String(v[i][0]).trim();
+    var oldRole = String(v[i][2]||"").trim().toLowerCase() === "admin" ? "admin" : "inspector";
+    if(uname.toLowerCase() === String(me).toLowerCase() && role !== "admin") return {ok:false, error:"You cannot remove your own admin role"};
+    if(oldRole === "admin" && role !== "admin"){
+      var admins = 0;
+      for(var r = 1; r < v.length; r++) if(String(v[r][2]||"").trim().toLowerCase() === "admin" && String(v[r][0]).trim() !== "") admins++;
+      if(admins < 2) return {ok:false, error:"There must be at least one admin"};
+    }
+    sh.getRange(i + 1, 3).setValue(role);
+    sh.getRange(i + 1, 5).setValue(access.length ? access.join(",") : "none");
+    // update live sessions of this user
+    var ss = sessionsSheet_(), sv = ss.getDataRange().getValues(), cache = CacheService.getScriptCache();
+    for(var j = 1; j < sv.length; j++){
+      if(String(sv[j][1]) !== uname) continue;
+      ss.getRange(j + 1, 4).setValue(role);
+      ss.getRange(j + 1, 7).setValue(access.length ? access.join(",") : "none");
+      cache.remove("s_" + String(sv[j][0]));
+    }
+    return {ok:true, role:role, access:parseAccess_(access.length ? access.join(",") : "none", role)};
+  } finally { lock.releaseLock(); }
 }
 function resetPassword(d){
   var p = pwProblem_(d.password); if(p) return {ok:false, error:p};
@@ -474,7 +559,7 @@ function changePassword(d){
     cache.remove(failKey);
     sh.getRange(i + 1, 2).setNumberFormat("@").setValue(hashPassword_(String(d.newPassword)));
     revokeSessions_(String(v[i][0]).trim());
-    var s = createSession_(String(v[i][0]).trim(), d._session.name, d._session.role);
+    var s = createSession_(String(v[i][0]).trim(), d._session.name, d._session.role, d._session.access);
     return {ok:true, token:s.token, expiresAt:s.expiresAt};
   } finally { lock.releaseLock(); }
 }

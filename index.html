@@ -314,6 +314,24 @@ select.field{cursor:pointer;appearance:none;background-image:linear-gradient(45d
 .tool-title{font-family:var(--font-display);font-size:24px;font-weight:400}
 .tool-frame{flex:1;width:min(1320px,calc(100% - 24px));margin:0 auto 12px;border:1px solid var(--line);border-radius:var(--radius-lg);background:#f6f8fb;min-height:0;box-shadow:var(--shadow-2)}
 @media (max-width:760px){ .tool-bar{padding:8px 12px;flex-wrap:wrap} }
+/* ── Users and access ─────────────────────────────────── */
+.user-card .uc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:10px}
+.uc-name{font-weight:700;font-size:17px}
+.uc-role{min-width:220px}
+.uc-role .field{margin-top:4px}
+.acc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.acc-item{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--paper);cursor:pointer;transition:border-color .15s}
+.acc-item:hover{border-color:var(--ink-3)}
+.acc-item input{margin-top:3px;width:16px;height:16px;accent-color:var(--color-brand-strong,var(--lime-deep))}
+.acc-item span{display:flex;flex-direction:column;gap:2px}
+.acc-item b{font-size:14px}
+.acc-item small{font-size:12.5px;color:var(--ink-3);line-height:1.35}
+.acc-item:has(input:checked){border-color:var(--lime-deep,var(--ink))}
+.acc-dis{opacity:.65;cursor:default}
+.uc-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.uc-pw{display:flex;gap:8px;align-items:center;flex:1;min-width:260px}
+.uc-pw .field{max-width:260px}
+
 /* ── Menus and pages ──────────────────────────────────── */
 .topnav{position:relative;align-items:center}
 .navBtn{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
@@ -695,36 +713,22 @@ async function loadBomList(){
   const r=await api('getBomList');
   bomModels=r.ok?(r.models||[]):[];
 }
-async function loadAll(){ await Promise.all([loadBatches(),loadModels(),loadBomList()]); }
+async function loadMe(){
+  const r=await api('whoami');
+  if(r.ok&&user){
+    user={username:r.username,role:r.role,name:r.name,access:r.access||[]};
+    if(session){ session.partdbUrl=r.partdbUrl||''; session.bomSheetUrl=r.bomSheetUrl||''; }
+    saveSession();
+    if(!pageAllowed(page)){ page='home'; bomTool=null; history.replaceState(null,'','#/'); }
+  }
+}
+async function loadAll(){ await Promise.all([loadMe(),loadBatches(),loadModels(),loadBomList()]); }
 function bomFor(modelName){ const m=getModel(modelName); return m&&m.lumioModel?bomModels.find(b=>b.model===m.lumioModel)||null:null; }
 function batchBom(batchName){ const l=batches.find(b=>b.batchName===batchName); return l?(l.bomStatus||''):''; }
 function samplingLocked(batchName){ const s=batchBom(batchName); return s==='Pending'||s==='Failed'; }
 
 async function loadBatches(){
-  let r=await api('getBatches');
-  if(!r.ok && (r.error||'').toLowerCase().includes('unknown')){
-    r=await api('getKits');
-    if(r.ok && r.kits){
-      // normalize kits to batch format
-      r.batches=r.kits.map(k=>({
-        batchName:k.kitName||k.batchName||'',
-        lotNumber:k.lotNumber||'',
-        lotSize:Number(k.lotSize)||90,
-        sampleSize:Number(k.sampleSize)||13,
-        bdMax:Number(k.bdMax)||0,
-        status:k.status||'Open',
-        createdBy:k.createdBy||'',
-        createdAt:k.createdAt||'',
-        result:k.result||'',
-        batchQty:Number(k.kitTotalQty)||Number(k.batchQty)||0,
-        totalLots:Number(k.totalLots)||0,
-        model:k.model||'',
-        prodMonthCode:k.prodMonthCode||'',
-      prodMonthCode2:k.prodMonthCode2||'',
-        fgPassQty:Number(k.fgPassQty)||0
-      }));
-    }
-  }
+  const r=await api('getBatches');
   if(r.ok) batches=r.batches||[];
 }
 
@@ -854,7 +858,7 @@ function buildPage(){
   if(!user)         return buildLogin();
   if(activeLot)     return buildInspection();
   if(activeBom)     return buildBomVerify();
-  if(page==='bom' && user.role==='admin') return buildBomMgmt();
+  if(page==='bom' && can('bommgmt')) return buildBomMgmt();
   return buildDashboard();
 }
 
@@ -899,14 +903,26 @@ function buildLogin(){
 }
 
 // ─── APP SHELL: HEADER, MENUS, PAGES ─────────────────────
-const ADMIN_PAGES=['create','models','data','users','reports','bom'];
+const MODULES=[
+  {k:'bomverify',  t:'BOM verification',          d:'Verify a batch against its BOM'},
+  {k:'sampling',   t:'Sampling inspection',       d:'Inspect lots, 13 samples each'},
+  {k:'reports',    t:'Reports',                   d:'CSV report and summary'},
+  {k:'createbatch',t:'Create batches',            d:'Make new batches and lots'},
+  {k:'models',     t:'Models and black dot spec', d:'Add or change models and limits'},
+  {k:'data',       t:'Data records',              d:'Duplicate check and record lookup'},
+  {k:'bommgmt',    t:'BOM management',            d:'All Part DB tools: assign, compare, lock, ECN, images'}
+];
+const PAGE_MODULE={create:'createbatch',models:'models',data:'data',reports:'reports',bom:'bommgmt'};
+function isAdminUser(){ return !!user&&user.role==='admin'; }
+function can(k){ return isAdminUser()||(!!user&&Array.isArray(user.access)&&user.access.includes(k)); }
+function pageAllowed(p){ if(p==='users') return isAdminUser(); const m=PAGE_MODULE[p]; return !m||can(m); }
 const PAGE_INFO={
   home:{t:'Overview'},
   batches:{t:'Batches and lots',d:'Pick a batch, then a lot. Each batch runs BOM verification, then FAI, then sampling.'},
   create:{t:'Create a batch',d:'Lots are made automatically: batch quantity ÷ 90, plus one smaller lot for any remainder.'},
   models:{t:'Models and black dot spec',d:'Each model has its own serial code and black dot limits. Inspections use these values straight away.'},
   data:{t:'Data records',d:'Each serial number is recorded once. Check for older duplicates or look up any record.'},
-  users:{t:'Users',d:'Inspectors can do BOM verification and sampling. Admins also manage batches, models, data and BOMs.'},
+  users:{t:'Users and access',d:'Choose which modules each person can use, set passwords, and add or remove people. Admins can use everything.'},
   account:{t:'Change your password',d:'Use at least 8 characters. Other devices signed in to your account are signed out.'},
   reports:{t:'Reports',d:'Download every inspection record, or open the batch summary.'}
 };
@@ -914,7 +930,7 @@ function routeFromHash(){
   const parts=(location.hash||'').replace(/^#\/?/,'').split('/').filter(Boolean).map(decodeURIComponent);
   let p=parts[0]||'home';
   if(!PAGE_INFO[p]&&p!=='bom') p='home';
-  if(ADMIN_PAGES.includes(p)&&!(user&&user.role==='admin')) p='home';
+  if(!pageAllowed(p)) p='home';
   page=p;
   bomTool=(p==='bom'&&parts[1]&&BOM_TOOLS.flatMap(g=>g.items).some(x=>x.k===parts[1]))?parts[1]:null;
 }
@@ -937,13 +953,13 @@ function navHtml(){
   const isAdmin=user.role==='admin';
   const link=(r,l)=>`<button class="navBtn navGo ${page===r?'on':''}" data-go="${r}" ${page===r?'aria-current="page"':''}>${l}</button>`;
   let h=link('home','Overview')+link('batches','Batches');
-  if(isAdmin){
+  if(can('bommgmt')){
     const bomMenu=ddItem('bom','All BOM tools',page==='bom'&&!bomTool)+'<div class="dd-sep"></div>'+
       BOM_TOOLS.map(g=>`<div class="dd-label">${esc(g.group)}</div>`+g.items.map(x=>ddItem('bom/'+x.k,x.t,bomTool===x.k)).join('')).join('');
     h+=ddHtml('BOM',page==='bom',bomMenu,'dd-wide');
-    const adm=[['create','Create a batch'],['models','Models and black dot spec'],['data','Data records'],['users','Users'],['reports','Reports']];
-    h+=ddHtml('Admin',['create','models','data','users','reports'].includes(page),adm.map(([r,l])=>ddItem(r,l,page===r)).join(''));
   }
+  const adm=[['create','Create a batch'],['models','Models and black dot spec'],['data','Data records'],['users','Users and access'],['reports','Reports']].filter(([r])=>pageAllowed(r));
+  if(adm.length) h+=ddHtml(isAdmin?'Admin':'Manage',adm.some(([r])=>r===page),adm.map(([r,l])=>ddItem(r,l,page===r)).join(''));
   return `<nav class="topnav" aria-label="Sections">${h}</nav>`;
 }
 function accountMenu(){
@@ -981,12 +997,12 @@ function shell(content){
 function buildDashboard(){
   const isAdmin=user.role==='admin';
   if(page==='batches') return shell(pageHead('batches')+buildBatchesBody(isAdmin));
-  if(isAdmin&&page==='create') return shell(pageHead('create')+buildCreateCard());
-  if(isAdmin&&page==='models') return shell(pageHead('models')+`<div class="rv" style="--i:1">${buildModelsPanel()}</div>`);
-  if(isAdmin&&page==='data') return shell(pageHead('data')+`<div class="rv" style="--i:1">${buildDataPanel()}</div>`);
+  if(page==='create'&&can('createbatch')) return shell(pageHead('create')+buildCreateCard());
+  if(page==='models'&&can('models')) return shell(pageHead('models')+`<div class="rv" style="--i:1">${buildModelsPanel()}</div>`);
+  if(page==='data'&&can('data')) return shell(pageHead('data')+`<div class="rv" style="--i:1">${buildDataPanel()}</div>`);
   if(isAdmin&&page==='users') return shell(pageHead('users')+buildUsersCard());
   if(page==='account') return shell(pageHead('account')+buildAccountCard());
-  if(isAdmin&&page==='reports') return shell(pageHead('reports')+buildReportsCard());
+  if(page==='reports'&&can('reports')) return shell(pageHead('reports')+buildReportsCard());
   return shell(buildOverview(isAdmin));
 }
 
@@ -1031,27 +1047,49 @@ function buildCreateCard(){
       <div class="text-muted" style="margin-top:10px;font-size:12.5px">New batches start with BOM verification. Sampling unlocks when it passes.</div>
     </div>`;
 }
+function accessBoxes(prefix,u){
+  const admin=u.role==='admin';
+  return `<div class="acc-grid">${MODULES.map(m=>`<label class="acc-item ${admin?'acc-dis':''}" title="${esc(m.d)}">
+      <input type="checkbox" class="${prefix}" value="${m.k}" ${admin||(u.access||[]).includes(m.k)?'checked':''} ${admin?'disabled':''}>
+      <span><b>${esc(m.t)}</b><small>${esc(m.d)}</small></span></label>`).join('')}</div>`;
+}
 function buildUsersCard(){
-  const list=userList==null?`<div class="text-muted">Loading users…</div>`:(userList.error?`<div class="err">${esc(userList.error)}</div>`:`
-    <div style="overflow-x:auto"><table class="res-table"><thead><tr><th>Username</th><th>Name</th><th>Role</th><th></th></tr></thead><tbody>
-    ${userList.map(u=>`<tr><td class="mono">${esc(u.username)}</td><td>${esc(u.name)}</td><td>${u.role==='admin'?'Admin':'Inspector'}</td>
-      <td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm resetPwBtn" data-u="${esc(u.username)}">Reset password</button>
-      ${u.username.toLowerCase()===String(user.username).toLowerCase()?'':`<button class="btn btn-ghost btn-sm delUserBtn" data-u="${esc(u.username)}" style="color:var(--fail)">Remove</button>`}</td></tr>`).join('')}
-    </tbody></table></div>`);
-  return `<div class="card rv" style="--i:1">${list}</div>
-    <div class="card narrow rv" style="--i:2">
+  let list;
+  if(userList==null) list=`<div class="card">Loading users…</div>`;
+  else if(userList.error) list=`<div class="card"><div class="err">${esc(userList.error)}</div></div>`;
+  else list=userList.map((u,ix)=>{
+    const me=u.username.toLowerCase()===String(user.username).toLowerCase();
+    return `<section class="card user-card rv" style="--i:${Math.min(ix+1,6)}" data-ix="${ix}">
+      <div class="uc-head">
+        <div><div class="uc-name">${esc(u.name||u.username)}${me?' <span class="badge badge-open">You</span>':''}</div><div class="text-muted mono" style="font-size:13px">${esc(u.username)}</div></div>
+        <div class="uc-role"><label class="lbl" for="role${ix}">Role</label>
+          <select id="role${ix}" class="field uRoleSel" data-ix="${ix}" ${me?'disabled':''}><option value="inspector" ${u.role!=='admin'?'selected':''}>Inspector</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin (everything)</option></select></div>
+      </div>
+      <div class="lbl" style="margin:4px 0 8px">Modules</div>
+      ${accessBoxes('acc'+ix,u)}
+      <div class="uc-actions">
+        <button class="btn btn-primary btn-sm saveAccBtn" data-ix="${ix}">Save access</button>
+        <span class="uc-pw"><input id="pw${ix}" class="field" type="password" autocomplete="new-password" placeholder="New password (8+ characters)" aria-label="New password for ${esc(u.username)}"><button class="btn btn-ghost btn-sm setPwBtn" data-ix="${ix}">Set password</button></span>
+        ${me?'':`<button class="btn btn-ghost btn-sm delUserBtn" data-u="${esc(u.username)}" style="color:var(--fail)">Remove</button>`}
+      </div>
+    </section>`;}).join('');
+  const nu={role:'inspector',access:['bomverify','sampling']};
+  return `${list}
+    <section class="card rv" style="--i:6">
       <div class="card-sub">Add a user</div>
       <div class="form-2">
         <div class="fg"><label class="lbl" for="uUser">Username</label><input id="uUser" class="field" type="text" autocomplete="off" maxlength="32"></div>
         <div class="fg"><label class="lbl" for="uPass">Password</label><input id="uPass" class="field" type="password" autocomplete="new-password" minlength="8"></div>
+        <div class="fg"><label class="lbl" for="uName">Full Name</label><input id="uName" class="field" type="text" maxlength="80"></div>
+        <div class="fg"><label class="lbl" for="uRole">Role</label>
+          <select id="uRole" class="field"><option value="inspector">Inspector</option><option value="admin">Admin (everything)</option></select></div>
       </div>
-      <div class="fg"><label class="lbl" for="uName">Full Name</label><input id="uName" class="field" type="text" maxlength="80"></div>
-      <div class="fg"><label class="lbl" for="uRole">Role</label>
-        <select id="uRole" class="field"><option value="inspector">Inspector</option><option value="admin">Admin</option></select></div>
-      <button id="btnAddUser" class="btn btn-primary btn-full">Add User</button>
+      <div class="lbl" style="margin:4px 0 8px">Modules</div>
+      ${accessBoxes('accNew',nu)}
+      <button id="btnAddUser" class="btn btn-primary" style="margin-top:12px">Add User</button>
       <div id="addUserMsg" class="text-muted hidden" style="margin-top:8px;font-size:13px"></div>
-      <div class="text-muted" style="margin-top:10px;font-size:12.5px">Usernames: 3 to 32 letters, numbers, dot, dash or underscore. Passwords: at least 8 characters. Passwords are stored only as a salted hash, so nobody can read them, admins included.</div>
-    </div>`;
+      <div class="text-muted" style="margin-top:10px;font-size:12.5px">Usernames: 3 to 32 letters, numbers, dot, dash or underscore. Passwords: at least 8 characters, stored only as a salted hash so nobody can read them, admins included. Everyone can view batches and results; modules decide what else they can do. Changes apply to people already signed in.</div>
+    </section>`;
 }
 function buildAccountCard(){
   return `<div class="card narrow rv" style="--i:1">
@@ -1093,7 +1131,7 @@ function buildBatchesBody(isAdmin){
       const pct2=g.totalLots?Math.round(g.completed/g.totalLots*100):0;
       const lots=g.lots.filter(matches);
       const locked=g.bomStatus==='Pending'||g.bomStatus==='Failed';
-      const nextOpen=(!isAdmin&&!locked)?g.lots.find(l=>l.status==='Open'):null;
+      const nextOpen=(!isAdmin&&can('sampling')&&!locked)?g.lots.find(l=>l.status==='Open'):null;
       html+=`<div class="batch-group fade">
       <div class="batch-hdr">
         <div>
@@ -1119,7 +1157,7 @@ function buildBatchesBody(isAdmin){
       } else {
         html+=`<div class="lot-grid" role="list">${lots.map(l=>{
           const ri=batches.indexOf(l), st=stOf(l), key=l.batchName+'||'+l.lotNumber;
-          const draft=(!isAdmin&&l.status==='Open')?loadDraft(l):null;
+          const draft=(!isAdmin&&can('sampling')&&l.status==='Open')?loadDraft(l):null;
           const cls=draft?'t-draft':(st==='open'&&locked)?'t-lock':'t-'+st;
           const lk=st==='open'&&locked;
           const word=draft?'Draft':lk?'Locked':st==='pass'?'Pass':st==='fail'?'Fail':st==='open'?'Open':'Closed';
@@ -1140,7 +1178,7 @@ function buildHero(groups,isAdmin){
   const st=l=>l.result==='PASS'?'pass':l.result==='FAIL'?'fail':l.status==='Open'?((l.bomStatus==='Pending'||l.bomStatus==='Failed')?'lock':'open'):'closed';
   const all=batches, pass=all.filter(l=>l.result==='PASS').length, fail=all.filter(l=>l.result==='FAIL').length;
   const open=all.filter(l=>l.status==='Open').length, lockedB=groups.filter(g=>g.bomStatus==='Pending'||g.bomStatus==='Failed');
-  const nextLot=!isAdmin?all.find(l=>l.status==='Open'&&!samplingLocked(l.batchName)):null;
+  const nextLot=(!isAdmin&&can('sampling'))?all.find(l=>l.status==='Open'&&!samplingLocked(l.batchName)):null;
   const today=new Date().toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'});
   let title, text;
   if(!all.length){ title='No batches yet.'; text=isAdmin?'Create the first batch. It starts with BOM verification, then sampling.':'Batches appear here once an admin creates them.'; }
@@ -1151,7 +1189,7 @@ function buildHero(groups,isAdmin){
   const actions=isAdmin
     ? `<button class="btn btn-primary navGo" data-go="create" type="button">Create a batch</button><button class="btn btn-ghost navGo" data-go="batches" type="button">View batches</button><button class="btn btn-ghost navGo" data-go="bom" type="button">BOM management</button>`
     : (nextLot?`<button class="btn btn-primary startBtn" data-ri="${batches.indexOf(nextLot)}" type="button">Inspect next open lot</button>`:'')
-      + (lockedB.length?`<button class="btn ${nextLot?'btn-ghost':'btn-primary'} heroJump" data-batch="${esc(lockedB[0].name)}" type="button">Verify BOM for ${esc(lockedB[0].name)}</button>`:'')
+      + (lockedB.length&&can('bomverify')?`<button class="btn ${nextLot?'btn-ghost':'btn-primary'} heroJump" data-batch="${esc(lockedB[0].name)}" type="button">Verify BOM for ${esc(lockedB[0].name)}</button>`:'')
       + `<button class="btn btn-ghost navGo" data-go="batches" type="button">View batches</button>`;
   const rows=groups.slice().reverse().map(g=>`<div class="lm-row"><div class="lm-name">${esc(g.name)}<span>${g.completed}/${g.totalLots}</span></div>
       <div class="lm-cells">${g.lots.map(l=>{const s=st(l);return `<button class="lm-cell c-${s} lmCell" data-ri="${batches.indexOf(l)}" type="button" aria-label="${esc(l.lotNumber)}: ${s==='lock'?'locked until BOM verification':s}" title="${esc(l.lotNumber)}"></button>`;}).join('')}</div></div>`).join('');
@@ -1230,7 +1268,7 @@ function buildFlow(g,isAdmin){
   else if(s==='Pending'){ cls='s-wait'; txt=canVerify?`Check all ${bm.parts} BOM parts of ${esc(bm.model)} for this batch`:`No BOM found for ${esc(modelLabel(g.model))}. Set its Lumio model number to a BOM tab name.`; }
   else if(s==='Waived'){ cls='s-na'; txt='Not required (waived by admin)'; }
   else { cls='s-na'; txt='Not required (batch created before the BOM step)'; }
-  if((s==='Pending'||s==='Failed')&&canVerify) act+=`<button class="btn btn-primary btn-sm bomStartBtn" data-batch="${esc(g.name)}">${startLbl}</button>`;
+  if((s==='Pending'||s==='Failed')&&canVerify&&can('bomverify')) act+=`<button class="btn btn-primary btn-sm bomStartBtn" data-batch="${esc(g.name)}">${startLbl}</button>`;
   if(verRef) act+=`<button class="btn btn-ghost btn-sm bomViewBtn" data-batch="${esc(g.name)}" data-ver="${esc(verRef)}">${bomResult&&bomResult.batch===g.name?'Hide result':'View result'}</button>`;
   if(isAdmin&&(s==='Pending'||s==='Failed')) act+=`<button class="btn btn-ghost btn-sm bomStageBtn" data-batch="${esc(g.name)}" data-st="Waived">Waive</button>`;
   if(isAdmin&&(s===''||s==='Waived')) act+=`<button class="btn btn-ghost btn-sm bomStageBtn" data-batch="${esc(g.name)}" data-st="Pending">Require BOM check</button>`;
@@ -1362,14 +1400,14 @@ function buildBomVerify(){
 function fmtDate(v){ const d=new Date(v); return isNaN(d)?(v||'-'):d.toLocaleString([], {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 function buildLotDetail(lot,isAdmin){
   const ri=batches.indexOf(lot), key=lot.batchName+'||'+lot.lotNumber;
-  const draft=(!isAdmin&&lot.status==='Open')?loadDraft(lot):null;
+  const draft=(!isAdmin&&can('sampling')&&lot.status==='Open')?loadDraft(lot):null;
   const st=lot.result==='PASS'?'<span class="badge badge-pass">Passed</span>':lot.result==='FAIL'?'<span class="badge badge-fail">Failed</span>':lot.status==='Open'?'<span class="badge badge-open">Open</span>':'<span class="badge badge-closed">Closed</span>';
   let h=`<section class="lot-detail" aria-label="${esc(lot.lotNumber)} details">
     <div class="ld-head">
       <div><div class="ld-title">${esc(lot.lotNumber)}</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${st}${draft?`<span class="badge badge-open">Draft, ${draft.samples.filter(s=>s.serial).length} of ${draft.samples.length} samples</span>`:''}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${!isAdmin&&lot.status==='Open'&&samplingLocked(lot.batchName)?`<span class="text-muted">Sampling starts after BOM verification passes</span>`:''}
-        ${!isAdmin&&lot.status==='Open'&&!samplingLocked(lot.batchName)?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume inspection':'Start inspection'}</button>`:''}
+        ${!isAdmin&&can('sampling')&&lot.status==='Open'&&samplingLocked(lot.batchName)?`<span class="text-muted">Sampling starts after BOM verification passes</span>`:''}
+        ${!isAdmin&&can('sampling')&&lot.status==='Open'&&!samplingLocked(lot.batchName)?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume inspection':'Start inspection'}</button>`:''}
         ${isAdmin?`<button class="btn btn-ghost btn-sm editBtn" data-ri="${ri}">Edit lot</button><button class="btn btn-ghost btn-sm delLotBtn" data-ri="${ri}" style="color:var(--fail)">Delete lot</button>`:''}
         <button class="btn btn-ghost btn-sm lotCloseBtn" aria-label="Close lot details">Close</button>
       </div>
@@ -1691,7 +1729,7 @@ function bindEvents(){
     try{
       const r=await api('login',{username:u,password:p});
       if(r.ok){
-        user={username:r.username,role:r.role,name:r.name};
+        user={username:r.username,role:r.role,name:r.name,access:r.access||[]};
         session={token:r.token,expiresAt:r.expiresAt,partdbUrl:r.partdbUrl||'',bomSheetUrl:r.bomSheetUrl||''};
         routeFromHash(); introDone=false; saveSession();
         render(); // show dashboard immediately
@@ -1783,7 +1821,7 @@ function bindEvents(){
     if(!username||!password||!name){ toast('Fill all user fields','err'); return; }
     if(password.length<8){ toast('Password must be at least 8 characters','err'); return; }
     bau.disabled=true;
-    const r=await api('addUser',{username,password,name,role});
+    const r=await api('addUser',{username,password,name,role,access:role==='admin'?[]:[...document.querySelectorAll('input.accNew')].filter(x=>x.checked).map(x=>x.value)});
     bau.disabled=false;
     if(r.ok){ toast(`User ${username} added`); loadUsers(); document.getElementById('addUserMsg').textContent=`✓ ${username} added as ${role}`; document.getElementById('addUserMsg').classList.remove('hidden'); document.getElementById('uUser').value=''; document.getElementById('uPass').value=''; document.getElementById('uName').value=''; }
     else toast(r.error||'Error','err');
@@ -1791,13 +1829,27 @@ function bindEvents(){
 
   // Users: reset password / remove ; own password change
   if(page==='users'&&userList===null&&user&&user.role==='admin'&&!activeLot&&!activeBom){ userList=undefined; loadUsers(); }
-  document.querySelectorAll('.resetPwBtn').forEach(b=>{ b.onclick=async()=>{
-    const u=b.getAttribute('data-u');
-    const pw=prompt(`New password for ${u} (at least 8 characters). Their other sessions are signed out.`);
-    if(pw===null) return;
-    if(pw.trim().length<8){ toast('Password must be at least 8 characters','err'); return; }
-    const r=await api('resetPassword',{username:u,password:pw.trim()});
-    r.ok?toast(`Password for ${u} changed`):toast(r.error||'Error','err');
+  const accOf=prefix=>[...document.querySelectorAll('input.'+prefix)].filter(x=>x.checked).map(x=>x.value);
+  document.querySelectorAll('.uRoleSel').forEach(sel=>{ sel.onchange=()=>{
+    const ad=sel.value==='admin';
+    document.querySelectorAll('input.acc'+sel.dataset.ix).forEach(x=>{ x.disabled=ad; if(ad) x.checked=true; x.closest('.acc-item').classList.toggle('acc-dis',ad); });
+  }; });
+  const nr=document.getElementById('uRole');
+  if(nr) nr.onchange=()=>{ const ad=nr.value==='admin'; document.querySelectorAll('input.accNew').forEach(x=>{ x.disabled=ad; if(ad) x.checked=true; x.closest('.acc-item').classList.toggle('acc-dis',ad); }); };
+  document.querySelectorAll('.saveAccBtn').forEach(b=>{ b.onclick=async()=>{
+    const ix=b.dataset.ix, u=userList[ix], role=document.getElementById('role'+ix).value;
+    b.disabled=true;
+    const r=await api('setUserAccess',{username:u.username,role,access:role==='admin'?[]:accOf('acc'+ix)});
+    b.disabled=false;
+    if(r.ok){ toast(`Access saved for ${u.username}`); u.role=r.role; u.access=r.access; render(); } else toast(r.error||'Error','err');
+  }; });
+  document.querySelectorAll('.setPwBtn').forEach(b=>{ b.onclick=async()=>{
+    const ix=b.dataset.ix, u=userList[ix], f=document.getElementById('pw'+ix), pw=f.value.trim();
+    if(pw.length<8){ toast('Password must be at least 8 characters','err'); f.focus(); return; }
+    b.disabled=true;
+    const r=await api('resetPassword',{username:u.username,password:pw});
+    b.disabled=false;
+    if(r.ok){ f.value=''; toast(`Password set for ${u.username}. They are signed out everywhere.`); } else toast(r.error||'Error','err');
   }; });
   document.querySelectorAll('.delUserBtn').forEach(b=>{ b.onclick=async()=>{
     const u=b.getAttribute('data-u');
