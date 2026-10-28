@@ -14,6 +14,15 @@ var FIXED_SAMPLE = 13;
 var BOM_SS_ID    = "11BFVHMfnDGymLNYfBNLp9CRKIAE0X5fLX8qX-R8DeYk";
 var TZ           = "Asia/Kolkata";
 
+// Part DB web app (BOM management tools, bound to the BOM sheet). Admins open it through the portal.
+var PARTDB_URL   = "https://script.google.com/macros/s/AKfycbyPiE-gcrUZH7cEA6KKBgXHJa93MUl2r7-GseHkZ0FGdKBmTJrOnl7r7SOpm3SNjdjZ/exec";
+
+// Login sessions (sheet "Sessions"; the Part DB script reads it too)
+var SESSION_HOURS = 12;
+// Actions anyone signed in may call; every other action except login needs the admin role.
+var MEMBER_ACTIONS = ["logout","getBatches","getModels","getBomList","getBom","getBomVerification",
+                      "checkSerial","submitLot","submitBomVerification","getLotUnits"];
+
 // Batches sheet stage columns (1-based)
 var COL_BOM_STATUS = 16;   // "", Pending, Passed, Failed, Waived  ("" = created before the BOM step)
 var COL_BOM_VER    = 17;   // Ver_ID of the verification that set the status
@@ -85,6 +94,21 @@ function doPost(e){
     var action = data.action;
     var result = {ok:false, error:"Unknown action: " + action};
 
+    // Every action except login needs a valid session; most need the admin role.
+    if(action !== "login"){
+      var sess = sessionFor_(data.token);
+      if(!sess) return json_({ok:false, auth:true, error:"Your session has expired. Please log in again."});
+      if(MEMBER_ACTIONS.indexOf(action) === -1 && sess.role !== "admin")
+        return json_({ok:false, error:"Only an admin can do this."});
+      data._session = sess;
+      // record who did it from the session, not from what the browser sent
+      if(action === "submitLot") data.inspector = sess.name;
+      if(action === "submitBomVerification") data.by = sess.name;
+      if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage"].indexOf(action) > -1){
+        data.createdBy = sess.username; data.updatedBy = sess.username; data.by = sess.username;
+      }
+    }
+
     if(action === "login"){
       result = login(data);
     }
@@ -139,6 +163,9 @@ function doPost(e){
     if(action === "approveSerial"){
       result = approveSerial(data);
     }
+    if(action === "logout"){
+      result = logout(data);
+    }
     if(action === "getBomList"){
       result = getBomList();
     }
@@ -170,10 +197,81 @@ function login(d){
   var rows = getOrCreateSheet("Users",[]).getDataRange().getValues();
   for(var i = 1; i < rows.length; i++){
     if(String(rows[i][0]) === String(d.username) && String(rows[i][1]) === String(d.password)){
-      return {ok:true, username:rows[i][0], role:rows[i][2], name:rows[i][3]};
+      var role = String(rows[i][2]||"inspector").trim().toLowerCase();
+      var s = createSession_(String(rows[i][0]), String(rows[i][3]||rows[i][0]), role);
+      var out = {ok:true, username:rows[i][0], role:role, name:rows[i][3], token:s.token, expiresAt:s.expiresAt};
+      if(role === "admin"){ out.partdbUrl = PARTDB_URL; out.bomSheetUrl = "https://docs.google.com/spreadsheets/d/" + BOM_SS_ID + "/edit"; }
+      return out;
     }
   }
   return {ok:false, error:"Invalid username or password"};
+}
+
+function json_(o){
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/* ---------------- sessions ----------------
+ * Sessions sheet: TokenHash | Username | Name | Role | CreatedAt | ExpiresAt
+ * Only a SHA-256 hash of each token is stored. */
+function sha256_(s){
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s), Utilities.Charset.UTF_8)
+    .map(function(b){ return ("0" + (b & 0xff).toString(16)).slice(-2); }).join("");
+}
+function sessionsSheet_(){
+  var sh = getSpreadsheet().getSheetByName("Sessions");
+  if(!sh){
+    sh = getSpreadsheet().insertSheet("Sessions");
+    sh.appendRow(["TokenHash","Username","Name","Role","CreatedAt","ExpiresAt"]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function createSession_(username, name, role){
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try{
+    var sh = sessionsSheet_();
+    var now = new Date();
+    // drop expired sessions
+    var v = sh.getDataRange().getValues();
+    var keep = [v[0]];
+    for(var i = 1; i < v.length; i++){ if(v[i][5] instanceof Date && v[i][5] > now) keep.push(v[i]); }
+    if(keep.length !== v.length){
+      sh.getRange(1, 1, v.length, 6).clearContent();
+      sh.getRange(1, 1, keep.length, 6).setValues(keep);
+    }
+    var token = Utilities.getUuid().replace(/-/g,"") + Utilities.getUuid().replace(/-/g,"");
+    var exp = new Date(now.getTime() + SESSION_HOURS * 3600 * 1000);
+    sh.appendRow([sha256_(token), username, name, role, now, exp]);
+    return {token:token, expiresAt:exp.toISOString()};
+  } finally { lock.releaseLock(); }
+}
+function sessionFor_(token){
+  token = String(token||"").trim();
+  if(!token) return null;
+  var h = sha256_(token);
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get("s_" + h);
+  if(hit) return JSON.parse(hit);
+  var v = sessionsSheet_().getDataRange().getValues();
+  for(var i = v.length - 1; i >= 1; i--){
+    if(String(v[i][0]) !== h) continue;
+    if(!(v[i][5] instanceof Date) || v[i][5] <= new Date()) return null;
+    var s = {username:String(v[i][1]), name:String(v[i][2]), role:String(v[i][3]).toLowerCase()};
+    cache.put("s_" + h, JSON.stringify(s), 300);
+    return s;
+  }
+  return null;
+}
+function logout(d){
+  var h = sha256_(String(d.token||""));
+  CacheService.getScriptCache().remove("s_" + h);
+  var sh = sessionsSheet_(), v = sh.getDataRange().getValues();
+  for(var i = v.length - 1; i >= 1; i--){
+    if(String(v[i][0]) === h) sh.getRange(i+1, 6).setValue(new Date(0));
+  }
+  return {ok:true};
 }
 
 function addUser(d){
@@ -882,8 +980,9 @@ function submitBomVerification(d){
       var lotQ = Number(it.lotQps);
       var okPn = lotPn === p.partNo || p.alternates.indexOf(lotPn) > -1;
       var okQ = !isNaN(lotQ) && Math.abs(lotQ - p.qps) < 1e-9;
-      var res = okPn && okQ ? "Matched" : "Deviation";
-      if(res === "Deviation"){
+      // same result words as the Part DB lot-wise verification
+      var res = !lotPn ? "Not used in lot" : !okPn ? "Part changed" : !okQ ? "QPS changed" : "Matched";
+      if(res !== "Matched"){
         dev++;
         if(!String(it.remark||"").trim()) throw new Error("Remark is required for deviation on " + p.partNo);
       }
@@ -895,8 +994,8 @@ function submitBomVerification(d){
     if(!log || !det) return {ok:false, error:"BOM_VERIFY_LOG or LOT_BOM_DETAIL tab missing in the BOM sheet"};
     var verId = nextVerId_(log);
     var when = Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd HH:mm:ss");
-    var result = dev === 0 ? "All matched" : (dev + " deviation" + (dev === 1 ? "" : "s"));
-    log.appendRow([verId, when, model, batchName, ctl.rev, ctl.status, parts.length, dev, result,
+    var result = dev === 0 ? "All matched" : "Deviation";
+    log.appendRow([verId, when, model, batchName, ctl.rev, String(ctl.status).toLowerCase() === "locked" ? "Locked" : "Not locked", parts.length, dev, result,
                    String(d.by||""), String(d.remarks||"")]);
     var detail = rows.map(function(r){
       return [verId, model, batchName, ctl.rev, r.p.partNo, r.p.description, r.p.imageUrl, r.p.qps,

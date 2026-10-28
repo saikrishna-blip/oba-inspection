@@ -149,6 +149,24 @@ select.field{cursor:pointer;appearance:none;background-image:linear-gradient(45d
 .ok-note{background:var(--pass-bg);border:1px solid var(--pass-line);color:var(--pass);border-radius:10px;padding:12px 16px;font-weight:600}
 .res-table tr.row-muted td{color:var(--ink-3);background:var(--paper)}
 
+/* ── Admin navigation + BOM management ─────────────────── */
+.topnav{display:flex;gap:4px;background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:3px}
+.navBtn{border:none;background:none;padding:0 14px;min-height:36px;border-radius:8px;font-size:14px;font-weight:600;color:var(--ink-2);cursor:pointer}
+.navBtn:hover{color:var(--ink)}
+.navBtn.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(21,26,22,.12)}
+.tool-group{margin-bottom:22px}
+.tool-group-h{font-family:var(--num);font-size:18px;font-weight:700;margin:0 0 10px}
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.tool-card{display:flex;flex-direction:column;gap:6px;text-align:left;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--lime);border-radius:12px;padding:16px 18px;cursor:pointer;color:var(--ink);font:inherit;transition:border-color .15s}
+.tool-card:hover{border-color:var(--ink);border-left-color:var(--lime)}
+.tc-t{font-weight:700;font-size:15.5px}
+.tc-d{font-size:13.5px;color:var(--ink-3);line-height:1.45}
+.tool-page{height:100vh;overflow:hidden}
+.tool-bar{display:flex;align-items:center;gap:12px;padding:10px 24px;background:var(--panel);border-bottom:1px solid var(--line)}
+.tool-title{font-family:var(--num);font-size:18px;font-weight:700}
+.tool-frame{flex:1;width:100%;border:0;background:#f6f8fb;min-height:0}
+@media (max-width:760px){ .topnav{order:3;width:100%} .navBtn{flex:1} .tool-bar{padding:8px 12px;flex-wrap:wrap} }
+
 /* ── Batch flow ──────────────────────────────────────── */
 .flow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--line);background:var(--paper)}
 .step{display:flex;gap:12px;align-items:flex-start;padding:14px 20px;border-right:1px solid var(--line);position:relative}
@@ -320,6 +338,9 @@ let recSearch = {q:'', loading:false, res:null};  // record lookup (admin)
 let bomModels = [];         // models in the BOM sheet (BOM_CONTROL)
 let activeBom = null;       // BOM verification in progress
 let bomResult = null;       // {batch, loading, data} verification result being viewed
+let session = null;         // {token, expiresAt, partdbUrl, bomSheetUrl}
+let page = 'insp';          // 'insp' | 'bom' (admin: BOM management)
+let bomTool = null;         // open BOM management tool key
 const LOT_SIZE   = 90;
 const SAMPLE_N   = 13;
 
@@ -386,8 +407,20 @@ function toast(msg,type='ok'){
   toastTimer=setTimeout(()=>{ el.style.display='none'; },3500);
 }
 
+function saveSession(){ try{ if(user&&session) localStorage.setItem('oba_session',JSON.stringify({user,session})); else localStorage.removeItem('oba_session'); }catch(e){} }
+function restoreSession(){
+  try{
+    const s=JSON.parse(localStorage.getItem('oba_session')||'null');
+    if(s&&s.session&&new Date(s.session.expiresAt)>new Date()){ user=s.user; session=s.session; return true; }
+    localStorage.removeItem('oba_session');
+  }catch(e){}
+  return false;
+}
+function resetApp(){ activeBom=null; bomResult=null; dataScan=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='insp'; bomTool=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; saveSession(); }
+let expiredShown=false;
 async function api(action,data={}){
   data.action=action;
+  if(session&&session.token&&action!=='login') data.token=session.token;
   try{
     const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(data)});
     const text=await r.text();
@@ -396,7 +429,15 @@ async function api(action,data={}){
       console.error('Apps Script returned HTML instead of JSON. URL may be wrong or script needs redeployment.');
       return {ok:false, error:'Backend error: The Apps Script URL is invalid or the script needs to be redeployed. Please check the URL and redeploy as a New Version.'};
     }
-    return JSON.parse(text);
+    const res=JSON.parse(text);
+    if(res&&res.auth&&user){
+      // session ended: keep any open inspection as a draft, then back to login
+      if(activeLot) saveDraft();
+      if(activeBom) saveBomDraft();
+      resetApp(); render();
+      if(!expiredShown){ expiredShown=true; toast('Your session has expired. Please log in again.','err'); setTimeout(()=>{expiredShown=false;},4000); }
+    }
+    return res;
   }catch(err){
     return {ok:false, error:'Network error: '+err.message+'. Check your internet connection and Apps Script URL.'};
   }
@@ -600,6 +641,7 @@ function buildPage(){
   if(!user)         return buildLogin();
   if(activeLot)     return buildInspection();
   if(activeBom)     return buildBomVerify();
+  if(page==='bom' && user.role==='admin') return buildBomMgmt();
   return buildDashboard();
 }
 
@@ -654,6 +696,7 @@ function buildDashboard(){
         <div class="hdr-sub">Batch flow: BOM verification, FAI inspection, sampling inspection (IS 2500 level G2)</div>
       </div>
     </div>
+    ${navHtml()}
     <div class="hdr-right">
       <span class="text-muted mono" style="font-size:13px">${esc(user.name)}, ${user.role}</span>
       <button id="btnLogout" class="btn btn-ghost btn-sm">Logout</button>
@@ -780,6 +823,69 @@ function buildDashboard(){
   <footer class="pg-footer">LUMIO Quality Management - Projector</footer>
   </div>`;
   return html;
+}
+
+// ─── ADMIN NAVIGATION + BOM MANAGEMENT ───────────────────
+function navHtml(){
+  if(!user||user.role!=='admin') return '';
+  return `<nav class="topnav" aria-label="Sections">
+    <button class="navBtn ${page==='insp'?'on':''}" data-p="insp" aria-current="${page==='insp'?'page':'false'}">Inspection</button>
+    <button class="navBtn ${page==='bom'?'on':''}" data-p="bom" aria-current="${page==='bom'?'page':'false'}">BOM management</button>
+  </nav>`;
+}
+const BOM_TOOLS=[
+  {group:'Build and assign', items:[
+    {k:'assign',  t:'Assign part to models', d:'Add one part to several model BOMs, change its QPS or remove it.'},
+    {k:'bom',     t:'Build model BOM (bulk)', d:'Add many parts to a model at once, or create a new model BOM.'}]},
+  {group:'Compare', items:[
+    {k:'compareall', t:'Compare model BOMs (all models)', d:'Every model side by side: common, shared and model-specific parts.'},
+    {k:'compare', t:'Compare two models', d:'Common parts, parts only in one model, and QPS differences.'}]},
+  {group:'Control and ECN', items:[
+    {k:'lock',    t:'BOM lock / unlock', d:'Lock a BOM as the baseline, or unlock it with a reason.'},
+    {k:'ecn',     t:'Generate ECN (part replace / split)', d:'Replace or split parts with an ECN, attach the document, edit or delete ECNs.'},
+    {k:'history', t:'BOM version history (view / restore)', d:'See the BOM at any revision, restore it, or merge revisions.'},
+    {k:'report',  t:'Print ECN report', d:'Printable before / after report for one ECN or a whole model.'}]},
+  {group:'Verification', items:[
+    {k:'verify',  t:'BOM verification (lot-wise)', d:'Verify any lot against a BOM and review past verifications. Batch verifications are done from Inspection.'}]},
+  {group:'Part images and clean-up', items:[
+    {k:'images',  t:'Images and duplicates', d:'Link part images, report missing images, remove duplicate parts, clear the image column.'}]}
+];
+function toolUrl(k){ return session&&session.partdbUrl ? `${session.partdbUrl}?page=${encodeURIComponent(k)}&t=${encodeURIComponent(session.token)}` : ''; }
+function buildBomMgmt(){
+  const logo=document.querySelector('.logo')?document.querySelector('.logo').outerHTML:'';
+  const tool=bomTool?BOM_TOOLS.flatMap(g=>g.items).find(x=>x.k===bomTool):null;
+  const head=`<header class="hdr">
+    <div class="hdr-left">${logo}
+      <div><div class="hdr-title">LUMIO Quality Management - Projector</div><div class="hdr-sub">BOM management (admin)</div></div>
+    </div>
+    ${navHtml()}
+    <div class="hdr-right">
+      <span class="text-muted mono" style="font-size:13px">${esc(user.name)}, ${user.role}</span>
+      <button id="btnLogout" class="btn btn-ghost btn-sm">Logout</button>
+    </div>
+  </header>`;
+  if(!session||!session.partdbUrl){
+    return `<div class="page">${head}<div class="main"><div class="card" style="text-align:center;padding:40px">BOM management needs a fresh login. Log out and log in again.</div></div></div>`;
+  }
+  if(tool){
+    return `<div class="page tool-page">${head}
+      <div class="tool-bar">
+        <button id="btnToolBack" class="btn btn-ghost btn-sm">← All BOM tools</button>
+        <div class="tool-title">${esc(tool.t)}</div>
+        <span style="flex:1"></span>
+        <a class="btn btn-ghost btn-sm" href="${esc(toolUrl(tool.k))}" target="_blank" rel="noopener">Open in new tab</a>
+      </div>
+      <iframe class="tool-frame" src="${esc(toolUrl(tool.k))}" title="${esc(tool.t)}"></iframe>
+    </div>`;
+  }
+  return `<div class="page">${head}<div class="main">
+    <div class="info-banner"><b>BOM data lives in the Lumio Part Reference DB sheet.</b> Every change made here is written straight to that sheet (model tabs, PART_MASTER, BOM_CONTROL, ECN_HISTORY and the verification logs).
+      ${session.bomSheetUrl?`<a href="${esc(session.bomSheetUrl)}" target="_blank" rel="noopener" style="color:var(--ink);font-weight:600">Open the BOM sheet</a>`:''}</div>
+    ${BOM_TOOLS.map(g=>`<section class="tool-group">
+      <h2 class="tool-group-h">${esc(g.group)}</h2>
+      <div class="tool-grid">${g.items.map(x=>`<button class="tool-card toolCard" data-k="${x.k}"><span class="tc-t">${esc(x.t)}</span><span class="tc-d">${esc(x.d)}</span></button>`).join('')}</div>
+    </section>`).join('')}
+  </div><footer class="pg-footer">LUMIO Quality Management - Projector</footer></div>`;
 }
 
 // ─── BATCH FLOW STRIP ─────────────────────────────────────
@@ -1256,6 +1362,8 @@ function bindEvents(){
       const r=await api('login',{username:u,password:p});
       if(r.ok){
         user={username:r.username,role:r.role,name:r.name};
+        session={token:r.token,expiresAt:r.expiresAt,partdbUrl:r.partdbUrl||'',bomSheetUrl:r.bomSheetUrl||''};
+        page='insp'; bomTool=null; saveSession();
         render(); // show dashboard immediately
         loadAll().then(()=>render()); // load batches + models in background
       }
@@ -1276,7 +1384,12 @@ function bindEvents(){
 
   // Logout
   const blo=document.getElementById('btnLogout');
-  if(blo) blo.onclick=()=>{ activeBom=null; bomResult=null; dataScan=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; render(); };
+  if(blo) blo.onclick=()=>{ if(session&&session.token) api('logout'); resetApp(); render(); };
+  // Admin navigation
+  document.querySelectorAll('.navBtn').forEach(b=>{ b.onclick=()=>{ page=b.getAttribute('data-p'); bomTool=null; render(); window.scrollTo(0,0); }; });
+  document.querySelectorAll('.toolCard').forEach(b=>{ b.onclick=()=>{ bomTool=b.getAttribute('data-k'); render(); window.scrollTo(0,0); }; });
+  const btb=document.getElementById('btnToolBack');
+  if(btb) btb.onclick=()=>{ bomTool=null; render(); };
 
   // Refresh
   const br=document.getElementById('btnRefresh');
@@ -1903,7 +2016,7 @@ window.addEventListener('beforeunload', ()=>{
   if(activeBom) saveBomDraft();
 });
 
-render();
+if(API && restoreSession()){ render(); loadAll().then(()=>render()); } else render();
 </script>
 
 <!-- SUMMARY SCREEN -->
