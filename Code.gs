@@ -23,7 +23,7 @@ var MEMBER_ACTIONS = ["logout","getBatches","getModels","getBomList","getBom","g
                       "checkSerial","submitLot","submitBomVerification","getLotUnits","changePassword"];
 
 // Security settings
-var PW_ITERATIONS    = 10000;   // PBKDF2-HMAC-SHA256 rounds for stored passwords
+var PW_ITERATIONS    = 1000;    // PBKDF2-HMAC-SHA256 rounds (each round is slow in Apps Script: 1000 = about 1.5 s per login)
 var PW_MIN_LENGTH    = 8;
 var LOGIN_MAX_FAILS  = 5;       // failed logins per username ...
 var LOGIN_LOCK_SECS  = 900;     // ... locks that username for 15 minutes
@@ -218,7 +218,8 @@ function login(d){
     return {ok:false, error:"Invalid username or password"};
   }
   cache.remove(failKey);
-  if(!isHashed_(String(row[1]))){   // a password typed into the sheet by hand: store it hashed now
+  // a password typed into the sheet by hand, or hashed with a different round count: store it hashed now
+  if(!isHashed_(String(row[1])) || String(row[1]).split("$")[1] !== String(PW_ITERATIONS)){
     var ush = getOrCreateSheet("Users",[]), uv = ush.getDataRange().getValues(), ui = findUserRow_(uv, username);
     if(ui > -1) ush.getRange(ui + 1, 2).setNumberFormat("@").setValue(hashPassword_(password));
   }
