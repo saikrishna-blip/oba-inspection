@@ -4,139 +4,191 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IS2500 OBA Inspection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#F2F4F1">
 <style>
-*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Roboto,Arial,sans-serif}
-body{background:#020617;color:#e2e8f0;min-height:100vh}
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-thumb{background:#1e293b;border-radius:4px}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-.fade{animation:fadeIn .25s ease forwards}
+/* ── Tokens: inspection bench ─────────────────────────── */
+:root{
+  --paper:#F2F4F1;  --panel:#FFFFFF;  --sunk:#EAEDE8;
+  --line:#DCE1DA;   --line-strong:#C3CAC0;
+  --ink:#151A16;    --ink-2:#4B554D;  --ink-3:#768078;
+  --lime:#82D11C;   --lime-deep:#4E8F0A;
+  --pass:#2E7A12;   --pass-bg:#E8F5DB;  --pass-line:#B9DE90;
+  --minor:#946000;  --minor-bg:#FFF1D2; --minor-line:#EBC984;
+  --fail:#C23321;   --fail-bg:#FBE6E2;  --fail-line:#EFB4A9; --fail-row:#FDF5F3;
+  --open:#24569E;   --open-bg:#E6EDF8;  --open-line:#BBCCE7;
+  --ui:'Barlow',system-ui,'Segoe UI',Roboto,Arial,sans-serif;
+  --num:'Barlow Semi Condensed','Barlow',system-ui,sans-serif;
+  --code:'JetBrains Mono',ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--paper);color:var(--ink);min-height:100vh;font-family:var(--ui);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select{font-family:inherit}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px;border:2px solid var(--paper)}
+:focus-visible{outline:3px solid var(--lime);outline-offset:2px}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes slotIn{from{transform:scale(.6);opacity:.3}to{transform:none;opacity:1}}
+.fade{animation:fadeIn .2s ease both}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-/* LAYOUT */
+/* ── Layout ───────────────────────────────────────────── */
 .page{min-height:100vh;display:flex;flex-direction:column}
-.hdr{background:#0a0f1e;border-bottom:1px solid #1e293b;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:40}
-.hdr-left{display:flex;align-items:center;gap:12px}
-.logo{display:flex;align-items:center;background:#ffffff;border-radius:8px;padding:5px 12px}.logo img{height:26px;width:auto}
-.hdr-title{font-size:15px;font-weight:800;color:#fff;letter-spacing:.05em}
-.hdr-sub{font-size:10px;color:#64748b;margin-top:2px;letter-spacing:.04em}
-.hdr-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.main{flex:1;max-width:1400px;width:100%;margin:0 auto;padding:20px}
+.hdr{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:40}
+.hdr-left{display:flex;align-items:center;gap:16px;min-width:0}
+.logo{display:flex;align-items:center;padding-right:16px;border-right:1px solid var(--line)}
+.logo img{height:26px;width:auto;display:block}
+.hdr-title{font-family:var(--num);font-size:20px;font-weight:700;color:var(--ink);letter-spacing:-.005em;line-height:1.1}
+.hdr-sub{font-size:13px;color:var(--ink-3);margin-top:2px}
+.hdr-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.main{flex:1;max-width:1320px;width:100%;margin:0 auto;padding:24px}
 
-/* CARDS */
-.card{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:20px;margin-bottom:16px}
-.card-title{font-size:11px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e293b}
-.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px}
+/* ── Panels ───────────────────────────────────────────── */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px}
+.card-title{font-family:var(--num);font-size:19px;font-weight:700;color:var(--ink);margin-bottom:16px;letter-spacing:-.005em}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px;margin-bottom:16px}
 .grid-4{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
 
-/* FORM */
-.fg{margin-bottom:12px}
-.lbl{display:block;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
-.field{width:100%;background:#020617;border:1px solid #1e293b;border-radius:9px;padding:9px 12px;font-size:13px;color:#e2e8f0;outline:none;transition:border-color .2s}
-.field:focus{border-color:#6366f1}
-.field.err-field{border-color:#ef4444}
-select.field{cursor:pointer}
+/* ── Form ─────────────────────────────────────────────── */
+.fg{margin-bottom:14px}
+.lbl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
+.field{width:100%;background:var(--panel);border:1px solid var(--line-strong);border-radius:8px;padding:10px 12px;font-size:15px;color:var(--ink);outline:none;transition:border-color .15s,box-shadow .15s;min-height:42px}
+.field::placeholder{color:#A3ABA4}
+.field:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(130,209,28,.35)}
+.field.err-field{border-color:var(--fail);box-shadow:0 0 0 3px rgba(194,51,33,.12)}
+select.field{cursor:pointer;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-2) 50%),linear-gradient(135deg,var(--ink-2) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:34px}
 
-/* BUTTONS */
-.btn{border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;padding:9px 18px;letter-spacing:.04em;text-transform:uppercase;transition:all .15s}
-.btn-primary{background:#4f46e5;color:#fff}.btn-primary:hover{background:#6366f1}
-.btn-danger{background:#dc2626;color:#fff}.btn-danger:hover{background:#ef4444}
-.btn-ghost{background:#1e293b;color:#94a3b8;border:1px solid #334155}.btn-ghost:hover{background:#334155;color:#fff}
-.btn-sm{padding:5px 12px;font-size:10px}
-.btn-full{width:100%;padding:11px}
-.btn:disabled{background:#1e293b;color:#475569;cursor:not-allowed}
+/* ── Buttons ──────────────────────────────────────────── */
+.btn{border:1px solid transparent;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;padding:10px 18px;min-height:42px;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background .15s,border-color .15s,color .15s}
+.btn-primary{background:var(--ink);color:#fff}
+.btn-primary:hover{background:#2C352E}
+.btn-danger{background:var(--fail);color:#fff}
+.btn-danger:hover{background:#A82917}
+.btn-ghost{background:var(--panel);color:var(--ink);border-color:var(--line-strong)}
+.btn-ghost:hover{border-color:var(--ink)}
+.btn-sm{padding:6px 12px;min-height:34px;font-size:13px}
+.btn-full{width:100%}
+.btn:disabled{background:var(--sunk);color:var(--ink-3);border-color:var(--line);cursor:not-allowed}
 
-/* BADGES */
-.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.05em}
-.badge-open{background:#1e3a5f;color:#60a5fa;border:1px solid #1d4ed8}
-.badge-closed{background:#1e293b;color:#64748b;border:1px solid #334155}
-.badge-pass{background:#052e16;color:#4ade80;border:1px solid #166534}
-.badge-fail{background:#2d0a0a;color:#f87171;border:1px solid #991b1b}
+/* ── Status chips ─────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:6px;font-size:12.5px;font-weight:600;border:1px solid}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge-open{background:var(--open-bg);color:var(--open);border-color:var(--open-line)}
+.badge-closed{background:var(--sunk);color:var(--ink-2);border-color:var(--line)}
+.badge-pass{background:var(--pass-bg);color:var(--pass);border-color:var(--pass-line)}
+.badge-fail{background:var(--fail-bg);color:var(--fail);border-color:var(--fail-line)}
 
-/* STATS */
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
-.stat{background:#0a0f1e;border:1px solid #1e293b;border-radius:12px;padding:14px 16px}
-.stat-label{font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.07em}
-.stat-val{font-size:24px;font-weight:900;color:#fff;margin-top:4px;font-variant-numeric:tabular-nums}
-.stat-sub{font-size:10px;color:#475569;margin-top:3px;font-family:monospace}
+/* ── Stats ────────────────────────────────────────────── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0;margin-bottom:20px;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.stat{background:var(--panel);padding:16px 20px;border-right:1px solid var(--line)}
+.stat:last-child{border-right:none}
+.stat-label{font-size:13px;font-weight:600;color:var(--ink-2)}
+.stat-val{font-family:var(--num);font-size:34px;font-weight:700;color:var(--ink);margin-top:2px;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat-sub{font-size:12.5px;color:var(--ink-3);margin-top:4px}
 
-/* BATCH GROUP */
-.batch-group{background:#0a0f1e;border:1px solid #1e293b;border-radius:14px;overflow:hidden;margin-bottom:14px}
-.batch-hdr{padding:14px 18px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px}
-.batch-name{font-size:14px;font-weight:800;color:#fff;font-family:monospace;letter-spacing:.04em}
-.batch-meta{font-size:10px;color:#475569;margin-top:3px;font-family:monospace;line-height:1.6}
-.batch-meta b{color:#94a3b8}
-.lot-row{padding:12px 18px;border-bottom:1px solid #0f172a;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;transition:background .15s}
+/* ── Batches ──────────────────────────────────────────── */
+.batch-group{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:16px}
+.batch-hdr{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}
+.batch-name{font-family:var(--num);font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.batch-meta{font-size:13px;color:var(--ink-3);margin-top:4px;line-height:1.7}
+.batch-meta b{color:var(--ink);font-weight:600}
+.lot-strip{display:flex;flex-wrap:wrap;gap:3px;margin-top:10px;max-width:640px}
+.lot-cell{width:14px;height:14px;border-radius:3px;background:var(--sunk);border:1px solid var(--line-strong)}
+.lot-cell.c-pass{background:var(--lime);border-color:var(--lime-deep)}
+.lot-cell.c-fail{background:var(--fail);border-color:#8E2214}
+.lot-cell.c-open{background:var(--panel);border-color:var(--open)}
+.lot-row{padding:12px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
 .lot-row:last-child{border-bottom:none}
-.lot-row:hover{background:#0f172a}
-.lot-name{font-size:12px;font-weight:700;color:#e2e8f0;font-family:monospace}
-.lot-meta{font-size:10px;color:#475569;font-family:monospace;margin-top:2px}
-.lot-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.progress-bar{background:#0f172a;border-radius:6px;height:5px;overflow:hidden;min-width:80px}
-.progress-fill{background:#4f46e5;height:100%;transition:width .4s}
+.lot-row:hover{background:#FAFBF9}
+.lot-name{font-size:15px;font-weight:600;color:var(--ink)}
+.lot-meta{font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.lot-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.progress-bar{background:var(--sunk);border-radius:99px;height:8px;overflow:hidden;min-width:80px}
+.progress-fill{background:var(--lime);height:100%;transition:width .4s;border-radius:99px}
 
-/* INSPECTION */
-.insp-header{background:#0a0f1e;border:1px solid #1e293b;border-radius:14px;padding:16px 20px;margin-bottom:16px}
-.insp-title{font-size:14px;font-weight:800;color:#fff;font-family:monospace}
-.insp-meta{font-size:10px;color:#64748b;font-family:monospace;margin-top:4px;line-height:1.7}
-.sample-card{background:#0a0f1e;border:1px solid #1e293b;border-radius:12px;padding:16px;margin-bottom:12px}
-.sample-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.sample-num{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em;font-family:monospace}
-.sample-result{font-size:12px;font-weight:800;font-family:monospace}
-.res-pass{color:#4ade80}.res-minor{color:#fbbf24}.res-major{color:#f87171}.res-pending{color:#475569}
-.test-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
-.toggle-btn{width:100%;padding:8px 6px;border:1px solid;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;transition:all .15s}
-.t-pass{background:#052e16;color:#4ade80;border-color:#166534}
-.t-fail{background:#2d0a0a;color:#f87171;border-color:#991b1b}
-.toggle-lbl{font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
-.bd-box{background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-top:10px}
-.bd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-top:8px}
-.bd-result{padding:8px 10px;border-radius:8px;font-size:10px;font-family:monospace;line-height:1.5}
-.bd-ok{background:#052e16;border:1px solid #166534;color:#4ade80}
-.bd-fail{background:#2d0a0a;border:1px solid #991b1b;color:#f87171}
-.insp-footer{background:#0a0f1e;border:1px solid #1e293b;border-radius:12px;padding:16px;margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
-.insp-tally{font-size:11px;font-family:monospace;line-height:1.8;color:#64748b}
-.insp-tally b{color:#e2e8f0}
-.insp-tally .t-ok{color:#4ade80}.insp-tally .t-warn{color:#fbbf24}.insp-tally .t-fail{color:#f87171}
+/* ── Inspection: sample tray (signature) ──────────────── */
+.bench{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center;background:var(--ink);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:16px}
+.bench-title{font-family:var(--num);font-size:24px;font-weight:700;letter-spacing:-.01em}
+.bench-sub{font-size:13px;color:#AEB8AF;margin-top:3px;line-height:1.6}
+.tray{display:grid;grid-template-columns:repeat(var(--n,13),34px);gap:5px;padding:8px;background:#232A24;border-radius:10px;border:1px solid #39423A}
+.slot{height:40px;border-radius:5px;background:#2E362F;border:1px dashed #56605A;color:#8D978F;font-family:var(--num);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.slot:hover{border-color:#fff;color:#fff}
+.slot.s-pass{background:var(--lime);border:1px solid var(--lime);color:var(--ink);animation:slotIn .25s ease}
+.slot.s-minor{background:#F2B33D;border:1px solid #F2B33D;color:var(--ink);animation:slotIn .25s ease}
+.slot.s-major{background:#E2533F;border:1px solid #E2533F;color:#fff;animation:slotIn .25s ease}
+.verdict{display:flex;gap:18px;align-items:flex-end;margin-top:10px;font-size:13px;color:#AEB8AF}
+.verdict b{font-family:var(--num);font-size:20px;color:#fff;display:block;line-height:1}
+.verdict .v-ok{color:var(--lime)}.verdict .v-bad{color:#FF8A78}.verdict .v-warn{color:#F2B33D}
 
-/* COMPACT SAMPLE LIST */
-.samp-row{border-bottom:1px solid #0f172a;padding:8px 14px;display:flex;align-items:center;gap:10px;transition:background .15s}
+/* ── Inspection rows ─────────────────────────────────── */
+.samp-table{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.samp-row{border-bottom:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;scroll-margin-top:90px}
 .samp-row:last-child{border-bottom:none}
-.samp-row:hover{background:#0f172a}
-.samp-row.is-fail{background:#170808}
-.samp-num-badge{width:22px;height:22px;border-radius:6px;background:#1e293b;color:#64748b;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;font-family:monospace;flex-shrink:0}
-.samp-serial-wrap{width:195px;flex-shrink:0}
-.samp-serial-inp{width:100%;background:#020617;border:1px solid #1e293b;border-radius:7px;padding:6px 9px;font-size:11.5px;color:#94a3b8;outline:none;font-family:'SF Mono',Consolas,monospace;letter-spacing:.02em}
-.samp-serial-inp:focus{border-color:#6366f1;color:#e2e8f0}
-.samp-serial-inp.err-field{border-color:#ef4444}
-.samp-toggles{display:flex;gap:4px;align-items:center;flex-shrink:0}
-.mini-toggle{padding:5px 9px;border-radius:6px;border:1px solid;font-size:9px;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.02em;min-width:34px;text-align:center;transition:all .12s;line-height:1}
-.mini-toggle-pass{background:#0c2818;color:#4ade80;border-color:#1c4a32}
-.mini-toggle-fail{background:#2d0a0a;color:#f87171;border-color:#5c1414}
-.samp-bd-toggle{padding:5px 9px;border-radius:6px;border:1px solid #283449;background:#141d2e;color:#7c8aa3;font-size:9px;font-weight:800;cursor:pointer;white-space:nowrap;letter-spacing:.02em;line-height:1;flex-shrink:0}
-.samp-bd-toggle.bd-active-ok{background:#0c2818;color:#4ade80;border-color:#1c4a32}
-.samp-bd-toggle.bd-active-fail{background:#2d0a0a;color:#f87171;border-color:#5c1414}
+.samp-row.is-fail{background:var(--fail-row)}
+.samp-row.flash{box-shadow:inset 4px 0 0 var(--lime)}
+.samp-num-badge{width:30px;height:30px;border-radius:6px;background:var(--sunk);color:var(--ink-2);display:flex;align-items:center;justify-content:center;font-family:var(--num);font-size:15px;font-weight:700;flex-shrink:0}
+.samp-serial-wrap{width:220px;flex-shrink:0}
+.samp-serial-inp{width:100%;background:var(--panel);border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;font-size:14px;color:var(--ink);outline:none;font-family:var(--code);letter-spacing:.02em;min-height:38px}
+.samp-serial-inp:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(130,209,28,.35)}
+.samp-serial-inp.err-field{border-color:var(--fail)}
+.samp-toggles{display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap}
+.mini-toggle{padding:0 10px;height:36px;border-radius:7px;border:1px solid;font-size:13px;font-weight:600;cursor:pointer;min-width:52px;text-align:center;transition:background .12s,color .12s}
+.mini-toggle-pass{background:var(--panel);color:var(--ink-2);border-color:var(--line-strong)}
+.mini-toggle-pass:hover{border-color:var(--ink);color:var(--ink)}
+.mini-toggle-fail{background:var(--fail);color:#fff;border-color:var(--fail)}
+.samp-bd-toggle{padding:0 12px;height:36px;border-radius:7px;border:1px dashed var(--line-strong);background:var(--panel);color:var(--ink-2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.samp-bd-toggle.bd-active-ok{background:var(--pass-bg);color:var(--pass);border:1px solid var(--pass-line)}
+.samp-bd-toggle.bd-active-fail{background:var(--fail);color:#fff;border:1px solid var(--fail)}
 .samp-spacer{flex:1}
-.samp-result-tag{font-size:9px;font-weight:800;font-family:monospace;padding:5px 10px;border-radius:6px;white-space:nowrap;width:88px;text-align:center;letter-spacing:.02em;flex-shrink:0}
-.samp-expand{width:100%;background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-top:6px}
-.samp-remark-inp{width:100%;background:#020617;border:1px solid #1e293b;border-radius:7px;padding:6px 10px;font-size:11px;color:#e2e8f0;outline:none;margin-top:8px}
-.samp-remark-inp:focus{border-color:#6366f1}
+.samp-result-tag{font-size:12.5px;font-weight:700;padding:7px 10px;border-radius:7px;white-space:nowrap;width:104px;text-align:center;flex-shrink:0}
+.samp-expand{width:100%;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:4px}
+.samp-remark-inp{width:100%;background:var(--panel);border:1px solid var(--line-strong);border-radius:8px;padding:8px 12px;font-size:14px;color:var(--ink);outline:none;margin-top:10px}
+.samp-remark-inp:focus{border-color:var(--ink)}
+.bd-box{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px}
+.bd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:10px}
+.bd-result{padding:8px 10px;border-radius:8px;font-size:12.5px;line-height:1.5}
+.bd-ok{background:var(--pass-bg);border:1px solid var(--pass-line);color:var(--pass)}
+.bd-fail{background:var(--fail-bg);border:1px solid var(--fail-line);color:var(--fail)}
+.res-pass{color:var(--pass)}.res-minor{color:var(--minor)}.res-major{color:var(--fail)}.res-pending{color:var(--ink-3)}
+.insp-footer{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;position:sticky;bottom:12px;box-shadow:0 8px 24px rgba(21,26,22,.08)}
+.insp-tally{font-size:14px;line-height:1.5;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:6px 22px}
+.insp-tally b{color:var(--ink)}
+.insp-tally .t-ok{color:var(--pass)}.insp-tally .t-warn{color:var(--minor)}.insp-tally .t-fail{color:var(--fail)}
 
-/* TOAST */
-.toast{position:fixed;top:16px;right:16px;z-index:9999;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:700;color:#fff;animation:fadeIn .3s ease;pointer-events:none}
-.toast-ok{background:#166534}.toast-err{background:#991b1b}
+/* ── Toast ────────────────────────────────────────────── */
+.toast{position:fixed;top:16px;right:16px;z-index:9999;padding:12px 18px 12px 16px;border-radius:10px;font-size:14px;font-weight:600;color:#fff;background:var(--ink);border-left:5px solid var(--lime);animation:fadeIn .2s ease;pointer-events:none;box-shadow:0 10px 30px rgba(21,26,22,.2);max-width:380px}
+.toast-ok{border-left-color:var(--lime)}.toast-err{border-left-color:#FF6A55}
 
-/* UTIL */
+/* ── Utilities ────────────────────────────────────────── */
 .hidden{display:none!important}
-.text-muted{color:#64748b;font-size:11px}
-.text-pass{color:#4ade80}.text-fail{color:#f87171}.text-warn{color:#fbbf24}
-.mono{font-family:monospace}
-.err{color:#f87171;font-size:10px;margin-top:4px}
-.info-banner{background:#0d1f3c;border:1px solid #1d4ed8;border-radius:10px;padding:12px 16px;font-size:11px;color:#93c5fd;line-height:1.7;margin-bottom:16px}
-footer.pg-footer{padding:16px;text-align:center;font-size:10px;color:#1e293b;font-family:monospace;border-top:1px solid #0f172a;margin-top:20px}
+.text-muted{color:var(--ink-3);font-size:13px}
+.text-pass{color:var(--pass)}.text-fail{color:var(--fail)}.text-warn{color:var(--minor)}
+.mono{font-family:var(--num);font-variant-numeric:tabular-nums}
+.err{color:var(--fail);font-size:12.5px;margin-top:4px}
+.info-banner{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--lime);border-radius:10px;padding:14px 18px;font-size:13.5px;color:var(--ink-2);line-height:1.75;margin-bottom:16px}
+.info-banner b{color:var(--ink)}
+footer.pg-footer{padding:18px;text-align:center;font-size:12.5px;color:var(--ink-3);margin-top:24px}
+table th{font-weight:600}
 
+@media (max-width:760px){
+  .main{padding:14px}
+  .hdr{padding:10px 14px}
+  .logo{border-right:none;padding-right:0}
+  .bench{grid-template-columns:1fr}
+  .tray{grid-template-columns:repeat(7,1fr)}
+  .samp-serial-wrap{width:100%}
+  .samp-spacer{display:none}
+  .stat{border-right:none;border-bottom:1px solid var(--line)}
+  .insp-footer{position:static}
+  .samp-head{display:none!important}
+  .samp-serial-wrap{width:calc(100% - 42px)}
+}
 @media print{
   .hdr-right,.btn{display:none!important}
-  body{background:#fff!important;color:#000!important}
+  body{background:#fff!important}
   .stat,.batch-group,.summ-table{break-inside:avoid}
   #summaryScreen{display:block!important}
   #app{display:none!important}
@@ -435,7 +487,7 @@ function buildSetup(){
   <div class="card" style="max-width:440px;width:100%">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
       <div class="logo"><img src="data:image/png;base64,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" alt="Lumio"></div>
-      <div><div class="hdr-title">Lumio OBA — BATCH INSPECTION</div><div class="hdr-sub">BATCH INSPECTION SYSTEM — SETUP</div></div>
+      <div><div class="hdr-title">OBA batch inspection</div><div class="hdr-sub">Connect to your backend</div></div>
     </div>
     <div class="fg"><label class="lbl">Apps Script Web App URL</label>
       <input id="apiInput" class="field" type="text" placeholder="https://script.google.com/macros/s/…/exec">
@@ -451,13 +503,13 @@ function buildLogin(){
   <div class="card" style="max-width:380px;width:100%">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
       <div class="logo"><img src="data:image/png;base64,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" alt="Lumio"></div>
-      <div><div class="hdr-title">Lumio OBA — BATCH INSPECTION</div><div class="hdr-sub">BATCH INSPECTION MANAGEMENT</div></div>
+      <div><div class="hdr-title">OBA batch inspection</div><div class="hdr-sub">Sign in to continue</div></div>
     </div>
     <div class="fg"><label class="lbl">Username</label><input id="lUser" class="field" type="text" placeholder="Username"></div>
     <div class="fg"><label class="lbl">Password</label><input id="lPass" class="field" type="password" placeholder="Password"></div>
     <div id="lErr" class="err hidden"></div>
     <button id="btnLogin" class="btn btn-primary btn-full" style="margin-top:6px">Login</button>
-    <button id="btnChgUrl" class="btn btn-ghost btn-full" style="margin-top:8px;font-size:10px">Change Backend URL</button>
+    <button id="btnChgUrl" class="btn btn-ghost btn-full" style="margin-top:8px;font-size:12.5px">Change Backend URL</button>
   </div></div>`;
 }
 
@@ -476,12 +528,12 @@ function buildDashboard(){
   <header class="hdr">
     <div class="hdr-left">
       <div class="logo"><img src="data:image/png;base64,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" alt="Lumio"></div>
-      <div><div class="hdr-title">Lumio OBA — BATCH INSPECTION </div>
-        <div class="hdr-sub">IS 2500 | LEVEL G2 | LOT SIZE 90 | SAMPLE 13 | MINOR Ac≤1 | MAJOR Ac=0</div>
+      <div><div class="hdr-title">OBA batch inspection</div>
+        <div class="hdr-sub">IS 2500 level G2, lots of 90, 13 samples each</div>
       </div>
     </div>
     <div class="hdr-right">
-      <span class="text-muted mono" style="font-size:11px">${user.name} (${user.role})</span>
+      <span class="text-muted mono" style="font-size:13px">${esc(user.name)}, ${user.role}</span>
       <button id="btnLogout" class="btn btn-ghost btn-sm">Logout</button>
     </div>
   </header>
@@ -499,8 +551,8 @@ function buildDashboard(){
 
   <!-- INFO BANNER -->
   <div class="info-banner">
-    <b>IS 2500 Standard:</b> Lot = 90 units | Sample = 13 units | Minor (Aesthetic): ≤1 defect → LOT PASS | Major (General / Functional / Screen / Black Dot): 0 allowed → any 1 = LOT FAIL<br>
-    ${models.length?models.map(m=>`<b>Black Dot — ${esc(m.name)}:</b> ${specText(m)}`).join('<br>'):'<b>Black Dot:</b> No models defined yet'+(isAdmin?' — add one in "Models &amp; Black Dot Spec" below.':' — ask admin.')}
+    <b>Acceptance:</b> each lot of 90 units is judged on 13 samples. One aesthetic (minor) defect is allowed. Any general, functional, screen or black dot (major) defect fails the lot.<br>
+    ${models.length?models.map(m=>`<b>Black dot, ${esc(m.name)}:</b> ${esc(specText(m))}`).join('<br>'):'<b>Black dot:</b> no models yet. '+(isAdmin?'Add one in Models and black dot spec below.':'Ask an admin to add one.')}
   </div>`;
 
   // ADMIN PANELS
@@ -508,33 +560,33 @@ function buildDashboard(){
     html+=`<div class="grid-3">
     <!-- CREATE BATCH -->
     <div class="card">
-      <div class="card-title">Create New Batch</div>
+      <div class="card-title">Create a batch</div>
       <div class="fg"><label class="lbl">Batch Name</label><input id="bName" class="field" type="text" placeholder="e.g. MODEL-JUN-2026"></div>
       <div class="fg"><label class="lbl">Batch Quantity (total units)</label><input id="bQty" class="field" type="number" placeholder="e.g. 2000" min="1"></div>
       <div class="fg"><label class="lbl">Model</label>
-        ${models.length?`<select id="bModel" class="field">${modelOptions('')}</select>`:`<div class="err">No models yet — add one in "Models &amp; Black Dot Spec" first.</div><input type="hidden" id="bModel" value="">`}</div>
+        ${models.length?`<select id="bModel" class="field">${modelOptions('')}</select>`:`<div class="err">No models yet. Add one in Models and black dot spec first.</div><input type="hidden" id="bModel" value="">`}</div>
       <div class="fg"><label class="lbl">Production Month 1</label><input id="bMonth" class="field" type="month"></div>
-      <div class="fg"><label class="lbl">Production Month 2 <span style="color:#475569;font-weight:400">(optional)</span></label><input id="bMonth2" class="field" type="month"></div>
+      <div class="fg"><label class="lbl">Production Month 2 <span style="color:var(--ink-3);font-weight:400">(optional)</span></label><input id="bMonth2" class="field" type="month"></div>
       <button id="btnCreateBatch" class="btn btn-primary btn-full">Create Batch</button>
-      <div id="createMsg" class="text-muted hidden" style="margin-top:8px;font-size:11px;line-height:1.6"></div>
-      <div class="text-muted" style="margin-top:8px;font-size:10px">Lots = Batch Qty ÷ 90. Remainder = extra smaller lot (same 13-sample inspection).</div>
+      <div id="createMsg" class="text-muted hidden" style="margin-top:8px;font-size:13px;line-height:1.6"></div>
+      <div class="text-muted" style="margin-top:8px;font-size:12.5px">Lots = Batch Qty ÷ 90. Remainder = extra smaller lot (same 13-sample inspection).</div>
     </div>
 
     <!-- ADD USER -->
     <div class="card">
-      <div class="card-title">Add Inspector / Admin</div>
+      <div class="card-title">Add a user</div>
       <div class="fg"><label class="lbl">Username</label><input id="uUser" class="field" type="text"></div>
       <div class="fg"><label class="lbl">Password</label><input id="uPass" class="field" type="text"></div>
       <div class="fg"><label class="lbl">Full Name</label><input id="uName" class="field" type="text"></div>
       <div class="fg"><label class="lbl">Role</label>
         <select id="uRole" class="field"><option value="inspector">Inspector</option><option value="admin">Admin</option></select></div>
       <button id="btnAddUser" class="btn btn-ghost btn-full">Add User</button>
-      <div id="addUserMsg" class="text-muted hidden" style="margin-top:8px;font-size:11px"></div>
+      <div id="addUserMsg" class="text-muted hidden" style="margin-top:8px;font-size:13px"></div>
     </div>
 
     <!-- QUICK ACTIONS -->
     <div class="card">
-      <div class="card-title">Quick Actions</div>
+      <div class="card-title">Reports</div>
       <button id="btnRefresh" class="btn btn-ghost btn-full" style="margin-bottom:8px">↻ Refresh Data</button>
       <button id="btnCSV" class="btn btn-primary btn-full">⬇ Download CSV Report</button>
       <button id="btnSummary" class="btn btn-ghost btn-full" style="margin-top:8px">📊 View Summary</button>
@@ -546,7 +598,7 @@ function buildDashboard(){
   // BATCH LIST
   html+=`<div id="batchList">`;
   if(groups.length===0){
-    html+=`<div class="card" style="text-align:center;padding:40px;color:#475569">No batches yet. ${isAdmin?'Create one above.':'Ask admin to create a batch.'}</div>`;
+    html+=`<div class="card" style="text-align:center;padding:40px;color:var(--ink-3)">No batches yet. ${isAdmin?'Create one above.':'Ask admin to create a batch.'}</div>`;
   } else {
     groups.forEach(g=>{
       const pct2=g.totalLots?Math.round(g.completed/g.totalLots*100):0;
@@ -555,13 +607,13 @@ function buildDashboard(){
         <div>
           <div class="batch-name">${g.name}</div>
           <div class="batch-meta">
-            Model: <b>${g.model||'-'}</b> | Prod Month: <b>${mmyyDisp(g.prodMonthCode)}${g.prodMonthCode2?' / '+mmyyDisp(g.prodMonthCode2):''}</b> |
-            Batch Qty: <b>${g.batchQty||'?'}</b> | Total Lots: <b>${g.totalLots}</b> |
-            Completed: <b>${g.completed}/${g.totalLots}</b> | Pending: <b>${g.pending}</b> |
-            <span class="text-pass">PASS: ${g.passLots}</span> |
-            <span class="text-fail">FAIL: ${g.failLots}</span> |
-            FG Released: <b class="text-pass">${g.fgTotal}</b>
+            Model <b>${esc(g.model||'-')}</b>, production <b>${mmyyDisp(g.prodMonthCode)}${g.prodMonthCode2?' / '+mmyyDisp(g.prodMonthCode2):''}</b>, <b>${g.batchQty||'?'}</b> units in <b>${g.totalLots}</b> lots<br>
+            <b>${g.completed}</b> inspected, <b>${g.pending}</b> open,
+            <span class="text-pass"><b class="text-pass">${g.passLots}</b> passed</span>,
+            <span class="text-fail"><b class="text-fail">${g.failLots}</b> failed</span>,
+            <b class="text-pass">${g.fgTotal}</b> units released
           </div>
+          <div class="lot-strip" aria-label="Lot status">${g.lots.map(l=>`<span class="lot-cell ${l.result==='PASS'?'c-pass':l.result==='FAIL'?'c-fail':l.status==='Open'?'c-open':''}" title="${esc(l.lotNumber)}: ${l.result||l.status}"></span>`).join('')}</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <div>
@@ -579,19 +631,19 @@ function buildDashboard(){
         html+=`<div class="lot-row">
           <div>
             <div class="lot-name">${lot.lotNumber}</div>
-            <div class="lot-meta">Lot Size: ${lot.lotSize} | Sample: ${lot.sampleSize} | Model: ${esc(lot.model||'-')}${getModel(lot.model)?'':' <span class="text-fail">(not in model list)</span>'}</div>
+            <div class="lot-meta">${lot.lotSize} units, ${lot.sampleSize} samples, model ${esc(lot.model||'-')}${getModel(lot.model)?'':' <span class="text-fail">(not in model list)</span>'}</div>
           </div>
           <div class="lot-actions">
             <span class="badge ${lot.status==='Open'?'badge-open':'badge-closed'}">${lot.status}</span>
             ${lot.result?`<span class="badge ${lot.result==='PASS'?'badge-pass':'badge-fail'}">${lot.result}</span>`:''}
-            ${draft?`<span class="badge" style="background:#1e1b4b;color:#a5b4fc;border:1px solid #4338ca">📝 Draft ${draftFilled}/${draft.samples.length}</span>`:''}
-            ${lot.fgPassQty!==0&&lot.fgPassQty!==''?`<span class="text-muted mono" style="font-size:10px">FG:${lot.fgPassQty}</span>`:''}
+            ${draft?`<span class="badge" style="background:var(--open-bg);color:var(--open);border:1px solid var(--open-line)">📝 Draft ${draftFilled}/${draft.samples.length}</span>`:''}
+            ${lot.fgPassQty!==0&&lot.fgPassQty!==''?`<span class="text-muted">${lot.fgPassQty} released</span>`:''}
             ${!isAdmin&&lot.status==='Open'?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume Inspection':'Start Inspection'}</button>`:''}
             ${isAdmin?`<button class="btn btn-ghost btn-sm editBtn" data-ri="${ri}">Edit</button>`:''}
-            ${isAdmin?`<button class="btn btn-danger btn-sm delLotBtn" data-ri="${ri}" style="font-size:9px;padding:4px 8px">🗑</button>`:''}
+            ${isAdmin?`<button class="btn btn-danger btn-sm delLotBtn" data-ri="${ri}" style="font-size:12px;padding:4px 8px">🗑</button>`:''}
           </div>
         </div>
-        <div id="editArea${ri}" class="hidden" style="padding:12px 18px;background:#020617;border-top:1px solid #0f172a"></div>`;
+        <div id="editArea${ri}" class="hidden" style="padding:12px 18px;background:var(--paper);border-top:1px solid var(--line)"></div>`;
       });
       html+=`</div>`;
     });
@@ -606,9 +658,9 @@ function buildDashboard(){
 function buildModelsPanel(){
   const em=editingModel?getModel(editingModel):null;
   const v=k=>em?esc(em[k]):'';
-  const nf=(id,label,ph,step,hint)=>`<div><label class="lbl">${label}</label><input id="${id}" class="field mono" type="number" step="${step}" min="0" value="${v(id.slice(2))}" placeholder="${ph}"><div class="text-muted" style="font-size:9px;margin-top:3px">${hint}</div></div>`;
-  let rows=models.map(m=>`<tr style="border-bottom:1px solid #1e293b">
-      <td style="padding:7px 10px;color:#e2e8f0;font-weight:700">${esc(m.name)}</td>
+  const nf=(id,label,ph,step,hint)=>`<div><label class="lbl">${label}</label><input id="${id}" class="field mono" type="number" step="${step}" min="0" value="${v(id.slice(2))}" placeholder="${ph}"><div class="text-muted" style="font-size:12px;margin-top:3px">${hint}</div></div>`;
+  let rows=models.map(m=>`<tr style="border-bottom:1px solid var(--line)">
+      <td style="padding:7px 10px;color:var(--ink);font-weight:700">${esc(m.name)}</td>
       <td style="padding:7px 10px">${esc(m.code)}</td>
       <td style="padding:7px 10px;text-align:center">${m.maxD}</td>
       <td style="padding:7px 10px;text-align:center">${m.smallD}</td>
@@ -619,12 +671,12 @@ function buildModelsPanel(){
         <button class="btn btn-ghost btn-sm editModelBtn" data-name="${esc(m.name)}">Edit</button>
         <button class="btn btn-danger btn-sm delModelBtn" data-name="${esc(m.name)}" style="padding:4px 8px">🗑</button>
       </td></tr>`).join('');
-  if(!rows) rows=`<tr><td colspan="8" style="padding:14px;text-align:center;color:#475569">No models yet. Add your first model below.</td></tr>`;
+  if(!rows) rows=`<tr><td colspan="8" style="padding:14px;text-align:center;color:var(--ink-3)">No models yet. Add your first model below.</td></tr>`;
   return `<div class="card">
-    <div class="card-title">Models &amp; Black Dot Spec</div>
+    <div class="card-title">Models and black dot spec</div>
     <div style="overflow-x:auto;margin-bottom:16px">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:monospace;color:#94a3b8">
-        <thead><tr style="background:#060c18;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#64748b">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;font-family:var(--num);color:var(--ink-2)">
+        <thead><tr style="background:var(--sunk);font-size:12px;color:var(--ink-3)">
           <th style="padding:7px 10px;text-align:left">Model</th><th style="padding:7px 10px;text-align:left">Serial Code</th>
           <th style="padding:7px 10px">Fail if D &gt; (mm)</th><th style="padding:7px 10px">OK if D ≤ (mm)</th>
           <th style="padding:7px 10px">Max N</th><th style="padding:7px 10px">Min DS (mm)</th>
@@ -632,10 +684,10 @@ function buildModelsPanel(){
         <tbody>${rows}</tbody>
       </table>
     </div>
-    <div style="font-size:11px;font-weight:800;color:#a5b4fc;margin-bottom:10px">${em?'Editing: '+esc(em.name):'Add New Model'}</div>
+    <div style="font-size:13px;font-weight:700;color:var(--open);margin-bottom:10px">${em?'Editing: '+esc(em.name):'Add New Model'}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px">
-      <div><label class="lbl">Model Name</label><input id="m_name" class="field" type="text" value="${v('name')}" placeholder="e.g. LH1G"><div class="text-muted" style="font-size:9px;margin-top:3px">Shown everywhere</div></div>
-      <div><label class="lbl">Serial Code (4 digits)</label><input id="m_code" class="field mono" type="text" maxlength="4" value="${v('code')}" placeholder="e.g. 1217"><div class="text-muted" style="font-size:9px;margin-top:3px">First 4 digits of serial</div></div>
+      <div><label class="lbl">Model Name</label><input id="m_name" class="field" type="text" value="${v('name')}" placeholder="e.g. LH1G"><div class="text-muted" style="font-size:12px;margin-top:3px">Shown everywhere</div></div>
+      <div><label class="lbl">Serial Code (4 digits)</label><input id="m_code" class="field mono" type="text" maxlength="4" value="${v('code')}" placeholder="e.g. 1217"><div class="text-muted" style="font-size:12px;margin-top:3px">First 4 digits of serial</div></div>
       ${nf('m_maxD','Fail if D &gt; (mm)','e.g. 2.4','0.01','Any dot bigger = FAIL')}
       ${nf('m_smallD','OK if D ≤ (mm)','e.g. 1.28','0.01','Small dot, no area check')}
       ${nf('m_maxN','Max N (spots)','e.g. 3','1','More spots = FAIL')}
@@ -648,7 +700,7 @@ function buildModelsPanel(){
       <button id="btnSaveModel" class="btn btn-primary">${em?'Save Changes':'Add Model'}</button>
       ${em?'<button id="btnCancelModel" class="btn btn-ghost">Cancel</button>':''}
     </div>
-    <div class="text-muted" style="margin-top:10px;font-size:10px;line-height:1.6">Black Dot rule order: not visible @2m → OK · D &gt; Fail limit → FAIL · N &gt; Max N → FAIL · DS &lt; Min DS (only when N&gt;1) → FAIL · D ≤ OK limit → OK · otherwise the Area limit decides. Changes apply to inspections immediately.</div>
+    <div class="text-muted" style="margin-top:10px;font-size:12.5px;line-height:1.6">Black Dot rule order: not visible @2m → OK · D &gt; Fail limit → FAIL · N &gt; Max N → FAIL · DS &lt; Min DS (only when N&gt;1) → FAIL · D ≤ OK limit → OK · otherwise the Area limit decides. Changes apply to inspections immediately.</div>
   </div>`;
 }
 
@@ -658,53 +710,56 @@ function buildInspection(){
   const {minor,major,passed,filled}=tallyLot();
   const allReady=filled===samples.length&&samples.every(s=>!s.serialError&&s.serial);
 
+  const slots=samples.map((s,i)=>{const r=sampleResult(s);const c=r==='PASS'?'s-pass':r==='FAIL-MINOR'?'s-minor':r==='FAIL-MAJOR'?'s-major':'';const tl=r==='PASS'?'pass':r==='FAIL-MINOR'?'minor fail':r==='FAIL-MAJOR'?'major fail':'not inspected yet';return `<button class="slot ${c}" data-i="${i}" title="Sample ${i+1}: ${tl}" aria-label="Go to sample ${i+1}, ${tl}">${i+1}</button>`;}).join('');
   let html=`<div class="page">
   <header class="hdr">
     <div class="hdr-left">
       <div class="logo"><img src="data:image/png;base64,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" alt="Lumio"></div>
-      <div><div class="hdr-title mono">${lot.batchName} — ${lot.lotNumber}</div>
-        <div class="hdr-sub">LOT SIZE: ${lot.lotSize} | SAMPLE: ${lot.sampleSize} | MODEL: ${esc(lot.model)} (${activeSpec?activeSpec.code:'?'}) | PROD: ${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' / '+mmyyDisp(lot.prodMonthCode2):''} | BD: ${activeSpec?'OK ≤'+activeSpec.smallD+'mm · FAIL >'+activeSpec.maxD+'mm':'NO SPEC'}</div>
+      <div><div class="hdr-title">Lot inspection</div>
+        <div class="hdr-sub">${esc(lot.batchName)}</div>
       </div>
     </div>
     <div class="hdr-right">
-      <div class="card" style="padding:10px 14px;margin:0">
-        <div class="text-muted" style="font-size:9px;margin-bottom:3px">MINOR / MAJOR</div>
-        <div style="font-size:14px;font-weight:900;font-family:monospace">
-          <span class="${minor<=1?'text-warn':'text-fail'}">${minor}</span>
-          <span class="text-muted"> / </span>
-          <span class="${major===0?'text-pass':'text-fail'}">${major}</span>
-        </div>
-      </div>
-      <div class="card" style="padding:10px 14px;margin:0">
-        <div class="text-muted" style="font-size:9px;margin-bottom:3px">STATUS</div>
-        <div style="font-size:12px;font-weight:900;font-family:monospace;color:${passed?'#4ade80':'#f87171'}">${passed?'PASSING':'FAILING'}</div>
-      </div>
-      <button id="btnBackInsp" class="btn btn-ghost btn-sm">← Back</button>
+      <span class="text-muted">${esc(user.name)}</span>
+      <button id="btnBackInsp" class="btn btn-ghost btn-sm" title="Your progress is saved as a draft">← Back to batches</button>
     </div>
   </header>
-  <div class="main">`;
+  <div class="main">
+  <section class="bench fade">
+    <div>
+      <div class="bench-title">${esc(lot.lotNumber)}</div>
+      <div class="bench-sub">Model ${esc(lot.model)} (serial code ${activeSpec?activeSpec.code:'?'}), production ${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' or '+mmyyDisp(lot.prodMonthCode2):''}<br>Lot of ${lot.lotSize} units, ${lot.sampleSize} samples. Black dot fails above ${activeSpec?activeSpec.maxD:'?'} mm.</div>
+      <div class="verdict">
+        <div><b>${filled}/${samples.length}</b>Inspected</div>
+        <div><b class="${minor<=1?(minor?'v-warn':''):'v-bad'}">${minor}</b>Minor (1 allowed)</div>
+        <div><b class="${major===0?'':'v-bad'}">${major}</b>Major (0 allowed)</div>
+        <div><b class="${passed?'v-ok':'v-bad'}">${passed?'Passing':'Failing'}</b>Lot verdict</div>
+      </div>
+    </div>
+    <div class="tray" style="--n:${samples.length}" role="group" aria-label="Sample tray">${slots}</div>
+  </section>`;
 
   html+=`<div class="samp-table">
-  <div style="padding:7px 14px;display:flex;align-items:center;gap:10px;background:#060c18;border-bottom:1px solid #1e293b">
-    <div style="width:22px;flex-shrink:0"></div>
-    <div style="width:195px;flex-shrink:0;font-size:9px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.07em">Serial Number</div>
-    <div style="font-size:9px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.07em;flex-shrink:0">Aes &nbsp;·&nbsp; Gen &nbsp;·&nbsp; Func &nbsp;·&nbsp; Scr &nbsp;·&nbsp; Black Dot</div>
+  <div class="samp-head" style="padding:10px 16px;display:flex;align-items:center;gap:12px;background:var(--sunk);border-bottom:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink-2)">
+    <div style="width:30px;flex-shrink:0"></div>
+    <div style="width:220px;flex-shrink:0">Serial number</div>
+    <div style="flex-shrink:0">Aesthetic, general, functional, screen, black dot <span style="font-weight:400;color:var(--ink-3)">(tap to mark fail)</span></div>
     <div style="flex:1"></div>
-    <div style="font-size:9px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.07em;width:88px;text-align:center;flex-shrink:0">Result</div>
+    <div style="width:104px;text-align:center;flex-shrink:0">Result</div>
   </div>`;
 
   samples.forEach((s,i)=>{
     const r=sampleResult(s);
     const rCls=r==='PASS'?'res-pass':r==='FAIL-MINOR'?'res-minor':r==='FAIL-MAJOR'?'res-major':'res-pending';
-    const rLbl=r==='PASS'?'PASS':r==='FAIL-MINOR'?'MINOR FAIL':r==='FAIL-MAJOR'?'MAJOR FAIL':'PENDING';
-    const rBg=r==='PASS'?'background:#052e16;color:#4ade80':r==='FAIL-MINOR'?'background:#3f2d05;color:#fbbf24':r==='FAIL-MAJOR'?'background:#2d0a0a;color:#f87171':'background:#1e293b;color:#64748b';
+    const rLbl=r==='PASS'?'Pass':r==='FAIL-MINOR'?'Minor fail':r==='FAIL-MAJOR'?'Major fail':'Pending';
+    const rBg=r==='PASS'?'background:var(--lime);color:var(--ink)':r==='FAIL-MINOR'?'background:#F2B33D;color:var(--ink)':r==='FAIL-MAJOR'?'background:var(--fail);color:var(--ink)':'background:var(--sunk);color:var(--ink-3)';
     const bd=evalBD(s);
     const isExpanded=expandedSample===i;
     const hasBDIssue=!s.bdNoDot;
     const bdBtnCls=s.bdNoDot?'':(bd.ok?'bd-active-ok':'bd-active-fail');
-    const bdBtnLabel=s.bdNoDot?'No BD':(s.bdVisible?(bd.incomplete?'BD ?':(bd.ok?'BD ✓':'BD ✗')):'BD: Set');
+    const bdBtnLabel=s.bdNoDot?'No dot':(s.bdVisible?(bd.incomplete?'Dot: finish':(bd.ok?'Dot OK':'Dot fail')):'Dot <2m view');
 
-    html+=`<div class="samp-row ${r.startsWith('FAIL')?'is-fail':''}">
+    html+=`<div class="samp-row ${r.startsWith('FAIL')?'is-fail':''}" id="samp-row-${i}">
       <div class="samp-num-badge">${i+1}</div>
 
       <div class="samp-serial-wrap">
@@ -728,7 +783,7 @@ function buildInspection(){
       <div class="samp-expand">
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px">
           <span class="lbl" style="margin-bottom:0">Black Dot Detail</span>
-          <span class="text-muted" style="font-size:9px;font-family:monospace">${esc(specText(activeSpec))}</span>
+          <span class="text-muted" style="font-size:12px;font-family:var(--num)">${esc(specText(activeSpec))}</span>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
             <input type="checkbox" class="sBDNoDot" data-i="${i}" ${s.bdNoDot?'checked':''}> No Black Dot
           </label>
@@ -748,9 +803,9 @@ function buildInspection(){
               <option value="A+B" ${s.bdArea==='A+B'?'selected':''}>Area A+B</option>
             </select></div>
           <div style="display:flex;align-items:flex-end">
-            <div class="bd-result ${bd.ok?'bd-ok':'bd-fail'}" ${bd.incomplete?'style="background:#3f2d05;border-color:#854d0e;color:#fbbf24"':''}>${bd.incomplete?'… INCOMPLETE':(bd.ok?'✓ OK':'✗ FAIL')}<br>${bd.reason}</div>
+            <div class="bd-result ${bd.ok?'bd-ok':'bd-fail'}" ${bd.incomplete?'style="background:var(--minor-bg);border-color:var(--minor-line);color:var(--minor)"':''}>${bd.incomplete?'… INCOMPLETE':(bd.ok?'✓ OK':'✗ FAIL')}<br>${bd.reason}</div>
           </div>
-        </div>`:`<div class="text-pass" style="font-size:11px;font-family:monospace">✓ No Black Dot — Acceptable</div>`}
+        </div>`:`<div class="text-pass" style="font-size:13px;font-family:var(--num)">✓ No Black Dot — Acceptable</div>`}
         <input class="samp-remark-inp sRemark" data-i="${i}" type="text" value="${s.remark||''}" placeholder="Optional remark or defect description">
       </div>`:''}
     </div>`;
@@ -765,7 +820,7 @@ function buildInspection(){
       <div>Major defects: <b class="${major===0?'t-ok':'t-fail'}">${major} / 0 allowed</b></div>
       <div>Lot verdict: <b class="${passed?'t-ok':'t-fail'}">${passed?'✓ PASS':'✗ FAIL'}</b></div>
     </div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <input id="lotRemarks" class="field" type="text" style="width:260px" value="${esc(lotRemarksVal)}" placeholder="General lot remarks (optional)">
       <button id="btnSubmitLot" class="btn ${allReady?(passed?'btn-primary':'btn-danger'):''}" ${allReady?'':'disabled'} style="min-width:200px">
         ${allReady?(passed?'✓ Submit Lot — PASS':'⚠ Submit Lot — FAIL'):`Complete all ${samples.length} samples to submit`}
@@ -1047,6 +1102,17 @@ function bindEvents(){
     };
   });
 
+  // Sample tray: jump to a sample
+  document.querySelectorAll('.slot').forEach(btn=>{
+    btn.onclick=()=>{
+      const row=document.getElementById('samp-row-'+btn.getAttribute('data-i'));
+      if(!row) return;
+      row.scrollIntoView({behavior:'smooth',block:'center'});
+      row.classList.add('flash'); setTimeout(()=>row.classList.remove('flash'),1200);
+      row.querySelector('.sSerial')?.focus({preventScroll:true});
+    };
+  });
+
   // Black Dot expand/collapse toggle
   document.querySelectorAll('.bdExpandBtn').forEach(btn=>{
     btn.onclick=()=>{
@@ -1171,16 +1237,16 @@ function showSummary(){
   let html=`
   <!-- TOTAL SUMMARY -->
   <div style="margin-bottom:24px">
-    <div style="font-size:13px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px">Total Summary</div>
+    <div style="font-size:13px;font-weight:700;color:var(--ink-2);margin-bottom:14px">Total Summary</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px">
       <div class="stat"><div class="stat-label">Total Batches</div><div class="stat-val">${groups.length}</div></div>
       <div class="stat"><div class="stat-label">Total Lots</div><div class="stat-val">${totalLots}</div></div>
-      <div class="stat"><div class="stat-label">Lots Completed</div><div class="stat-val">${doneLots}<span style="font-size:12px;color:#475569"> / ${totalLots}</span></div></div>
+      <div class="stat"><div class="stat-label">Lots Completed</div><div class="stat-val">${doneLots}<span style="font-size:12px;color:var(--ink-3)"> / ${totalLots}</span></div></div>
       <div class="stat"><div class="stat-label">Lots Passed</div><div class="stat-val text-pass">${passLots}</div></div>
-      <div class="stat"><div class="stat-label">Lots Failed</div><div class="stat-val" style="color:${failLots>0?'#f87171':'#475569'}">${failLots}</div></div>
-      <div class="stat"><div class="stat-label">Pending Lots</div><div class="stat-val" style="color:#fbbf24">${pendLots}</div></div>
+      <div class="stat"><div class="stat-label">Lots Failed</div><div class="stat-val" style="color:${failLots>0?'var(--fail)':'var(--ink-3)'}">${failLots}</div></div>
+      <div class="stat"><div class="stat-label">Pending Lots</div><div class="stat-val" style="color:var(--minor)">${pendLots}</div></div>
       <div class="stat"><div class="stat-label">FG Released</div><div class="stat-val text-pass">${fgAll}</div><div class="stat-sub">of ${totalBatchQty} units</div></div>
-      <div class="stat"><div class="stat-label">Yield Rate</div><div class="stat-val" style="color:#60a5fa">${doneLots>0?((passLots/doneLots)*100).toFixed(1):0}%</div></div>
+      <div class="stat"><div class="stat-label">Yield Rate</div><div class="stat-val" style="color:var(--open)">${doneLots>0?((passLots/doneLots)*100).toFixed(1):0}%</div></div>
     </div>
   </div>`;
 
@@ -1190,69 +1256,69 @@ function showSummary(){
     const fgPct=g.batchQty>0?Math.round(g.fgTotal/g.batchQty*100):0;
     html+=`
     <div class="batch-group" style="margin-bottom:20px">
-      <div style="padding:14px 18px;border-bottom:1px solid #1e293b">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--line)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
           <div>
-            <div style="font-size:14px;font-weight:800;color:#fff;font-family:monospace">${g.name}</div>
-            <div style="font-size:10px;color:#64748b;font-family:monospace;margin-top:3px">
-              Model: <b style="color:#94a3b8">${g.model||'-'}</b> &nbsp;|&nbsp;
-              Prod Month: <b style="color:#94a3b8">${mmyyDisp(g.prodMonthCode)}${g.prodMonthCode2?' / '+mmyyDisp(g.prodMonthCode2):''}</b> &nbsp;|&nbsp;
-              Batch Qty: <b style="color:#94a3b8">${g.batchQty}</b> &nbsp;|&nbsp;
-              Total Lots: <b style="color:#94a3b8">${g.totalLots}</b>
+            <div style="font-size:14px;font-weight:700;color:var(--ink);font-family:var(--num)">${g.name}</div>
+            <div style="font-size:12.5px;color:var(--ink-3);font-family:var(--num);margin-top:3px">
+              Model: <b style="color:var(--ink-2)">${g.model||'-'}</b> &nbsp;|&nbsp;
+              Prod Month: <b style="color:var(--ink-2)">${mmyyDisp(g.prodMonthCode)}${g.prodMonthCode2?' / '+mmyyDisp(g.prodMonthCode2):''}</b> &nbsp;|&nbsp;
+              Batch Qty: <b style="color:var(--ink-2)">${g.batchQty}</b> &nbsp;|&nbsp;
+              Total Lots: <b style="color:var(--ink-2)">${g.totalLots}</b>
             </div>
           </div>
           <div style="display:flex;gap:16px;flex-wrap:wrap">
-            <div style="text-align:center"><div style="font-size:9px;color:#475569;text-transform:uppercase">Completed</div><div style="font-size:18px;font-weight:900;color:#fff">${g.completed}/${g.totalLots}</div></div>
-            <div style="text-align:center"><div style="font-size:9px;color:#475569;text-transform:uppercase">Pass</div><div style="font-size:18px;font-weight:900;color:#4ade80">${g.passLots}</div></div>
-            <div style="text-align:center"><div style="font-size:9px;color:#475569;text-transform:uppercase">Fail</div><div style="font-size:18px;font-weight:900;color:${g.failLots>0?'#f87171':'#475569'}">${g.failLots}</div></div>
-            <div style="text-align:center"><div style="font-size:9px;color:#475569;text-transform:uppercase">FG Released</div><div style="font-size:18px;font-weight:900;color:#4ade80">${g.fgTotal}</div></div>
-            <div style="text-align:center"><div style="font-size:9px;color:#475569;text-transform:uppercase">Pending</div><div style="font-size:18px;font-weight:900;color:#fbbf24">${g.pending}</div></div>
+            <div style="text-align:center"><div style="font-size:12px;color:var(--ink-3)">Completed</div><div style="font-size:18px;font-weight:700;color:var(--ink)">${g.completed}/${g.totalLots}</div></div>
+            <div style="text-align:center"><div style="font-size:12px;color:var(--ink-3)">Pass</div><div style="font-size:18px;font-weight:700;color:var(--pass)">${g.passLots}</div></div>
+            <div style="text-align:center"><div style="font-size:12px;color:var(--ink-3)">Fail</div><div style="font-size:18px;font-weight:700;color:${g.failLots>0?'var(--fail)':'var(--ink-3)'}">${g.failLots}</div></div>
+            <div style="text-align:center"><div style="font-size:12px;color:var(--ink-3)">FG Released</div><div style="font-size:18px;font-weight:700;color:var(--pass)">${g.fgTotal}</div></div>
+            <div style="text-align:center"><div style="font-size:12px;color:var(--ink-3)">Pending</div><div style="font-size:18px;font-weight:700;color:var(--minor)">${g.pending}</div></div>
           </div>
         </div>
         <div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap">
           <div style="flex:1;min-width:160px">
-            <div style="font-size:9px;color:#475569;margin-bottom:3px">Lot Progress (${pct}%)</div>
-            <div style="background:#0f172a;border-radius:4px;height:6px;overflow:hidden"><div style="background:#6366f1;height:100%;width:${pct}%"></div></div>
+            <div style="font-size:12px;color:var(--ink-3);margin-bottom:3px">Lot Progress (${pct}%)</div>
+            <div style="background:var(--line);border-radius:4px;height:6px;overflow:hidden"><div style="background:var(--lime);height:100%;width:${pct}%"></div></div>
           </div>
           <div style="flex:1;min-width:160px">
-            <div style="font-size:9px;color:#475569;margin-bottom:3px">FG Release (${fgPct}%)</div>
-            <div style="background:#0f172a;border-radius:4px;height:6px;overflow:hidden"><div style="background:#4ade80;height:100%;width:${fgPct}%"></div></div>
+            <div style="font-size:12px;color:var(--ink-3);margin-bottom:3px">FG Release (${fgPct}%)</div>
+            <div style="background:var(--line);border-radius:4px;height:6px;overflow:hidden"><div style="background:var(--pass);height:100%;width:${fgPct}%"></div></div>
           </div>
         </div>
       </div>
 
       <!-- LOT WISE TABLE -->
       <div style="overflow-x:auto">
-        <table class="summ-table" style="width:100%;border-collapse:collapse;font-size:11px;font-family:monospace">
+        <table class="summ-table" style="width:100%;border-collapse:collapse;font-size:13px;font-family:var(--num)">
           <thead>
-            <tr style="background:#060c18;color:#334155;font-size:9px;text-transform:uppercase;letter-spacing:.06em">
-              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid #1e293b">#</th>
-              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid #1e293b">Lot Number</th>
-              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #1e293b">Lot Size</th>
-              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #1e293b">Sample</th>
-              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #1e293b">Status</th>
-              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #1e293b">Result</th>
-              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #1e293b">FG Qty</th>
+            <tr style="background:var(--sunk);color:var(--ink-3);font-size:12px">
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--line)">#</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--line)">Lot Number</th>
+              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)">Lot Size</th>
+              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)">Sample</th>
+              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)">Status</th>
+              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)">Result</th>
+              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)">FG Qty</th>
             </tr>
           </thead>
           <tbody>
     `;
     g.lots.forEach((lot,idx)=>{
-      const resBg=lot.result==='PASS'?'background:#052e16;color:#4ade80':lot.result==='FAIL'?'background:#2d0a0a;color:#f87171':'background:#1e293b;color:#64748b';
-      const stBg=lot.status==='Open'?'background:#1e3a5f;color:#60a5fa':'background:#1e293b;color:#64748b';
-      html+=`<tr style="border-bottom:1px solid #0a0f1e;${idx%2===0?'':'background:#0a0f1e'}">
-        <td style="padding:8px 14px;color:#334155">${idx+1}</td>
-        <td style="padding:8px 14px;color:#e2e8f0;font-weight:700">${lot.lotNumber}</td>
-        <td style="padding:8px 10px;text-align:center;color:#94a3b8">${lot.lotSize}</td>
-        <td style="padding:8px 10px;text-align:center;color:#94a3b8">${lot.sampleSize}</td>
-        <td style="padding:8px 10px;text-align:center"><span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;${stBg}">${lot.status}</span></td>
-        <td style="padding:8px 10px;text-align:center">${lot.result?`<span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;${resBg}">${lot.result}</span>`:'<span style="color:#334155">—</span>'}</td>
-        <td style="padding:8px 10px;text-align:center;font-weight:700;color:${lot.fgPassQty>0?'#4ade80':'#334155'}">${lot.fgPassQty>0?lot.fgPassQty:'—'}</td>
+      const resBg=lot.result==='PASS'?'background:var(--pass-bg);color:var(--pass)':lot.result==='FAIL'?'background:var(--fail-bg);color:var(--fail)':'background:var(--line);color:var(--ink-3)';
+      const stBg=lot.status==='Open'?'background:var(--open-bg);color:var(--open)':'background:var(--line);color:var(--ink-3)';
+      html+=`<tr style="border-bottom:1px solid var(--paper);${idx%2===0?'':'background:var(--paper)'}">
+        <td style="padding:8px 14px;color:var(--ink-3)">${idx+1}</td>
+        <td style="padding:8px 14px;color:var(--ink);font-weight:700">${lot.lotNumber}</td>
+        <td style="padding:8px 10px;text-align:center;color:var(--ink-2)">${lot.lotSize}</td>
+        <td style="padding:8px 10px;text-align:center;color:var(--ink-2)">${lot.sampleSize}</td>
+        <td style="padding:8px 10px;text-align:center"><span style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px;${stBg}">${lot.status}</span></td>
+        <td style="padding:8px 10px;text-align:center">${lot.result?`<span style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px;${resBg}">${lot.result}</span>`:'<span style="color:var(--ink-3)">—</span>'}</td>
+        <td style="padding:8px 10px;text-align:center;font-weight:700;color:${lot.fgPassQty>0?'var(--pass)':'var(--ink-3)'}">${lot.fgPassQty>0?lot.fgPassQty:'—'}</td>
       </tr>`;
     });
-    html+=`<tr style="background:#060c18;font-weight:800">
-      <td colspan="6" style="padding:8px 14px;color:#94a3b8;text-align:right">Batch Total FG Released:</td>
-      <td style="padding:8px 10px;text-align:center;color:#4ade80;font-weight:900">${g.fgTotal}</td>
+    html+=`<tr style="background:var(--sunk);font-weight:700">
+      <td colspan="6" style="padding:8px 14px;color:var(--ink-2);text-align:right">Batch Total FG Released:</td>
+      <td style="padding:8px 10px;text-align:center;color:var(--pass);font-weight:700">${g.fgTotal}</td>
     </tr>`;
     html+=`</tbody></table></div></div>`;
   });
@@ -1275,12 +1341,12 @@ render();
 </script>
 
 <!-- SUMMARY SCREEN -->
-<div id="summaryScreen" class="hidden" style="min-height:100vh;background:#020617">
+<div id="summaryScreen" class="hidden" style="min-height:100vh;background:var(--paper)">
   <header class="hdr">
     <div class="hdr-left">
       <div class="logo"><img src="" alt="Lumio" id="summLogoImg"></div>
-      <div><div class="hdr-title">OBA INSPECTION — SUMMARY REPORT</div>
-        <div class="hdr-sub">IS 2500 | LEVEL G2 | LOT SIZE 90 | SAMPLE 13</div>
+      <div><div class="hdr-title">Inspection summary</div>
+        <div class="hdr-sub">IS 2500 level G2, lots of 90, 13 samples each</div>
       </div>
     </div>
     <div class="hdr-right">
