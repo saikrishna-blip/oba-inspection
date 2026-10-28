@@ -277,12 +277,13 @@ function DUMMY_HASH_(){
   if(!DUMMY_HASH_CACHE_) DUMMY_HASH_CACHE_ = "pbkdf2$" + PW_ITERATIONS + "$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
   return DUMMY_HASH_CACHE_;
 }
-/* Converts any plain-text password in the Users sheet to a hash (runs once, then only when needed). */
+/* Converts any plain-text password in the Users sheet to a hash (only does work when one is found). */
 function migratePasswords_(){
-  var props = PropertiesService.getScriptProperties();
   var sh = getOrCreateSheet("Users",[]);
-  var stamp = String(sh.getLastRow());
-  if(props.getProperty("pwMigrated") === stamp) return 0;
+  var pending = sh.getDataRange().getValues().some(function(r, i){
+    return i > 0 && String(r[1] == null ? "" : r[1]) !== "" && !isHashed_(String(r[1]));
+  });
+  if(!pending) return 0;
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try{
@@ -294,7 +295,6 @@ function migratePasswords_(){
         n++;
       }
     }
-    props.setProperty("pwMigrated", String(sh.getLastRow()));
     return n;
   } finally { lock.releaseLock(); }
 }
@@ -418,7 +418,6 @@ function addUser(d){
     if(findUserRow_(sh.getDataRange().getValues(), username) > -1) return {ok:false, error:"Username " + username + " already exists"};
     sh.appendRow([username, hashPassword_(String(d.password)), role, safe_(name, 80)]);
     sh.getRange(sh.getLastRow(), 2).setNumberFormat("@");
-    PropertiesService.getScriptProperties().setProperty("pwMigrated", String(sh.getLastRow()));
     return {ok:true};
   } finally { lock.releaseLock(); }
 }
@@ -452,7 +451,6 @@ function deleteUser(d){
     var uname = String(v[i][0]).trim();
     if(uname.toLowerCase() === String(me).toLowerCase()) return {ok:false, error:"You cannot remove your own account"};
     sh.deleteRow(i + 1);
-    PropertiesService.getScriptProperties().setProperty("pwMigrated", String(sh.getLastRow()));
     revokeSessions_(uname);
     return {ok:true};
   } finally { lock.releaseLock(); }
