@@ -344,6 +344,23 @@ select.field{cursor:pointer;appearance:none;background-image:linear-gradient(45d
 .rw-probs{margin-top:12px;padding:10px 14px;border-radius:10px;background:var(--color-warn-bg);border:1px solid var(--color-warn-border);font-size:13.5px}
 @media (max-width:760px){ .rw-paste{grid-template-columns:1fr} }
 
+/* ── Bulk upload ──────────────────────────────────────── */
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+label.btn{cursor:pointer}
+input.sr-only:focus-visible + *,label.btn:focus-within{outline:2px solid var(--color-ring,var(--ink));outline-offset:2px}
+.bulk-box{border:1px dashed var(--line-strong,var(--line));border-radius:14px;padding:14px 16px;margin:4px 0 16px;background:var(--paper)}
+.bulk-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.bulk-actions{display:flex;gap:8px;flex-wrap:wrap}
+.bulk-result{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--pass-bg);border:1px solid var(--pass-line);font-size:13.5px}
+.bulk-result.has-bad{background:var(--color-warn-bg);border-color:var(--color-warn-border)}
+.bulk-result ul{margin:6px 0 0 18px;padding:0}
+.bulk-guide{margin-top:12px;font-size:13.5px}
+.bulk-guide summary{cursor:pointer;font-weight:600}
+.bulk-guide ol{margin:8px 0 8px 20px;padding:0;line-height:1.55}
+.bulk-fill{margin:0 0 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.bulk-fill summary{cursor:pointer;padding:10px 14px;font-weight:600;font-size:14px}
+.bulk-fill-body{padding:0 14px 14px;display:grid;gap:10px}
+
 /* ── Users and access ─────────────────────────────────── */
 .user-card .uc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:10px}
 .uc-name{font-weight:700;font-size:17px}
@@ -591,6 +608,7 @@ let userList = null;        // admin: users (no passwords)
 let bomModels = [];         // models in the BOM sheet (BOM_CONTROL)
 let activeBom = null;       // BOM verification in progress
 let activeRework = null;    // rework entry for a lot on hold
+let bulkFillOpen = false;   // sampling: bulk fill panel open
 let bomResult = null;       // {batch, loading, data} verification result being viewed
 let session = null;         // {token, expiresAt, partdbUrl, bomSheetUrl}
 let page = 'home';          // home | batches | create | models | data | users | reports | bom (see PAGE_INFO)
@@ -1660,6 +1678,131 @@ function buildModelsPanel(){
   </div>`;
 }
 
+// ─── SPREADSHEET FILES: read .xlsx/.csv, write the .xlsx template ─────
+// Small built-in reader/writer so no outside library is loaded.
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_T[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+async function unzip(buf){
+  const u8=new Uint8Array(buf), dv=new DataView(buf), out={};
+  let e=-1; for(let i=u8.length-22;i>=Math.max(0,u8.length-66000);i--){ if(dv.getUint32(i,true)===0x06054b50){e=i;break;} }
+  if(e<0) throw new Error('This is not an Excel (.xlsx) file');
+  const n=dv.getUint16(e+10,true); let p=dv.getUint32(e+16,true);
+  for(let k=0;k<n;k++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const method=dv.getUint16(p+10,true), csize=dv.getUint32(p+20,true), nlen=dv.getUint16(p+28,true), xlen=dv.getUint16(p+30,true), clen=dv.getUint16(p+32,true), off=dv.getUint32(p+42,true);
+    const name=new TextDecoder().decode(u8.subarray(p+46,p+46+nlen));
+    const lo=off+30+dv.getUint16(off+26,true)+dv.getUint16(off+28,true);
+    const data=u8.slice(lo,lo+csize);
+    out[name]={method,data};
+    p+=46+nlen+xlen+clen;
+  }
+  return {
+    has:nm=>!!out[nm], names:()=>Object.keys(out),
+    text:async nm=>{ const f=out[nm]; if(!f) return null; let b=f.data;
+      if(f.method===8) b=new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+      else if(f.method!==0) throw new Error('Unsupported Excel compression');
+      return new TextDecoder().decode(b); }
+  };
+}
+function cellText(v){
+  v=String(v==null?'':v).trim();
+  if(/^[0-9.]+E\+?\d+$/i.test(v)){ const n=Number(v); if(isFinite(n)) v=n.toLocaleString('fullwide',{useGrouping:false}); }
+  else if(/^\d+\.0+$/.test(v)) v=v.replace(/\.0+$/,'');
+  return v;
+}
+async function readXlsx(buf){
+  const z=await unzip(buf), X=t=>new DOMParser().parseFromString(t,'application/xml');
+  const ss=[]; const sst=await z.text('xl/sharedStrings.xml');
+  if(sst) X(sst).querySelectorAll('si').forEach(si=>ss.push([...si.getElementsByTagName('t')].map(t=>t.textContent).join('')));
+  let sheet='xl/worksheets/sheet1.xml';
+  if(!z.has(sheet)) sheet=z.names().filter(n=>/^xl\/worksheets\/[^/]+\.xml$/.test(n)).sort()[0];
+  if(!sheet) throw new Error('No worksheet found in the file');
+  const doc=X(await z.text(sheet)), rows=[];
+  doc.querySelectorAll('sheetData > row').forEach(r=>{
+    const row=[];
+    r.querySelectorAll('c').forEach(c=>{
+      const ref=c.getAttribute('r')||'', col=(ref.match(/^[A-Z]+/)||['A'])[0].split('').reduce((a,ch)=>a*26+ch.charCodeAt(0)-64,0)-1;
+      const t=c.getAttribute('t'), v=c.getElementsByTagName('v')[0];
+      let val=t==='s'?(ss[Number(v&&v.textContent)]||''):t==='inlineStr'?[...c.getElementsByTagName('t')].map(x=>x.textContent).join(''):(v?v.textContent:'');
+      row[col<0?row.length:col]=cellText(val);
+    });
+    rows.push(Array.from(row,x=>x==null?'':x));
+  });
+  return rows;
+}
+function parseCsv(text){
+  const rows=[]; let row=[], f='', q=false;
+  text=text.replace(/^﻿/,'');
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(q){ if(ch==='"'){ if(text[i+1]==='"'){ f+='"'; i++; } else q=false; } else f+=ch; }
+    else if(ch==='"') q=true;
+    else if(ch===','||ch===';'||ch==='\t'){ row.push(f); f=''; }
+    else if(ch==='\n'||ch==='\r'){ if(ch==='\r'&&text[i+1]==='\n') i++; row.push(f); rows.push(row); row=[]; f=''; }
+    else f+=ch;
+  }
+  if(f!==''||row.length){ row.push(f); rows.push(row); }
+  return rows.map(r=>r.map(cellText)).filter(r=>r.some(x=>x!==''));
+}
+async function readSheetFile(file){
+  if(file.size>5*1024*1024) throw new Error('File is larger than 5 MB');
+  const name=file.name.toLowerCase();
+  if(name.endsWith('.xlsx')) return readXlsx(await file.arrayBuffer());
+  if(name.endsWith('.csv')||name.endsWith('.txt')) return parseCsv(await file.text());
+  if(name.endsWith('.xls')) throw new Error('Old .xls files are not supported. In Excel use File > Save As > Excel Workbook (.xlsx).');
+  throw new Error('Use an Excel (.xlsx) or CSV file');
+}
+/* Minimal .xlsx writer (stored, no compression). cols: [{h,w,text,list}] rows: arrays of strings. */
+function xmlEsc(v){ return String(v==null?'':v).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+function makeXlsx(cols,rows,sheetName){
+  const L=i=>String.fromCharCode(65+i), enc=new TextEncoder();
+  const cell=(v,r,c,st)=>`<c r="${L(c)}${r}" t="inlineStr"${st?` s="${st}"`:''}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+  const all=[cols.map(c=>c.h)].concat(rows);
+  const sd=all.map((r,i)=>`<row r="${i+1}">${r.map((v,c)=>cell(v,i+1,c,i===0?2:(cols[c].text?1:0))).join('')}</row>`).join('');
+  const dv=cols.map((c,i)=>c.list?`<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${L(i)}2:${L(i)}1000"><formula1>"${xmlEsc(c.list.join(','))}"</formula1></dataValidation>`:'').filter(Boolean);
+  const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${cols.map((c,i)=>`<col min="${i+1}" max="${i+1}" width="${c.w||18}" customWidth="1"${c.text?' style="1"':''}/>`).join('')}</cols><sheetData>${sd}</sheetData>${dv.length?`<dataValidations count="${dv.length}">${dv.join('')}</dataValidations>`:''}</worksheet>`;
+  const files={
+    '[Content_Types].xml':'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
+    '_rels/.rels':'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
+    'xl/workbook.xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEsc(sheetName||'Sheet1')}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels':'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+    'xl/styles.xml':'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8F5C8"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="49" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>',
+    'xl/worksheets/sheet1.xml':sheet
+  };
+  const parts=[], central=[]; let off=0;
+  const u16=n=>[n&255,(n>>8)&255], u32=n=>[n&255,(n>>8)&255,(n>>16)&255,(n>>>24)&255];
+  Object.keys(files).forEach(nm=>{
+    const name=enc.encode(nm), data=enc.encode(files[nm]), crc=crc32(data);
+    const head=[0x50,0x4b,3,4,...u16(20),...u16(0),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0)];
+    parts.push(new Uint8Array(head),name,data);
+    central.push(new Uint8Array([0x50,0x4b,1,2,...u16(20),...u16(20),...u16(0),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),name);
+    off+=head.length+name.length+data.length;
+  });
+  const cs=central.reduce((a,b)=>a+b.length,0);
+  const end=new Uint8Array([0x50,0x4b,5,6,...u16(0),...u16(0),...u16(Object.keys(files).length),...u16(Object.keys(files).length),...u32(cs),...u32(off),...u16(0)]);
+  return new Blob([...parts,...central,end],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function saveBlob(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000); }
+/* Header words people use, mapped to our fields */
+function findCol(head,words){ const h=head.map(x=>String(x||'').toLowerCase().replace(/[^a-z]/g,'')); return h.findIndex(x=>words.some(w=>x===w||x.startsWith(w))); }
+function matchCheckpoint(v){
+  const x=String(v||'').toLowerCase().replace(/[^a-z]/g,'');
+  if(!x) return '';
+  if(/^aes/.test(x)||x==='cosmetic'||x==='minor') return 'Aesthetic';
+  if(/^gen/.test(x)) return 'General';
+  if(/^func/.test(x)) return 'Functional';
+  if(/^scr|^display/.test(x)) return 'Screen';
+  if(/^bd$|^black|^dot/.test(x)) return 'Black dot';
+  return null;
+}
+function matchStatus(v){
+  const x=String(v||'').toLowerCase().replace(/[^a-z]/g,'');
+  if(!x) return '';
+  if(/^scrap|^reject/.test(x)) return 'Scrapped';
+  if(/^rework|^ok|^pass|^done/.test(x)) return 'Reworked OK';
+  return null;
+}
+
 // ─── REWORK (lot on hold) ─────────────────────────────────
 const CHECKPOINTS=['Aesthetic','General','Functional','Screen','Black dot'];
 const UNIT_STATUSES=['Reworked OK','Scrapped'];
@@ -1731,6 +1874,23 @@ function buildRework(){
         <div class="fg"><label class="lbl" for="rwCount">Number of units reworked</label><input id="rwCount" class="field mono" type="number" min="1" max="${esc(lot.lotSize)}" value="${esc(a.count)}" placeholder="e.g. 12"></div>
         <div class="fg"><span class="lbl">Serial numbers listed</span><div class="rw-count ${parseInt(a.count)===a.items.length?'text-pass':'text-warn'}">${a.items.length}</div></div>
       </div>
+      <div class="bulk-box">
+        <div class="bulk-head"><div><b>Bulk upload</b><div class="text-muted" style="font-size:13px">Upload an Excel (.xlsx) or CSV file with one row per reworked unit.</div></div>
+          <div class="bulk-actions"><button id="btnRwTpl" class="btn btn-ghost btn-sm">Download template</button>
+          <label class="btn btn-primary btn-sm" for="rwFile">Upload file</label><input id="rwFile" type="file" accept=".xlsx,.csv,.txt" class="sr-only"></div></div>
+        ${a.upload?`<div class="bulk-result ${a.upload.bad.length?'has-bad':''}"><b>${esc(a.upload.file)}:</b> ${a.upload.added} unit${a.upload.added===1?'':'s'} added${a.upload.updated?`, ${a.upload.updated} updated`:''}${a.upload.bad.length?`, ${a.upload.bad.length} row${a.upload.bad.length===1?'':'s'} skipped`:''}.
+          ${a.upload.bad.length?`<ul>${a.upload.bad.slice(0,15).map(b=>`<li>Row ${esc(b.row)}: ${esc(b.why)}</li>`).join('')}${a.upload.bad.length>15?`<li>and ${a.upload.bad.length-15} more</li>`:''}</ul>`:''}</div>`:''}
+        <details class="bulk-guide"><summary>How to bulk upload</summary>
+          <ol>
+            <li>Click <b>Download template</b>. It opens in Excel with these columns: <b>Serial Number</b>, <b>Check Point</b>, <b>Defect</b>, <b>Rework Done</b>, <b>Unit Status</b>. The defective sample units are already in it.</li>
+            <li>Add one row per reworked unit. Paste serial numbers into column A (it is set to Text, so all 15 digits stay). Pick Check Point (Aesthetic, General, Functional, Screen, Black dot) and Unit Status (Reworked OK or Scrapped) from the drop-downs.</li>
+            <li>Save the file, then click <b>Upload file</b> and choose it. Rows are added to the list below; a serial already in the list is updated, not added twice.</li>
+            <li>Empty Check Point, Defect, Rework Done or Status cells take the values in the boxes under "Add reworked units", so you can upload just a list of serial numbers.</li>
+            <li>Check the list, enter the number of units reworked, then save.</li>
+          </ol>
+          <div class="text-muted" style="font-size:12.5px">Your own sheet works too if row 1 has headings like Serial, Check point, Defect, Rework, Status (any order). A CSV must keep serials as text; if Excel shows them as 1.21706E+14, format the column as Text before typing them.</div>
+        </details>
+      </div>
       <div class="lbl" style="margin:6px 0 8px">Add reworked units</div>
       <div class="rw-paste">
         <textarea id="rwPaste" class="field mono" rows="3" placeholder="Scan or paste serial numbers, one per line">${esc(a.paste)}</textarea>
@@ -1795,6 +1955,12 @@ function buildInspection(){
   </section>`;
 
   if(defective>0) html+=`<div class="hold-banner" role="alert"><b>Sample ${firstBad+1} is defective. The whole lot goes on hold.</b> Any defect holds the lot. Put it on hold now with the ${filled} sample${filled===1?'':'s'} inspected; then record the rework and the lot is reoffered.</div>`;
+  const emptyRows=samples.filter(s=>!s.locked&&!s.serial).length;
+  if(emptyRows) html+=`<details class="bulk-fill" ${bulkFillOpen?'open':''}><summary>Bulk fill serial numbers (${emptyRows} empty row${emptyRows===1?'':'s'})</summary>
+    <div class="bulk-fill-body"><textarea id="bfText" class="field mono" rows="4" placeholder="Scan or paste serial numbers, one per line"></textarea>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="btnBfGo" class="btn btn-primary btn-sm">Fill empty rows</button>
+    <label class="btn btn-ghost btn-sm" for="bfFile">Upload Excel or CSV</label><input id="bfFile" type="file" accept=".xlsx,.csv,.txt" class="sr-only">
+    <span class="text-muted" style="font-size:12.5px">Serials go into the empty rows in order and are checked like typed ones. The first column of the file is used (or a column headed Serial).</span></div></div></details>`;
   if(round>1&&!defective) html+=`<div class="reoffer-banner">Reoffer inspection, round ${round}. Serial numbers marked with a lock were picked for you (defective units from the last round first, then random reworked units) and cannot be changed.${samples.some(s=>!s.locked)?' Scan fresh units from the lot into the empty rows.':''}</div>`;
   html+=`<div class="samp-table">
   <div class="samp-head" style="padding:10px 16px;display:flex;align-items:center;gap:12px;background:var(--sunk);border-bottom:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink-2)">
@@ -2429,6 +2595,37 @@ function bindEvents(){
   const lotRemarksEl=document.getElementById('lotRemarks');
   if(lotRemarksEl) lotRemarksEl.oninput=()=>{ lotRemarksVal=lotRemarksEl.value; saveDraft(); };
 
+  // Sampling: bulk fill serials
+  const bfd=document.querySelector('details.bulk-fill'); if(bfd) bfd.ontoggle=()=>{ bulkFillOpen=bfd.open; };
+  const fillSerials=async list=>{
+    const sns=[...new Set(list.map(x=>String(x||'').trim().toUpperCase().replace(/\s+/g,'')).filter(x=>/^[A-Z0-9]{1,40}$/.test(x)))];
+    const have=new Set(samples.map(s=>s.serial));
+    const todo=sns.filter(x=>!have.has(x)); let placed=0;
+    const slots=samples.map((s,i)=>i).filter(i=>!samples[i].locked&&!samples[i].serial);
+    const filled=[];
+    for(const sn of todo){ const i=slots.shift(); if(i===undefined) break; samples[i].serial=sn; filled.push(i); placed++; }
+    for(const i of filled){
+      const used=samples.filter((_,j)=>j!==i&&samples[j].serial).map(s=>s.serial.toUpperCase());
+      let err=validateSerial(samples[i].serial,activeLot.model,activeLot.prodMonthCode,used,activeLot.prodMonthCode2||'');
+      if(!err){ try{ const dup=await api('checkSerial',{serial:samples[i].serial,batchName:activeLot.batchName,lotNumber:activeLot.lotNumber}); if(dup.ok&&dup.exists) err='Duplicate — already exists in master data ('+(dup.batch||'')+' '+(dup.lot||'')+')'; }catch(e){} }
+      samples[i].serialError=err;
+    }
+    const left=todo.length-placed, skipped=sns.length-todo.length;
+    bulkFillOpen=false; saveDraft(); render();
+    const bad=filled.filter(i=>samples[i].serialError).length;
+    toast(`${placed} serial${placed===1?'':'s'} filled${bad?`, ${bad} with errors (see red rows)`:''}${left?`, ${left} did not fit`:''}${skipped?`, ${skipped} already in the list`:''}`, bad||left?'err':'ok');
+  };
+  const bfg=document.getElementById('btnBfGo'); if(bfg) bfg.onclick=()=>{ const t=document.getElementById('bfText').value; if(!t.trim()){ toast('Paste serial numbers first','err'); return; } fillSerials(t.split(/[\s,;]+/)); };
+  const bff=document.getElementById('bfFile'); if(bff) bff.onchange=async()=>{
+    const file=bff.files&&bff.files[0]; if(!file) return;
+    try{
+      const rows=await readSheetFile(file); let c=findCol(rows[0]||[],['serial','sn','serialno','serialnumber']); let body=c>-1?rows.slice(1):rows; if(c<0) c=0;
+      if(body.some(r=>/E\+?\d+$/i.test(String(r[c]||'')))){ toast('Some serials are in scientific format (1.2E+14). Format the column as Text in Excel and type them again.','err'); return; }
+      fillSerials(body.map(r=>r[c]));
+    }catch(e){ toast(e.message||'Could not read the file','err'); }
+    bff.value='';
+  };
+
   // Hold / rework / reoffer
   document.querySelectorAll('.reworkBtn,.heroHold').forEach(b=>{ b.onclick=()=>{ const lot=batches[parseInt(b.getAttribute('data-ri'))]; if(lot) openRework(lot); }; });
   document.querySelectorAll('.holdLotBtn').forEach(b=>{ b.onclick=async()=>{
@@ -2446,6 +2643,45 @@ function bindEvents(){
     [['rwPCp','pasteCp'],['rwPSt','pasteStatus']].forEach(([id,k])=>{ const el=document.getElementById(id); if(el) el.onchange=()=>{ a[k]=el.value; }; });
     document.querySelectorAll('.rwF').forEach(el=>{ el.onchange=()=>{ const it=a.items[parseInt(el.dataset.i)]; if(!it||(it.fromSample&&el.dataset.f==='serial')) return; it[el.dataset.f]=el.dataset.f==='serial'?el.value.trim().toUpperCase():el.value; rr(); }; });
     document.querySelectorAll('.rwDel').forEach(b=>{ b.onclick=()=>{ a.items.splice(parseInt(b.dataset.i),1); rr(); }; });
+    const tpl=document.getElementById('btnRwTpl'); if(tpl) tpl.onclick=()=>{
+      const rows=a.items.length?a.items.map(it=>[it.serial,it.checkpoint,it.defect,it.action,it.status]):[];
+      saveBlob(makeXlsx([{h:'Serial Number',w:22,text:true},{h:'Check Point',w:16,list:CHECKPOINTS},{h:'Defect',w:34},{h:'Rework Done',w:34},{h:'Unit Status',w:16,list:UNIT_STATUSES}],rows,'Rework'),
+        `Rework_${a.lot.lotNumber.replace(/[^A-Za-z0-9_-]+/g,'_')}.xlsx`);
+    };
+    const rf=document.getElementById('rwFile'); if(rf) rf.onchange=async()=>{
+      const file=rf.files&&rf.files[0]; if(!file) return;
+      let rows; try{ rows=await readSheetFile(file); }catch(e){ toast(e.message||'Could not read the file','err'); rf.value=''; return; }
+      if(!rows.length){ toast('The file is empty','err'); return; }
+      const lot=a.lot;
+      let head=rows[0], body=rows.slice(1);
+      let cS=findCol(head,['serial','sn','slno','serialno','serialnumber']);
+      if(cS<0){ cS=0; body=rows; head=[]; }   // no heading row: first column is the serial
+      const cC=head.length?findCol(head,['checkpoint','check','inspectioncheck','defectcategory','category']):-1;
+      const cD=head.length?findCol(head,['defect','problem','issue','fault']):-1;
+      const cA=head.length?findCol(head,['rework','action','repair','correction']):-1;
+      const cT=head.length?findCol(head,['unitstatus','status','result']):-1;
+      const res={file:file.name,added:0,updated:0,bad:[]};
+      body.forEach((r,ix)=>{
+        const rowNo=ix+(head.length?2:1);
+        const sn=String(r[cS]||'').trim().toUpperCase().replace(/\s+/g,'');
+        if(!sn&&r.every(x=>!String(x||'').trim())) return;
+        if(/E\+?\d+$/i.test(String(r[cS]||''))){ res.bad.push({row:rowNo,why:'serial shown as a number in scientific format; format the column as Text'}); return; }
+        const e=validateSerial(sn,lot.model,lot.prodMonthCode,[],lot.prodMonthCode2||'');
+        if(e){ res.bad.push({row:rowNo,why:(sn||'(blank)')+': '+e}); return; }
+        const cp=cC>-1?matchCheckpoint(r[cC]):'';
+        if(cp===null){ res.bad.push({row:rowNo,why:sn+': check point "'+r[cC]+'" is not one of '+CHECKPOINTS.join(', ')}); return; }
+        const st=cT>-1?matchStatus(r[cT]):'';
+        if(st===null){ res.bad.push({row:rowNo,why:sn+': unit status "'+r[cT]+'" must be Reworked OK or Scrapped'}); return; }
+        const vals={checkpoint:cp||a.pasteCp, defect:(cD>-1&&String(r[cD]||'').trim())||a.pasteDefect, action:(cA>-1&&String(r[cA]||'').trim())||a.pasteAction, status:st||a.pasteStatus};
+        const ex=a.items.find(it=>it.serial===sn);
+        if(ex){ if(ex.fromSample){ ex.checkpoint=vals.checkpoint||ex.checkpoint; ex.defect=vals.defect||ex.defect; ex.action=vals.action||ex.action; ex.status=vals.status||ex.status; } else Object.assign(ex,vals); res.updated++; }
+        else { a.items.push({serial:sn,...vals}); res.added++; }
+      });
+      a.upload=res; rf.value='';
+      if(!(parseInt(a.count)>=1)) a.count=String(a.items.length);
+      toast(`${res.added} added${res.updated?`, ${res.updated} updated`:''}${res.bad.length?`, ${res.bad.length} skipped`:''}`, res.bad.length?'err':'ok');
+      rr();
+    };
     const add=document.getElementById('btnRwAdd'); if(add) add.onclick=()=>{
       const sns=(a.paste.toUpperCase().match(/[A-Z0-9]{6,40}/g)||[]);
       if(!sns.length){ toast('Scan or paste at least one serial number','err'); return; }
