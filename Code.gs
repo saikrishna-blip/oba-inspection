@@ -994,13 +994,13 @@ function setOfferedQty(d){
 }
 
 /****************************************************
- * FAI (first article inspection): 5 samples per lot, in the format of the
+ * FAI (first article inspection): 5 samples per batch, in the format of the
  * "Projection Unit Finished Product Outgoing Inspection Report".
  *  FAISpec   : Model | SpecJSON | UpdatedBy | UpdatedAt      (check items + limits per model)
  *  FAI       : ReportID | Batch | Lot | Model | Result | Defective | Inspector | Reviewer | InspectionDate |
  *              Revision | CreatedBy | CreatedAt | UpdatedBy | UpdatedAt | DataJSON
  *  FAI_Detail: ReportID | Batch | Lot | Sample | Serial | Section | Item | Value | Judgment   (one row per sample and item)
- *  Batches column R (FAIStatus) holds each lot's FAI result.
+ *  One report per batch (Lot column left blank). Batches column R (FAIStatus) holds the batch FAI result on every lot.
  ****************************************************/
 var FAI_SAMPLES = 5;
 var FAI_RESULTS = ["Pass","Fail","Special procurement"];
@@ -1101,7 +1101,7 @@ function saveFaiSpec(d){
 }
 function faiSheet_(){ return getOrCreateSheet("FAI", ["ReportID","Batch","Lot","Model","Result","Defective","Inspector","Reviewer","InspectionDate","Revision","CreatedBy","CreatedAt","UpdatedBy","UpdatedAt","DataJSON"]); }
 function getFai(d){
-  var bn = String(d.batchName||""), ln = String(d.lotNumber||"");
+  var bn = String(d.batchName||""), ln = "";
   var sh = getSpreadsheet().getSheetByName("FAI");
   if(!sh) return {ok:true, found:false};
   var v = sh.getDataRange().getValues();
@@ -1115,7 +1115,7 @@ function getFai(d){
   }
   return {ok:true, found:false};
 }
-/* Saves or updates the FAI report of one lot. The judgment of every measured item is worked out here again
+/* Saves or updates the FAI report of one batch. The judgment of every measured item is worked out here again
    from the lot model's specification, so the stored result does not depend on the browser. */
 function faiJudge_(it, val){
   if(it.na) return "N/A";
@@ -1152,12 +1152,14 @@ function saveFai(d){
     var bsh = getOrCreateSheet("Batches",[]);
     ensureStageHeaders_(bsh);
     var bv = bsh.getDataRange().getValues();
-    var lotRow = lotRowOf_(bv, d.batchName, d.lotNumber);
-    if(lotRow < 0) return {ok:false, error:"Lot not found. Refresh and try again."};
-    var batch = String(bv[lotRow][0]), lot = String(bv[lotRow][1]), model = String(bv[lotRow][11]||"");
+    var batch = String(d.batchName||""), lots = [];
+    for(var q = 1; q < bv.length; q++) if(String(bv[q][0]) === batch) lots.push(q);
+    if(!lots.length) return {ok:false, error:"Batch not found. Refresh and try again."};
+    var lot = "", model = String(bv[lots[0]][11]||"");
+    var batchQty = Number(bv[lots[0]][9]) || lots.reduce(function(t, r){ return t + (Number(bv[r][2]) || 0); }, 0);
     var rep = d.report || {};
     var spec = getFaiSpec({model:model}).spec;
-    var nS = Math.min(FAI_SAMPLES, Number(bv[lotRow][2]) || FAI_SAMPLES);
+    var nS = Math.min(FAI_SAMPLES, batchQty || FAI_SAMPLES);
     var samples = Array.isArray(rep.samples) ? rep.samples.slice(0, nS) : [];
     if(samples.length !== nS) return {ok:false, error:"FAI needs " + nS + " samples"};
     var seen = {};
@@ -1201,7 +1203,7 @@ function saveFai(d){
     for(var i = 1; i < v.length; i++) if(String(v[i][1]) === batch && String(v[i][2]) === lot){ row = i + 1; }
     var now = new Date(), id, rev;
     if(row < 0){
-      id = "FAI-" + Utilities.formatDate(now, TZ, "yyyyMMdd-HHmmss") + "-" + (lotNum_(lot) || 0);
+      id = "FAI-" + Utilities.formatDate(now, TZ, "yyyyMMdd-HHmmss");
       rev = 1;
       sh.appendRow([id, safe_(batch, 80), safe_(lot, 100), safe_(model, 80), result, defective, safe_(d.inspector, 80), safe_(clean.header.reviewer, 80),
                     clean.header.inspectionDate, rev, safe_(d.inspector, 80), now, safe_(d.inspector, 80), now, json]);
@@ -1217,8 +1219,8 @@ function saveFai(d){
     detail.forEach(function(x){ x[0] = id; });
     if(detail.length) ds.getRange(ds.getLastRow() + 1, 1, detail.length, detail[0].length).setValues(detail);
 
-    bsh.getRange(lotRow + 1, COL_FAI_STATUS).setValue(result);
-    logLot_(batch, lot, Number(bv[lotRow][COL_ROUND-1]) || 1, rev === 1 ? "FAI" : "FAI edited",
+    lots.forEach(function(r){ bsh.getRange(r + 1, COL_FAI_STATUS).setValue(result); });
+    logLot_(batch, "", 1, rev === 1 ? "FAI" : "FAI edited",
             id + " revision " + rev + ": " + result + ", " + defective + " of " + nS + " samples defective", d.inspector);
     return {ok:true, id:id, revision:rev, result:result, defective:defective};
   } finally { lock.releaseLock(); }

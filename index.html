@@ -1015,7 +1015,7 @@ function buildLogin(){
 // ─── APP SHELL: HEADER, MENUS, PAGES ─────────────────────
 const MODULES=[
   {k:'bomverify',  t:'BOM verification',          d:'Verify a batch against its BOM'},
-  {k:'fai',        t:'FAI inspection',            d:'First article inspection, 5 samples per lot'},
+  {k:'fai',        t:'FAI inspection',            d:'First article inspection, 5 samples per batch'},
   {k:'sampling',   t:'Sampling inspection',       d:'Inspect lots, 13 samples each'},
   {k:'reports',    t:'Reports',                   d:'CSV report and summary'},
   {k:'createbatch',t:'Create batches',            d:'Make new batches and lots'},
@@ -1390,14 +1390,15 @@ function buildFlow(g,isAdmin){
   if(isAdmin&&(s==='Pending'||s==='Failed')) act+=`<button class="btn btn-ghost btn-sm bomStageBtn" data-batch="${esc(g.name)}" data-st="Waived">Waive</button>`;
   if(isAdmin&&(s===''||s==='Waived')) act+=`<button class="btn btn-ghost btn-sm bomStageBtn" data-batch="${esc(g.name)}" data-st="Pending">Require BOM check</button>`;
   const locked=s==='Pending'||s==='Failed';
-  const faiDone=g.lots.filter(l=>l.faiStatus).length, faiFail=g.lots.filter(l=>l.faiStatus==='Fail').length;
-  const faiTxt=`${faiDone} of ${g.lots.length} lots done${faiFail?`, ${faiFail} failed`:''}. 5 samples per lot.`;
-  const faiCls=faiFail?'s-fail':faiDone&&faiDone===g.lots.length?'s-pass':faiDone?'s-wait':'s-na';
+  const faiSt=(g.lots.find(l=>l.faiStatus)||{}).faiStatus||'';
+  const faiTxt=faiSt?`${faiSt==='Pass'?'Passed':faiSt==='Fail'?'Failed':faiSt}, 5 samples for the batch`:'Not done yet. 5 samples for the batch.';
+  const faiCls=faiSt==='Pass'?'s-pass':faiSt==='Fail'?'s-fail':faiSt?'s-wait':'s-na';
+  const faiAct=can('fai')?`<button class="btn ${faiSt?'btn-ghost':'btn-primary'} btn-sm faiBtn" data-batch="${esc(g.name)}">${faiSt?'Edit FAI':'Start FAI'}</button>`:faiSt?`<button class="btn btn-ghost btn-sm faiBtn" data-batch="${esc(g.name)}">View FAI</button>`:'';
   const sampTxt=locked?'Locked until BOM verification passes':`${g.completed} of ${g.totalLots} lots inspected`;
   const sampCls=locked?'s-lock':(g.completed===g.totalLots&&g.totalLots?(g.failLots?'s-fail':'s-pass'):'s-wait');
   let h=`<div class="flow" aria-label="Batch inspection flow">
     <div class="step ${cls}"><div class="step-n">1</div><div><div class="step-t">BOM verification</div><div class="step-s">${txt}</div>${act?`<div class="step-a">${act}</div>`:''}</div></div>
-    <div class="step ${faiCls}"><div class="step-n">2</div><div><div class="step-t">FAI inspection</div><div class="step-s">${faiTxt}</div></div></div>
+    <div class="step ${faiCls}"><div class="step-n">2</div><div><div class="step-t">FAI inspection</div><div class="step-s">${faiTxt}</div>${faiAct?`<div class="step-a">${faiAct}</div>`:''}</div></div>
     <div class="step ${sampCls}"><div class="step-n">3</div><div><div class="step-t">Sampling inspection</div><div class="step-s">${sampTxt}</div></div></div>
   </div>`;
   if(bomResult&&bomResult.batch===g.name) h+=buildBomResult();
@@ -1535,7 +1536,6 @@ function buildLotDetail(lot,isAdmin){
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${canInspect&&samplingLocked(lot.batchName)?`<span class="text-muted">Sampling starts after BOM verification passes</span>`:''}
         ${canInspect&&!samplingLocked(lot.batchName)?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume inspection':lot.status==='Reoffered'?`Inspect reoffer (round ${round})`:'Start inspection'}</button>`:''}
-        ${can('fai')?`<button class="btn ${lot.faiStatus?'btn-ghost':'btn-primary'} btn-sm faiBtn" data-ri="${ri}">${lot.faiStatus?'Edit FAI':'Start FAI'}</button>`:lot.faiStatus?`<button class="btn btn-ghost btn-sm faiBtn" data-ri="${ri}">View FAI</button>`:''}
         ${lot.status==='Hold'&&can('sampling')?`<button class="btn btn-primary btn-sm reworkBtn" data-ri="${ri}">Record rework and reoffer</button>`:''}
         ${isAdmin&&lot.result==='FAIL'?`<button class="btn btn-ghost btn-sm holdLotBtn" data-ri="${ri}">Move to hold for rework</button>`:''}
         ${isAdmin?`<button class="btn btn-ghost btn-sm editBtn" data-ri="${ri}">Edit lot</button><button class="btn btn-ghost btn-sm delLotBtn" data-ri="${ri}" style="color:var(--fail)">Delete lot</button>`:''}
@@ -1548,7 +1548,7 @@ function buildLotDetail(lot,isAdmin){
       <div>Model<b>${esc(modelLabel(lot.model))}</b></div>
       <div>Production<b>${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' / '+mmyyDisp(lot.prodMonthCode2):''}</b></div>
       <div>Inspection round<b>${round}${round>1?' (reoffer)':''}</b></div>
-      <div>FAI<b class="${lot.faiStatus==='Pass'?'text-pass':lot.faiStatus==='Fail'?'text-fail':''}">${lot.faiStatus?esc(lot.faiStatus):'Not done'}</b></div>
+      <div>Batch FAI<b class="${lot.faiStatus==='Pass'?'text-pass':lot.faiStatus==='Fail'?'text-fail':''}">${lot.faiStatus?esc(lot.faiStatus):'Not done'}</b></div>
       <div>Released<b>${lot.fgPassQty?esc(lot.fgPassQty)+' units':'—'}</b></div>
     </div>
     <div id="editArea${ri}" class="hidden" style="padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--line)"></div>`;
@@ -1894,10 +1894,10 @@ function faiSpecText(it){
   if(it.type==='xy') return has(it.x)&&has(it.y)&&has(it.tol)?`x ${it.x}, y ${it.y} ± ${it.tol}`:'No limit set';
   return 'Pass / Fail';
 }
-function faiDraftKey(lot){ return 'oba_fai_'+(user?user.username:'anon')+'_'+lot.batchName+'_'+lot.lotNumber; }
+function faiDraftKey(lot){ return 'oba_fai_'+(user?user.username:'anon')+'_batch_'+lot.batchName; }
 function saveFaiDraft(){ if(!activeFai||activeFai.readOnly) return; try{ localStorage.setItem(faiDraftKey(activeFai.lot),JSON.stringify({rep:activeFai.rep,savedAt:new Date().toISOString(),base:activeFai.meta?activeFai.meta.revision:0})); }catch(e){} }
 async function openFai(lot){
-  const [sp,fr]=await Promise.all([api('getFaiSpec',{model:lot.model}),api('getFai',{batchName:lot.batchName,lotNumber:lot.lotNumber})]);
+  const [sp,fr]=await Promise.all([api('getFaiSpec',{model:lot.model}),api('getFai',{batchName:lot.batchName})]);
   if(!sp.ok||!fr.ok){ toast((sp.error||fr.error)||'Could not load FAI','err'); return; }
   const n=Math.min(FAI_N,Number(lot.lotSize)||FAI_N);
   const readOnly=!can('fai');
@@ -1908,7 +1908,7 @@ async function openFai(lot){
   rep.samples=Array.from({length:n},(_,i)=>(rep.samples||[])[i]||{serial:'',results:{}});
   if(!readOnly){
     let d=null; try{ d=JSON.parse(localStorage.getItem(faiDraftKey(lot))||'null'); }catch(e){}
-    if(d&&d.rep&&(d.base||0)===(meta?meta.revision:0)&&confirm(`An unsaved FAI draft for ${lot.lotNumber} exists (${new Date(d.savedAt).toLocaleString()}). Resume it? Cancel starts from the ${meta?'saved report':'blank form'}.`)) rep=d.rep;
+    if(d&&d.rep&&(d.base||0)===(meta?meta.revision:0)&&confirm(`An unsaved FAI draft for ${lot.label} exists (${new Date(d.savedAt).toLocaleString()}). Resume it? Cancel starts from the ${meta?'saved report':'blank form'}.`)) rep=d.rep;
   }
   activeFai={lot,spec:sp.spec,specSaved:sp.saved,rep,meta,readOnly,saving:false,n};
   render(); window.scrollTo(0,0);
@@ -1944,14 +1944,14 @@ function buildFai(){
   return `<div class="page">
   <header class="hdr">
     <div class="hdr-left"><div class="logo"><img src="${LOGO_SRC}" alt="Lumio"></div>
-      <div><div class="hdr-title">FAI inspection</div><div class="hdr-sub">${esc(lot.lotNumber)}</div></div></div>
+      <div><div class="hdr-title">FAI inspection</div><div class="hdr-sub">${esc(lot.label)}</div></div></div>
     <div class="hdr-right"><span class="text-muted">${esc(user.name)}</span>${themeToggleHtml()}<button id="btnFaiBack" class="btn btn-ghost btn-sm">← Back to batches</button></div>
   </header>
   <div class="main">
     <section class="bench fade" style="grid-template-columns:1fr">
       <div>
-        <div class="bench-title">${esc(lot.lotNumber)} ${a.meta?`<span class="badge ${a.meta.result==='Pass'?'badge-pass':a.meta.result==='Fail'?'badge-fail':'badge-hold'}" style="vertical-align:middle">${esc(a.meta.result)}, revision ${esc(a.meta.revision)}</span>`:''}</div>
-        <div class="bench-sub">Projection unit finished product inspection (FAI), ${a.n} samples. Model ${esc(modelLabel(lot.model))}, lot of ${esc(lot.lotSize)} units.
+        <div class="bench-title">${esc(lot.label)} ${a.meta?`<span class="badge ${a.meta.result==='Pass'?'badge-pass':a.meta.result==='Fail'?'badge-fail':'badge-hold'}" style="vertical-align:middle">${esc(a.meta.result)}, revision ${esc(a.meta.revision)}</span>`:''}</div>
+        <div class="bench-sub">Projection unit finished product inspection (FAI) for the batch, ${a.n} samples. Model ${esc(modelLabel(lot.model))}, batch of ${esc(lot.lotSize)} units in ${esc(lot.lots)} lots.
           ${a.specSaved?'':`<br><b>No FAI specification saved for this model yet</b>: measured values are judged by hand.${can('models')?' Set limits under Manage, FAI specification.':''}`}
           ${a.meta?`<br>Saved by ${esc(a.meta.createdBy)} ${esc(fmtDate(a.meta.createdAt))}${a.meta.revision>1?`, last edited by ${esc(a.meta.updatedBy)} ${esc(fmtDate(a.meta.updatedAt))}`:''}.`:''}</div>
         <div class="verdict">
@@ -1968,14 +1968,14 @@ function buildFai(){
         <div class="fg"><label class="lbl" for="fhSO">Sales order</label><input id="fhSO" class="field faiH" data-k="salesOrder" value="${esc(H.salesOrder||'')}" placeholder="N/A" ${dis}></div>
         <div class="fg"><label class="lbl" for="fhCu">Customer</label><input id="fhCu" class="field faiH" data-k="customer" value="${esc(H.customer||'')}" ${dis}></div>
         <div class="fg"><span class="lbl">Model</span><div class="fai-ro">${esc(modelLabel(lot.model))}</div></div>
-        <div class="fg"><span class="lbl">Order quantity</span><div class="fai-ro">${esc(lot.lotSize)}</div></div>
+        <div class="fg"><span class="lbl">Order quantity (batch)</span><div class="fai-ro">${esc(lot.lotSize)}</div></div>
         <div class="fg"><span class="lbl">Sampling quantity</span><div class="fai-ro">${a.n}</div></div>
         <div class="fg"><span class="lbl">Defective quantity</span><div class="fai-ro ${t.defective?'text-fail':''}">${t.defective}</div></div>
         <div class="fg"><span class="lbl">Inspector</span><div class="fai-ro">${esc(a.meta?a.meta.inspector:user.name)}</div></div>
         <div class="fg"><label class="lbl" for="fhRv">Review</label><input id="fhRv" class="field faiH" data-k="reviewer" value="${esc(H.reviewer||'')}" ${dis}></div>
         <div class="fg"><label class="lbl" for="fhDt">Inspection date</label><input id="fhDt" type="date" class="field faiH" data-k="inspectionDate" value="${esc(H.inspectionDate||'')}" ${dis}></div>
-        <div class="fg"><label class="lbl" for="fhF">First serial of lot</label><input id="fhF" class="field mono faiH" data-k="firstSerial" value="${esc(H.firstSerial||'')}" ${dis}></div>
-        <div class="fg"><label class="lbl" for="fhL">Last serial of lot</label><input id="fhL" class="field mono faiH" data-k="lastSerial" value="${esc(H.lastSerial||'')}" ${dis}></div>
+        <div class="fg"><label class="lbl" for="fhF">First serial of batch</label><input id="fhF" class="field mono faiH" data-k="firstSerial" value="${esc(H.firstSerial||'')}" ${dis}></div>
+        <div class="fg"><label class="lbl" for="fhL">Last serial of batch</label><input id="fhL" class="field mono faiH" data-k="lastSerial" value="${esc(H.lastSerial||'')}" ${dis}></div>
       </div>
       <div class="text-muted" style="font-size:12.5px">According to General Inspection Level II of GB2828.1-2012, normal single sampling plan. CR = 0, MA = 1.0, MI = 1.5.</div>
     </div>
@@ -2895,7 +2895,7 @@ function bindEvents(){
   });
 
   // FAI
-  document.querySelectorAll('.faiBtn').forEach(b=>{ b.onclick=()=>{ const lot=batches[parseInt(b.getAttribute('data-ri'))]; if(lot) openFai(lot); }; });
+  document.querySelectorAll('.faiBtn').forEach(b=>{ b.onclick=()=>{ const g=groupBatches().find(x=>x.name===b.getAttribute('data-batch')); if(g) openFai({batchName:g.name,lotNumber:'',label:g.name,model:g.model,lotSize:g.batchQty||g.lots.reduce((t,l)=>t+Number(l.lotSize||0),0),lots:g.lots.length}); }; });
   if(activeFai){
     const a=activeFai, rr=()=>{ saveFaiDraft(); render(); };
     const res=(si,id)=>a.rep.samples[si].results;
@@ -2919,15 +2919,14 @@ function bindEvents(){
       if(!a.rep.result){ toast('Choose the final determination','err'); return; }
       if(a.rep.result==='Pass'&&t.defective){ toast(`${t.defective} sample${t.defective===1?'':'s'} failed; the result cannot be Pass`,'err'); return; }
       a.saving=true; render();
-      const r=await api('saveFai',{batchName:a.lot.batchName,lotNumber:a.lot.lotNumber,report:a.rep});
+      const r=await api('saveFai',{batchName:a.lot.batchName,report:a.rep});
       a.saving=false;
       if(r.ok){
         try{ localStorage.removeItem(faiDraftKey(a.lot)); }catch(e){}
         toast(`FAI ${r.result} saved (${r.id}, revision ${r.revision})`, r.result==='Pass'?'ok':'err');
         const lot=a.lot; activeFai=null; lotUnits={};
-        await loadBatches(); view.batch=lot.batchName; selLot=lot.batchName+'||'+lot.lotNumber;
-        const nl=batches.find(l=>l.batchName===lot.batchName&&l.lotNumber===lot.lotNumber); if(nl) loadLotUnits(nl);
-        go('batches',()=>document.querySelector('.lot-detail')?.scrollIntoView({block:'center'}));
+        await loadBatches(); view.batch=lot.batchName; view.status='all'; view.q=''; selLot=null;
+        go('batches',()=>document.querySelector('.flow')?.scrollIntoView({block:'center'}));
       } else { render(); toast(r.error||'Save failed','err'); }
     };
   }
