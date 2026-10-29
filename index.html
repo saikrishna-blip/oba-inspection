@@ -1265,7 +1265,7 @@ function buildOverview(isAdmin){
   <details class="rules rv" style="--i:4">
     <summary>Acceptance and black dot rules</summary>
     <div class="rules-body">
-    <b>Acceptance:</b> each lot of 90 units is judged on 13 samples. One aesthetic (minor) defect is allowed. Any general, functional, screen or black dot (major) defect fails the lot.<br>
+    <b>Acceptance:</b> each lot of 90 units is judged on 13 samples (a smaller lot on 13, or all its units when it has fewer). Any defect, minor (aesthetic) or major (general, functional, screen or black dot), puts the lot on hold.<br>
     ${models.length?models.map(m=>`<b>Black dot, ${esc(m.lumioModel||m.name)}:</b> ${esc(specText(m))}`).join('<br>'):'<b>Black dot:</b> no models yet. '+(isAdmin?'Add one under Admin, Models and black dot spec.':'Ask an admin to add one.')}
     </div>
   </details>`;
@@ -3576,6 +3576,7 @@ function bindEvents(){
         bd:s.bdNoDot?'No BD':(s.bdVisible?bd.reason:'Not visible @2m'),
         remark:fails.length?fails.join(' | '):(s.remark||lotRemarks||'OK'),
         sampleResult:r==='PASS'?'Pass':'Fail',
+        bdIn:{noDot:!!s.bdNoDot,visible:!!s.bdVisible,D:s.bdD,N:s.bdN,DS:s.bdDS,area:s.bdArea||'A'},
         inspectedAt: s.inspectedAt || new Date().toISOString()
       };
     });

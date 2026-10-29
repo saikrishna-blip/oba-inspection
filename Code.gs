@@ -708,7 +708,7 @@ function createBatch(d){
     sheet.appendRow([
       batchName,
       batchName + " Lot " + (fullLots + 1),
-      remainder, FIXED_SAMPLE, bdMax, "Open", by, now, "",
+      remainder, Math.min(FIXED_SAMPLE, remainder), bdMax, "Open", by, now, "",
       batchQty, total, model, "'" + pm, "", "'" + pm2, "Pending", "", ""
     ]);
   }
@@ -790,6 +790,41 @@ function logLot_(batch, lot, round, event, details, by){
   var sh = getOrCreateSheet("LotHistory", ["Time","Batch","Lot","Round","Event","Details","By"]);
   sh.appendRow([new Date(), safe_(batch, 80), safe_(lot, 100), round, event, safe_(details, 1000), safe_(by, 80)]);
 }
+function mmyy_(v){ var t = String(v == null ? "" : v).replace(/^'/, "").trim(); if(/^\d{3}$/.test(t)) t = "0" + t; return /^\d{4}$/.test(t) ? t : ""; }
+/* Serial: 15 digits = model code (4) + production month MMYY (one of the batch months) + unit number (7) */
+function serialFormatError_(s, code, months){
+  if(!/^\d{15}$/.test(s)) return "serial must be exactly 15 digits";
+  if(s.substring(0,4) !== code4_(code)) return "model code must be " + code4_(code);
+  var mm = Number(s.substring(4,6));
+  if(mm < 1 || mm > 12) return "month digits must be 01 to 12";
+  if(months.length && months.indexOf(s.substring(4,8)) < 0) return "production month must be " + months.join(" or ");
+  return "";
+}
+/* Black dot, same order as the inspection screen: no dot / not visible at 2 m pass; D > fail D, N > max N,
+   DS < min DS (N > 1) fail; D <= OK D passes; otherwise the chosen area's spot limit decides. */
+function judgeBlackDot_(b, spec){
+  if(b.noDot) return {ok:true, reason:"No Black Dot"};
+  if(!b.visible) return {ok:true, reason:"Not visible at 2m"};
+  var D = parseFloat(b.D), N = parseInt(b.N, 10), DS = parseFloat(b.DS);
+  if(!(D > 0)) return {incomplete:true, reason:"Enter D (mm)"};
+  if(!(N >= 1)) return {incomplete:true, reason:"Enter N (spots)"};
+  if(N > 1 && !(DS >= 0)) return {incomplete:true, reason:"Enter DS (mm)"};
+  var ds = N > 1 ? ", DS=" + DS + "mm" : "";
+  if(D > spec.maxD) return {ok:false, reason:"D=" + D + "mm > " + spec.maxD + "mm — FAIL"};
+  if(N > spec.maxN) return {ok:false, reason:"N=" + N + " > " + spec.maxN + " — FAIL"};
+  if(N > 1 && DS < spec.minDS) return {ok:false, reason:"DS=" + DS + "mm < " + spec.minDS + "mm — FAIL"};
+  if(D <= spec.smallD) return {ok:true, reason:"D=" + D + "mm ≤ " + spec.smallD + "mm, N=" + N + ds + " — OK"};
+  var area = b.area === "B" || b.area === "A+B" ? b.area : "A";
+  var lim = area === "A" ? spec.nA : area === "B" ? spec.nB : spec.nAB;
+  if(N <= lim) return {ok:true, reason:"D=" + D + "mm in Area " + area + ", N=" + N + "≤" + lim + ds + " — OK"};
+  return {ok:false, reason:"Area " + area + ": N=" + N + ">" + lim + " — FAIL"};
+}
+function judgeSample_(u, spec){
+  var bd = judgeBlackDot_(u.bdIn || {}, spec);
+  if(bd.incomplete) return {incomplete:true, reason:bd.reason};
+  var pass = String(u.aes) === "Pass" && String(u.general) === "Pass" && String(u.func) === "Pass" && String(u.screen) === "Pass" && bd.ok;
+  return {result: pass ? "Pass" : "Fail", reason: bd.ok ? "" : bd.reason, bdText: bd.reason};
+}
 /* Any defective sample puts the whole lot on HOLD straight away (submitted with the samples inspected so far).
    PASS needs every sample inspected and none defective. */
 function submitLotLocked_(d){
@@ -813,6 +848,21 @@ function submitLotLocked_(d){
   var sampleSize = Number(bRows[lotRow][3]) || FIXED_SAMPLE;
   var units = Array.isArray(d.units) ? d.units : [];
   var pf = function(v){ return String(v) === "Pass" ? "Pass" : "Fail"; };
+  // The server applies the rules itself: serial format, checkpoints and black dot limits of the lot's model
+  var spec = findModel_(String(bRows[lotRow][11]||""));
+  if(!spec) return {ok:false, error:"Model of this lot is not in Models. Ask an admin to add it."};
+  var months = [bRows[lotRow][12], bRows[lotRow][14]].map(mmyy_).filter(String);
+  for(var q = 0; q < units.length; q++){
+    var uq = units[q] || {};
+    var se = serialFormatError_(normSerial_(uq.serial), spec.code, months);
+    if(se) return {ok:false, error:"Sample " + (q+1) + " (" + normSerial_(uq.serial) + "): " + se};
+    if(!uq.bdIn) return {ok:false, error:"This page is out of date. Reload it (your draft is kept) and submit again."};
+    var j = judgeSample_(uq, spec);
+    if(j.incomplete) return {ok:false, error:"Sample " + (q+1) + ": black dot entry is not complete (" + j.reason + ")"};
+    if(j.result !== pf(uq.sampleResult)) return {ok:false, error:"Sample " + (q+1) + ": the result sent (" + pf(uq.sampleResult) + ") does not match the rules (" + j.result + (j.reason ? ", " + j.reason : "") + "). Reload the page and check it."};
+    uq.sampleResult = j.result;
+    if(uq.bdIn.noDot) uq.bd = "No BD"; else if(!uq.bdIn.visible) uq.bd = "Not visible @2m"; else uq.bd = j.bdText;
+  }
   var defective = units.filter(function(u){ return pf(u && u.sampleResult) === "Fail"; }).length;
   if(lotResult === "PASS"){
     if(units.length !== sampleSize) return {ok:false, error:"Expected " + sampleSize + " samples, got " + units.length};
