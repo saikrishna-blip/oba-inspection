@@ -344,6 +344,15 @@ select.field{cursor:pointer;appearance:none;background-image:linear-gradient(45d
 .rw-probs{margin-top:12px;padding:10px 14px;border-radius:10px;background:var(--color-warn-bg);border:1px solid var(--color-warn-border);font-size:13.5px}
 @media (max-width:760px){ .rw-paste{grid-template-columns:1fr} }
 
+/* ── Offered quantity ─────────────────────────────────── */
+.offer-box{margin:12px 18px;padding:12px 16px;border:1px dashed var(--line-strong,var(--line));border-radius:12px;background:var(--paper);display:grid;grid-template-columns:1fr auto;gap:10px 16px;align-items:center;font-size:14px}
+.offer-ctl{display:flex;gap:8px;align-items:center}
+.offer-ctl .field{width:110px}
+.offer-prev{grid-column:1/-1;font-size:13px}
+.offer-prev:empty{display:none}
+.offer-note{margin:12px 18px;padding:10px 14px;border-radius:12px;background:var(--open-bg);border:1px solid var(--open-line);font-size:13.5px}
+@media (max-width:760px){ .offer-box{grid-template-columns:1fr} }
+
 /* ── Bulk upload ──────────────────────────────────────── */
 .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
 label.btn{cursor:pointer}
@@ -1495,6 +1504,15 @@ function buildLotDetail(lot,isAdmin){
       <div>Released<b>${lot.fgPassQty?esc(lot.fgPassQty)+' units':'—'}</b></div>
     </div>
     <div id="editArea${ri}" class="hidden" style="padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--line)"></div>`;
+  // offered quantity: set once, before the first inspection
+  const lc=lotUnits[key], offeredEv=lc&&lc.history?lc.history.find(e=>e.event==='Offered'):null;
+  const fresh=lot.status==='Open'&&!lot.result&&round===1&&!draft;
+  if(offeredEv) h+=`<div class="offer-note"><b>Offered quantity:</b> ${esc(offeredEv.details)}</div>`;
+  else if(fresh&&can('sampling')&&lc&&!lc.loading&&!(lc.units||[]).length) h+=`<div class="offer-box">
+      <div><b>Units offered</b><div class="text-muted" style="font-size:13px">If fewer than ${esc(lot.lotSize)} units are offered, enter the quantity. Sampling is done on the offered units only (${'13'} samples, or all if fewer). The units not offered go back to the batch and its open lots are recalculated and renumbered.</div></div>
+      <div class="offer-ctl"><input id="offQty${ri}" class="field mono" type="number" min="1" max="${esc(lot.lotSize-1)}" value="${esc(lot.lotSize)}" aria-label="Units offered for ${esc(lot.lotNumber)}">
+      <button class="btn btn-ghost btn-sm offQtyBtn" data-ri="${ri}">Set offered quantity</button></div>
+      <div class="text-muted offer-prev" id="offPrev${ri}"></div></div>`;
   if(lot.status==='Hold') h+=`<div class="hold-note"><b>This lot is on hold.</b> A defective sample was found. Record the rework done on the lot: how many units were reworked, and each serial number against its inspection check point. The lot is then reoffered with 13 units picked for re-inspection, always including the defective ones.</div>`;
   if(lot.status==='Reoffered'){
     const rs=lot.reofferSerials||[], fresh=Math.max((lot.sampleSize||13)-rs.length,0);
@@ -2110,7 +2128,7 @@ function bindEvents(){
   document.querySelectorAll('.lmCell').forEach(b=>{ b.onclick=()=>{
     const lot=batches[parseInt(b.getAttribute('data-ri'))]; if(!lot) return;
     view.batch=lot.batchName; view.status='all'; view.q=''; selLot=lot.batchName+'||'+lot.lotNumber;
-    if((lot.status!=='Open'||lot.result||(lot.round||1)>1)&&!lotUnits[selLot]) loadLotUnits(lot);
+    if(!lotUnits[selLot]) loadLotUnits(lot);
     go('batches',()=>document.querySelector('.lot-detail')?.scrollIntoView({behavior:'smooth',block:'center'}));
   }; });
   if(document.querySelector('.main.intro')) setTimeout(()=>{ introDone=true; },1200);
@@ -2371,7 +2389,7 @@ function bindEvents(){
       render();
       if(selLot){
         document.querySelector('.lot-detail')?.scrollIntoView({behavior:'smooth',block:'nearest'});
-        if((lot.status!=='Open'||lot.result||(lot.round||1)>1)&&!lotUnits[k]) loadLotUnits(lot);
+        if(!lotUnits[k]) loadLotUnits(lot);
       }
     };
   });
@@ -2625,6 +2643,26 @@ function bindEvents(){
     }catch(e){ toast(e.message||'Could not read the file','err'); }
     bff.value='';
   };
+
+  // Offered quantity
+  document.querySelectorAll('.offQtyBtn').forEach(b=>{
+    const ri=b.getAttribute('data-ri'), lot=batches[parseInt(ri)], inp=document.getElementById('offQty'+ri), prev=document.getElementById('offPrev'+ri);
+    const show=()=>{ const q=parseInt(inp.value); prev.textContent=(q>=1&&q<lot.lotSize)?`${lot.lotNumber} becomes ${q} units with ${Math.min(13,q)} samples. ${lot.lotSize-q} units go back to the open lots of ${lot.batchName}, which are recalculated into lots of 90 and renumbered.`:''; };
+    inp.oninput=show;
+    b.onclick=async()=>{
+      const q=parseInt(inp.value);
+      if(!(q>=1&&q<lot.lotSize)){ toast(`Enter a quantity between 1 and ${lot.lotSize-1}`,'err'); return; }
+      if(!confirm(`${lot.lotNumber}: ${q} of ${lot.lotSize} units offered?\n\nSampling: ${Math.min(13,q)} samples. ${lot.lotSize-q} units go back to the open lots of this batch, which are recalculated and renumbered. This can be set only once.`)) return;
+      b.disabled=true;
+      const r=await api('setOfferedQty',{batchName:lot.batchName,lotNumber:lot.lotNumber,qty:q});
+      b.disabled=false;
+      if(!r.ok){ toast(r.error||'Error','err'); return; }
+      toast(`${lot.lotNumber}: ${r.qty} units, ${r.samples} samples. Batch now has ${r.totalLots} lots.`);
+      lotUnits={}; await loadBatches();
+      const nl=batches.find(l=>l.batchName===lot.batchName&&l.lotNumber===lot.lotNumber); if(nl) loadLotUnits(nl);
+      render();
+    };
+  });
 
   // Hold / rework / reoffer
   document.querySelectorAll('.reworkBtn,.heroHold').forEach(b=>{ b.onclick=()=>{ const lot=batches[parseInt(b.getAttribute('data-ri'))]; if(lot) openRework(lot); }; });

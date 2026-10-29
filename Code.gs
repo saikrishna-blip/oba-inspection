@@ -27,7 +27,7 @@ var ALWAYS_ACTIONS = ["logout","whoami","getBatches","getModels","getBomList","g
 // recordRework (rework data + reoffer) belongs to the sampling module
 // Actions unlocked by a module; everything not listed here or above is admin only
 var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify",
-                      checkSerial:"sampling", submitLot:"sampling", recordRework:"sampling",
+                      checkSerial:"sampling", submitLot:"sampling", recordRework:"sampling", setOfferedQty:"sampling",
                       createBatch:"createbatch",
                       saveModel:"models", deleteModel:"models",
                       scanDuplicates:"data", searchRecords:"data", removeDuplicates:"data", approveSerial:"data"};
@@ -112,7 +112,7 @@ function doPost(e){
         return json_({ok:false, error: ACTION_MODULE[action] ? "You do not have access to this. Ask an admin to give you the " + moduleName_(ACTION_MODULE[action]) + " module." : "Only an admin can do this."});
       data._session = sess;
       // record who did it from the session, not from what the browser sent
-      if(action === "submitLot" || action === "recordRework" || action === "holdLot") data.inspector = sess.name;
+      if(action === "submitLot" || action === "recordRework" || action === "holdLot" || action === "setOfferedQty") data.inspector = sess.name;
       if(action === "submitBomVerification") data.by = sess.name;
       if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser","setUserAccess"].indexOf(action) > -1){
         data.createdBy = sess.username; data.updatedBy = sess.username; data.by = sess.username;
@@ -175,6 +175,9 @@ function doPost(e){
     }
     if(action === "recordRework"){
       result = recordRework(data);
+    }
+    if(action === "setOfferedQty"){
+      result = setOfferedQty(data);
     }
     if(action === "holdLot"){
       result = holdLot(data);
@@ -894,6 +897,82 @@ function recordRework(d){
     logLot_(thisBatch, thisLot, round, "Rework", rid + ": " + count + " units reworked" + (scrapped ? ", " + scrapped + " scrapped" : ""), d.inspector);
     logLot_(thisBatch, thisLot, round + 1, "Reoffered", pick.length + " units picked (" + must.length + " defective" + (pick.length < sampleSize ? ", " + (sampleSize - pick.length) + " to scan fresh" : "") + ")", d.inspector);
     return {ok:true, reworkId:rid, round:round + 1, reoffer:pick, fresh:sampleSize - pick.length};
+  } finally { lock.releaseLock(); }
+}
+
+/* Lot offered with fewer units than planned. The lot keeps only the offered units (13 samples, or all if fewer);
+   the units not offered go back to the batch: every untouched open lot is recalculated into lots of 90 plus
+   one remainder lot, and those lots are renumbered into the free lot numbers. Lots already inspected keep
+   their numbers and data. */
+function lotNum_(ln){ var m = String(ln).match(/(\d+)\s*$/); return m ? Number(m[1]) : 0; }
+function setOfferedQty(d){
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try{
+    var bsh = getOrCreateSheet("Batches",[]);
+    ensureStageHeaders_(bsh);
+    var v = bsh.getDataRange().getValues();
+    var lotRow = lotRowOf_(v, d.batchName, d.lotNumber);
+    if(lotRow < 0) return {ok:false, error:"Lot not found. Refresh and try again."};
+    var batch = String(v[lotRow][0]);
+    var qty = parseInt(d.qty, 10), size = Number(v[lotRow][2]) || FIXED_LOT;
+    if(!(qty >= 1) || qty >= size) return {ok:false, error:"Offered quantity must be between 1 and " + (size - 1) + " (the lot has " + size + " units)."};
+
+    // which lots of this batch are untouched (never inspected, never reworked)
+    var inspected = {};
+    var m = getOrCreateSheet("Master",[]).getDataRange().getValues();
+    for(var i = 1; i < m.length; i++) if(String(m[i][2]) === batch) inspected[String(m[i][3])] = true;
+    // lots whose offered quantity was already set keep their size and number
+    var hs = getSpreadsheet().getSheetByName("LotHistory");
+    if(hs){ var hv = hs.getDataRange().getValues(); for(var j = 1; j < hv.length; j++) if(String(hv[j][1]) === batch && String(hv[j][4]) === "Offered") inspected[String(hv[j][2])] = true; }
+    var untouched = function(r){
+      return String(r[5]) === "Open" && String(r[8]||"") === "" && (Number(r[COL_ROUND-1]) || 1) === 1 &&
+             String(r[COL_REOFFER-1]||"") === "" && !inspected[String(r[1])];
+    };
+    if(!untouched(v[lotRow])) return {ok:false, error:"The offered quantity can only be set once, before the lot is inspected."};
+
+    var rows = [];   // sheet row numbers (1-based) of this batch
+    for(var r = 1; r < v.length; r++) if(String(v[r][0]) === batch) rows.push(r);
+    var fixedNums = {}, pool = [], poolQty = size - qty;
+    rows.forEach(function(r){
+      if(r === lotRow) { fixedNums[lotNum_(v[r][1])] = true; return; }
+      if(untouched(v[r])) { pool.push(r); poolQty += Number(v[r][2]) || 0; }
+      else fixedNums[lotNum_(v[r][1])] = true;
+    });
+
+    // recalculate the untouched units into lots of 90 + remainder
+    var sizes = [];
+    for(var left = poolQty; left > 0; left -= FIXED_LOT) sizes.push(Math.min(FIXED_LOT, left));
+    var nums = [], n = 1;
+    while(nums.length < sizes.length){ if(!fixedNums[n]) nums.push(n); n++; }
+    var total = Object.keys(fixedNums).length + sizes.length;
+    var tpl = v[lotRow].slice();
+    var lotName = function(k){ return batch + " Lot " + k; };
+
+    // 1. the offered lot keeps its number with the offered quantity
+    bsh.getRange(lotRow + 1, 3, 1, 2).setValues([[qty, Math.min(FIXED_SAMPLE, qty)]]);
+    // 2. reuse the untouched rows for the new lots, add or remove rows as needed
+    var w = tpl.length;
+    var newRow = function(k, sz){
+      var x = tpl.slice(); while(x.length < w) x.push("");
+      x[1] = lotName(k); x[2] = sz; x[3] = Math.min(FIXED_SAMPLE, sz); x[5] = "Open"; x[8] = ""; x[13] = "";
+      x[COL_ROUND-1] = ""; x[COL_REOFFER-1] = "";
+      return x;
+    };
+    for(var k = 0; k < sizes.length; k++){
+      var data = newRow(nums[k], sizes[k]);
+      if(k < pool.length) bsh.getRange(pool[k] + 1, 1, 1, w).setValues([data]);
+      else bsh.appendRow(data);
+    }
+    for(var z = pool.length - 1; z >= sizes.length; z--) bsh.deleteRow(pool[z] + 1);   // bottom-up keeps row numbers valid
+    // 3. total lots for every lot of the batch
+    var v2 = bsh.getDataRange().getValues();
+    for(var y = 1; y < v2.length; y++) if(String(v2[y][0]) === batch) bsh.getRange(y + 1, 11).setValue(total);
+
+    logLot_(batch, String(v[lotRow][1]), 1, "Offered", qty + " of " + size + " units offered (" + Math.min(FIXED_SAMPLE, qty) + " samples). " +
+            (size - qty) + " units moved back; open lots recalculated: " + sizes.length + " lot" + (sizes.length === 1 ? "" : "s") +
+            (sizes.length ? " (" + nums.map(function(x, i){ return "Lot " + x + ": " + sizes[i]; }).join(", ") + ")" : "") + ". Batch now has " + total + " lots.", d.inspector);
+    return {ok:true, qty:qty, samples:Math.min(FIXED_SAMPLE, qty), moved:size - qty, lots:nums.map(function(x, i){ return {lotNumber:lotName(x), size:sizes[i]}; }), totalLots:total};
   } finally { lock.releaseLock(); }
 }
 
