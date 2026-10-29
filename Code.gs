@@ -28,7 +28,7 @@ var DEFAULT_ACCESS = ["bomverify","fai","sampling"];
 // Actions that only read; every other successful action clears the cache
 var READ_ACTIONS = ["login","logout","whoami","bootstrap","getBatches","getModels","modelInsights","getBomList","getBom","getBomVerification",
                     "getLotUnits","checkSerial","getFaiSpec","getFai","listUsers","scanDuplicates","searchRecords"];
-var ALWAYS_ACTIONS = ["bootstrap","modelInsights","logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai"];
+var ALWAYS_ACTIONS = ["bootstrap","modelInsights","logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai","getBom"];
 // recordRework (rework data + reoffer) belongs to the sampling module
 // Actions unlocked by a module; everything not listed here or above is admin only
 var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify",
@@ -2496,8 +2496,7 @@ function runEcnChange(payload) {
 
     const sheet = ss.getSheetByName(model);
     if (!sheet || isSystemSheet_(model)) throw uerr_('Model sheet not found: ' + model);
-    if (!oldParts.length) throw uerr_('Enter at least one before (old) part number.');
-    if (!newParts.length) throw uerr_('Enter at least one after (new) part number.');
+    if (!oldParts.length && !newParts.length) throw uerr_('Enter the parts to remove or replace, the parts to add, or both.');
     if (!reason) throw uerr_('Enter the reason for the change.');
     if (!effectiveDate) throw uerr_('Enter the effective date.');
     if (payload.received && !docLink_(payload.docUrl)) throw uerr_('Paste the link to the ECN document, or answer "No" if you have not received it yet.');
@@ -3465,7 +3464,7 @@ function hasPartNo_(s) {
 }
 function reservedName_(name) {
   name = String(name || '');
-  return [SHEET_NAME, COMPARE_SHEET, CONTROL_SHEET, ECN_SHEET, VERIFY_SHEET, LOT_SHEET, LOTVIEW_SHEET, TWO_SHEET].indexOf(name) >= 0 ||
+  return [SHEET_NAME, COMPARE_SHEET, CONTROL_SHEET, ECN_SHEET, VERIFY_SHEET, LOT_SHEET, LOTVIEW_SHEET, TWO_SHEET, 'PART_LOG'].indexOf(name) >= 0 ||
          PORTAL_TABS_.indexOf(name.toLowerCase()) >= 0;
 }
 function isSystemSheet_(name) {
@@ -3527,6 +3526,117 @@ function compareAll() {
   return { models: names, rows: rows };
 }
 
+// ---------------- parts (PART_MASTER) ----------------
+const PART_RE_ = /^[A-Za-z0-9][A-Za-z0-9._\-\/ ]{0,59}$/;
+const PART_LOG_HDR = ['Date_Time', 'Part_No', 'Field', 'Old_Value', 'New_Value', 'Changed_By'];
+function partFields_(ctx) {
+  return ctx.mh.map((h, i) => ({ h: h, i: i }))
+    .filter(x => x.h && x.i !== COL_PART_NO - 1 && ['IMAGE', 'BLANK'].indexOf(norm_(x.h)) < 0);
+}
+function imgFormula_(u) { u = docLink_(u); return u ? '=IMAGE("' + u.replace(/"/g, '%22') + '",1)' : ''; }
+function usageMap_(mh) {
+  const m = {};
+  getModelSheets_().forEach(s => {
+    const n = s.getLastRow() - HEADER_ROW;
+    if (n <= 0) return;
+    s.getRange(HEADER_ROW + 1, partColIn_(s, mh), n, 1).getValues().forEach(r => {
+      const k = norm_(r[0]);
+      if (k) (m[k] = m[k] || []).indexOf(s.getName()) < 0 && m[k].push(s.getName());
+    });
+  });
+  return m;
+}
+/** Every part with its editable fields and the model BOMs that use it. */
+function listParts() {
+  const ctx = readMaster_(), f = partFields_(ctx), use = usageMap_(ctx.mh), rows = [];
+  ctx.mVals.forEach(r => {
+    const p = String(r[COL_PART_NO - 1]).trim();
+    if (p) rows.push({ partNo: p, v: f.map(x => txt_(r[x.i])), used: use[norm_(p)] || [] });
+  });
+  return { fields: f.map(x => x.h), descField: ctx.descCol ? ctx.mh[ctx.descCol - 1] : '',
+           urlField: ctx.urlCol ? ctx.mh[ctx.urlCol - 1] : '', rows: rows };
+}
+/** payload = { partNo, isNew, values:{ header: value } }. Edits are copied to every model BOM that lists the part. */
+function savePart(p) {
+  return withLock_(() => {
+    const sh = dataSS_().getSheetByName(SHEET_NAME);
+    const ctx = readMaster_(), fields = partFields_(ctx);
+    const partNo = String(p.partNo || '').replace(/^'/, '').trim();
+    if (!PART_RE_.test(partNo)) throw uerr_('Part numbers may use letters, numbers, . _ - / and spaces (up to 60 characters).');
+    const k = norm_(partNo), exists = k in ctx.idx;
+    if (p.isNew && exists) throw uerr_(partNo + ' is already in PART_MASTER.');
+    if (!p.isNew && !exists) throw uerr_(partNo + ' was not found in PART_MASTER.');
+    const vals = (p.values && typeof p.values === 'object') ? p.values : {};
+    const descH = ctx.descCol ? ctx.mh[ctx.descCol - 1] : '', urlH = ctx.urlCol ? ctx.mh[ctx.urlCol - 1] : '';
+    if (descH && descH in vals && !String(vals[descH]).trim()) throw uerr_('Enter the part description.');
+    if (p.isNew && descH && !String(vals[descH] || '').trim()) throw uerr_('Enter the part description.');
+    if (urlH && String(vals[urlH] || '').trim() && !docLink_(vals[urlH])) throw uerr_('The image link must be an https link.');
+    if (urlH && urlH in vals) vals[urlH] = docLink_(vals[urlH]);
+    const imgCol = ctx.mh.findIndex(h => norm_(h) === 'IMAGE') + 1;
+    const log = migratedSheet_('PART_LOG', PART_LOG_HDR), when = now_(), by = user_();
+    if (p.isNew) {
+      const row = ctx.mh.map((h, i) => i === COL_PART_NO - 1 ? partNo : (fields.some(x => x.i === i) && vals[h] != null ? vals[h] : ''));
+      const r = Math.max(sh.getLastRow(), HEADER_ROW) + 1;
+      sh.getRange(r, COL_PART_NO).setNumberFormat('@');
+      sh.getRange(r, 1, 1, row.length).setValues([row]);
+      if (imgCol && urlH && vals[urlH]) sh.getRange(r, imgCol).setFormula(imgFormula_(vals[urlH]));
+      appendRows_(log, [[when, partNo, 'Created', '', String(vals[descH] || ''), by]]);
+      return { partNo: partNo, created: true, changed: 0, models: 0 };
+    }
+    const i = ctx.idx[k], r = HEADER_ROW + 1 + i, changed = [];
+    fields.forEach(x => {
+      if (!(x.h in vals)) return;
+      const nv = vals[x.h] == null ? '' : vals[x.h];
+      if (txt_(ctx.mVals[i][x.i]) === String(nv).replace(/^'/, '')) return;
+      changed.push({ h: x.h, i: x.i, old: txt_(ctx.mVals[i][x.i]), nv: nv });
+    });
+    if (!changed.length) return { partNo: partNo, created: false, changed: 0, models: 0 };
+    changed.forEach(c => sh.getRange(r, c.i + 1).setValue(c.nv));
+    const urlChanged = changed.some(c => c.h === urlH);
+    if (urlChanged && imgCol) sh.getRange(r, imgCol).setFormula(imgFormula_(vals[urlH]));
+    let models = 0;
+    getModelSheets_().forEach(s => {
+      const f = findInModel_(s, partNo, ctx.mh);
+      if (!f) return;
+      models++;
+      const hs = headersOf_(s);
+      changed.forEach(c => { const j = hs.findIndex(h => norm_(h) === norm_(c.h)); if (j >= 0) s.getRange(f.row, j + 1).setValue(c.nv); });
+      if (urlChanged) { const j = hs.findIndex(h => norm_(h) === 'IMAGE'); if (j >= 0) s.getRange(f.row, j + 1).setFormula(imgFormula_(vals[urlH])); }
+    });
+    appendRows_(log, changed.map(c => [when, partNo, c.h, c.old, String(c.nv).replace(/^'/, ''), by]));
+    return { partNo: partNo, created: false, changed: changed.length, models: models };
+  });
+}
+/** Rewrites the Image column (=IMAGE of Image_URL) in PART_MASTER and every model BOM. */
+function repairImages() {
+  return withLock_(() => {
+    const mh = headersOf_(dataSS_().getSheetByName(SHEET_NAME));
+    let fixed = 0;
+    [dataSS_().getSheetByName(SHEET_NAME)].concat(getModelSheets_()).forEach(s => {
+      const hs = headersOf_(s), n = s.getLastRow() - HEADER_ROW;
+      const ic = hs.findIndex(h => norm_(h) === 'IMAGE') + 1, uc = findCol_(hs, /image.*url|url.*image/i);
+      if (n <= 0 || !ic || !uc) return;
+      const urls = s.getRange(HEADER_ROW + 1, uc, n, 1).getValues();
+      s.getRange(HEADER_ROW + 1, ic, n, 1).setFormulas(urls.map(u => [imgFormula_(u[0])]));
+      fixed += urls.filter(u => docLink_(u[0])).length;
+    });
+    return { fixed: fixed };
+  });
+}
+/** New model BOM from a part list; it is locked straight away as Rev 0 so BOM verification can use it. */
+function createModel(p) {
+  const name = String(p.newModel || '').trim();
+  if (!(p.items || []).length) throw uerr_('Add at least one part with its QPS.');
+  const r = saveBom({ newModel: name, items: p.items });
+  if (r.missing && r.missing.length) {
+    const ss = dataSS_(), sh = ss.getSheetByName(name);
+    if (sh) ss.deleteSheet(sh);
+    throw uerr_('Not in PART_MASTER yet: ' + r.missing.join(', ') + '. Create these parts first.');
+  }
+  lockBom(name);
+  return { model: name, parts: r.added };
+}
+
 /** PART_MASTER as a list (part, description, image link) for pickers. */
 function masterList() {
   return getBomData();
@@ -3548,14 +3658,16 @@ const API_ = {
   lockBom: [1, ['model']], unlockBom: [1, ['model', 'reason']], runEcnChange: [1, ['payload']],
   updateEcnMeta: [1, ['payload']], deleteEcn: [1, ['ecnNo']], deleteEcnRecordOnly: [1, ['ecnNo']],
   restoreBomVersion: [1, ['model', 'rev', 'reason']], mergeBomRevisions: [1, ['model', 'revs']],
-  assignPart: [1, ['payload']], saveBom: [1, ['payload']], dedupe: [1, []]
+  assignPart: [1, ['payload']], saveBom: [1, ['payload']], dedupe: [1, []],
+  listParts: [0, []], savePart: [1, ['payload']], repairImages: [1, []], createModel: [1, ['payload']]
 };
 const FNS_ = {
   getControlData, getVerifyModels, getBomData, getTodayStr, getVerifyBom, getModelParts, getModelBomCsv,
   getEcnLog, getAllEcnNos, getEcnByNo, getEcnReportData, getBomRevisions, getBomAtRevision, getBomRevisionCsv,
   getPartInModel, getMasterPart, getAfterPartInfo, getPartsInModel, getMasterParts, getLotList, getLotBom,
   getLotCsv, compareTwoModels, compareAll, getPartUsage, lockBom, unlockBom, runEcnChange, updateEcnMeta,
-  deleteEcn, deleteEcnRecordOnly, restoreBomVersion, mergeBomRevisions, assignPart, saveBom, dedupe
+  deleteEcn, deleteEcnRecordOnly, restoreBomVersion, mergeBomRevisions, assignPart, saveBom, dedupe,
+  listParts, savePart, repairImages, createModel
 };
 // Functions that take a model name check it is a real model BOM first.
 const MODEL_ARG_ = { model: 1, a: 1, b: 1 };
@@ -3583,7 +3695,7 @@ function call(d) {
     const args = spec[1].map(name => {
       const v = a[name];
       if (MODEL_ARG_[name] && v !== '' && v != null) modelOk_(v);
-      if (name === 'payload' && v && v.model && !v.newModel) modelOk_(v.model);
+      if (name === 'payload' && v && v.model && !v.newModel && fn !== 'savePart') modelOk_(v.model);
       if (name === 'payload' && v && v.newModel) {
         if (!NAME_RE_.test(String(v.newModel))) throw uerr_('Model names may use letters, numbers, spaces and - _ . / ( ) # & only.');
       }
@@ -3599,6 +3711,8 @@ function call(d) {
     return { ok: false, error: 'Could not complete that. Please try again, or ask an admin to check the Apps Script log.' };
   }
 }
-return { call: call, isWrite: fn => !!(API_[fn] && API_[fn][0]) };
+return { call: call, isWrite: fn => !!(API_[fn] && API_[fn][0]), repairImages: repairImages };
 })();
 function bomCall(d){ return BOMX.call(d); }
+/* Run once from the editor: fixes the Image column (#REF! after the move into this spreadsheet). */
+function repairBomImages(){ var r = BOMX.repairImages(); console.log('Images rewritten: ' + r.fixed); return r; }
