@@ -36,7 +36,8 @@ var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify",
                       saveFai:"fai", saveFaiSpec:"models",
                       createBatch:"createbatch",
                       saveModel:"models", deleteModel:"models",
-                      scanDuplicates:"data", searchRecords:"data", removeDuplicates:"data", approveSerial:"data"};
+                      scanDuplicates:"data", searchRecords:"data", removeDuplicates:"data", approveSerial:"data",
+                      bom:"bommgmt"};
 
 // Security settings
 var PW_ITERATIONS    = 1000;    // PBKDF2-HMAC-SHA256 rounds (each round is slow in Apps Script: 1000 = about 1.5 s per login)
@@ -241,9 +242,12 @@ function doPost(e){
     if(action === "setBatchStage"){
       result = setBatchStage(data);
     }
+    if(action === "bom"){
+      result = bomCall(data);
+    }
 
     // any change clears the cached lists so the next read is fresh
-    if(READ_ACTIONS.indexOf(action) === -1 && result && result.ok) dropCache_();
+    if(result && result.ok && (action === "bom" ? result.write : READ_ACTIONS.indexOf(action) === -1)) dropCache_();
     return ContentService
       .createTextOutput(JSON.stringify(result))
       .setMimeType(ContentService.MimeType.JSON);
@@ -1918,3 +1922,1683 @@ function setBatchStage(d){
   var n = setBomStatus_(String(d.batchName||""), st, st === "Waived" ? safe_("Waived by " + String(d.by||"admin"), 80) : "");
   return n ? {ok:true, lots:n} : {ok:false, error:"Batch not found"};
 }
+
+/* =====================================================================
+   BOM MANAGEMENT (native). Same rules as the Part DB tools; data in this spreadsheet.
+   Ported from PartDB.gs. Everything here is reached through the "bom" action only.
+   ===================================================================== */
+var BOMX = (function(){
+const IMAGE_FOLDER_ID = '1xwpe_z03u3dk2z40QHJ_559yDouuAFHM';
+const SHEET_NAME      = 'PART_MASTER';
+const HEADER_ROW      = 1;
+const COL_PART_NO     = 1;   // A
+const COL_IMAGE       = 3;   // C  (=IMAGE formula goes here)
+const COL_IMAGE_URL   = 4;   // D  (raw link, used by other tools)
+const ROW_HEIGHT_PX   = 90;  // row height so thumbnails are readable
+const THUMB_WIDTH     = 400; // px width requested from Drive
+const MAKE_PUBLIC     = true; // set false if your domain blocks link sharing
+
+function dedupePartMaster_() {
+  const sheet = dataSS_().getSheetByName(SHEET_NAME);
+  if (!sheet) return { removed: 0, parts: [] };
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow <= HEADER_ROW || lastCol === 0) return { removed: 0, parts: [] };
+
+  const numRows = lastRow - HEADER_ROW;
+  const rng   = sheet.getRange(HEADER_ROW + 1, 1, numRows, lastCol);
+  const vals  = rng.getValues();
+  const forms = rng.getFormulas();
+
+  // A column counts as a "formula column" (e.g. the =IMAGE() column) if any
+  // row in it currently holds a formula - those are written back with
+  // setFormulas, everything else with setValues, so neither call clobbers
+  // the other's cells.
+  const formulaCol = [];
+  for (let c = 0; c < lastCol; c++) formulaCol.push(forms.some(r => r[c]));
+
+  const firstRowOf = {};
+  const dupRowIdx  = [];
+  const removedParts = [];
+
+  for (let i = 0; i < vals.length; i++) {
+    const key = norm_(vals[i][COL_PART_NO - 1]);
+    if (!key) continue;
+    if (!(key in firstRowOf)) { firstRowOf[key] = i; continue; }
+
+    const keepIdx = firstRowOf[key];
+    for (let c = 0; c < lastCol; c++) {
+      const keptIsBlank = formulaCol[c]
+        ? !forms[keepIdx][c]
+        : (vals[keepIdx][c] === '' || vals[keepIdx][c] === null || vals[keepIdx][c] === undefined);
+      if (!keptIsBlank) continue;
+      if (formulaCol[c]) {
+        if (forms[i][c]) forms[keepIdx][c] = forms[i][c];
+      } else if (vals[i][c] !== '' && vals[i][c] !== null && vals[i][c] !== undefined) {
+        vals[keepIdx][c] = vals[i][c];
+      }
+    }
+    dupRowIdx.push(i);
+    removedParts.push(String(vals[i][COL_PART_NO - 1]).trim());
+  }
+
+  if (!dupRowIdx.length) return { removed: 0, parts: [] };
+
+  for (let c = 0; c < lastCol; c++) {
+    const colRange = sheet.getRange(HEADER_ROW + 1, c + 1, numRows, 1);
+    if (formulaCol[c]) colRange.setFormulas(forms.map(r => [r[c]]));
+    else colRange.setValues(vals.map(r => [r[c]]));
+  }
+
+  dupRowIdx.slice().sort((a, b) => b - a).forEach(i => sheet.deleteRow(HEADER_ROW + 1 + i));
+
+  return { removed: dupRowIdx.length, parts: removedParts };
+}
+
+// ======================================================================
+//        SHARED HELPERS, SYSTEM SHEETS, BOM LOCK, ECN LOG
+// ======================================================================
+const CONTROL_SHEET = 'BOM_CONTROL';
+const ECN_SHEET     = 'ECN_HISTORY';
+const VERIFY_SHEET  = 'BOM_VERIFY_LOG';
+const LOT_SHEET     = 'LOT_BOM_DETAIL';
+const LOTVIEW_SHEET = 'LOT_BOM_VIEW';
+const PROTECT_DESC  = 'BOM LOCKED - change only via Part DB menu with an ECN';
+const QPS_HEADER    = 'QPS';
+const DESC_COL      = 2;   // B = fallback description column, used only if no header matches /desc/i
+
+const CONTROL_HDR = ['Model', 'Status', 'Rev', 'Locked_By', 'Locked_On', 'Last_ECN'];
+const ECN_HDR     = ['Date_Time', 'ECN_No', 'Model', 'BOM_Rev', 'Part_No', 'Action',
+                     'Old_QPS', 'New_QPS', 'Description', 'Effective_Date', 'Document_Link', 'Changed_By'];
+const ECN_DOC_FOLDER = 'ECN_Documents'; // Drive folder name, created alongside the spreadsheet
+const VERIFY_HDR  = ['Ver_ID', 'Date_Time', 'Model', 'Lot_No', 'BOM_Rev', 'BOM_Status',
+                     'Parts_Checked', 'Deviations', 'Result', 'Verified_By', 'Remarks'];
+// LOT_HDR is defined in the verification module (BOM-interface column order).
+
+// ---------------------------- basic helpers ----------------------------
+function norm_(v) { return String(v === null || v === undefined ? '' : v).trim().toUpperCase(); }
+
+function txt_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  return v === null || v === undefined ? '' : String(v);
+}
+
+function now_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+}
+
+function user_() {
+  let u = '';
+  try { u = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(); } catch (e) {}
+  return u || 'unknown';
+}
+
+function withLock_(fn) {
+  const l = LockService.getDocumentLock() || LockService.getScriptLock();
+  l.waitLock(30000);
+  try { return fn(); } finally { l.releaseLock(); }
+}
+
+function isSystemSheet_(name) {
+  return [SHEET_NAME, COMPARE_SHEET, CONTROL_SHEET, ECN_SHEET, VERIFY_SHEET, LOT_SHEET, LOTVIEW_SHEET]
+    .indexOf(name) >= 0;
+}
+
+/** Model sheets = every sheet that is not a system sheet and has a Part_No heading in row 1
+ *  (the spreadsheet also holds the portal's own tabs: Batches, Master, Users, ...). */
+function getModelSheets_() {
+  return dataSS_().getSheets().filter(s => {
+    const n = s.getName();
+    if (isSystemSheet_(n) || n === TWO_SHEET) return false;
+    if (s.getLastColumn() < 1) return false;
+    const h = s.getRange(HEADER_ROW, 1, 1, Math.min(s.getLastColumn(), 40)).getValues()[0];
+    return h.some(x => String(x).toLowerCase().replace(/[^a-z0-9]/g, '') === 'partno');
+  });
+}
+
+function headersOf_(sheet) {
+  const lc = sheet.getLastColumn();
+  if (lc === 0) return [];
+  return sheet.getRange(HEADER_ROW, 1, 1, lc).getValues()[0].map(h => String(h).trim());
+}
+
+/** Column number of the Part_No column inside a model sheet. */
+function partColIn_(sheet, masterHeaders) {
+  const target = norm_(masterHeaders[COL_PART_NO - 1] || '');
+  const idx = headersOf_(sheet).findIndex(h => norm_(h) === target);
+  return idx >= 0 ? idx + 1 : 1;
+}
+
+/** Creates a system sheet (plain-text columns, header row) if missing. */
+function sysSheet_(name, headers) {
+  const ss = dataSS_();
+  let sh = ss.getSheetByName(name);
+  if (sh) return sh;
+  const prev = ss.getActiveSheet();
+  sh = ss.insertSheet(name);
+  sh.getRange(1, 1, sh.getMaxRows(), headers.length).setNumberFormat('@');
+  sh.getRange(1, 1, 1, headers.length).setValues([headers])
+    .setFontWeight('bold').setBackground('#1a73e8').setFontColor('#ffffff');
+  sh.setFrozenRows(1);
+  sh.setColumnWidths(1, headers.length, 130);
+  try { ss.setActiveSheet(prev); } catch (e) {}
+  return sh;
+}
+
+function appendRows_(sh, rows) {
+  if (!rows.length) return;
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+/**
+ * Gets a system sheet and makes sure its header row matches wantHeaders,
+ * inserting any missing columns so old rows keep their data instead of
+ * reading back shifted or blank once the schema gains a column. Each
+ * missing header is anchored to insert right after whatever precedes it
+ * in wantHeaders (so several new columns added at once still land in the
+ * right order relative to each other). Existing sheets are migrated in
+ * place; new sheets are created with the header already correct.
+ */
+function migratedSheet_(name, wantHeaders) {
+  const sh = sysSheet_(name, wantHeaders);
+  const have = headersOf_(sh).map(norm_);
+  const want = wantHeaders.map(norm_);
+  if (have.length && have.join('|') !== want.join('|')) {
+    want.forEach((h, i) => {
+      if (have.indexOf(h) < 0) {
+        const anchor = i > 0 ? want[i - 1] : '';
+        const afterIdx = anchor ? have.indexOf(anchor) : -1;
+        const at = afterIdx >= 0 ? afterIdx + 1 : have.length;
+        sh.insertColumnAfter(at || 1);
+        have.splice(at, 0, h);
+      }
+    });
+    sh.getRange(1, 1, 1, wantHeaders.length).setValues([wantHeaders])
+      .setFontWeight('bold').setBackground('#1a73e8').setFontColor('#ffffff');
+  }
+  return sh;
+}
+
+// ---------------------------- BOM control (lock) ----------------------------
+/** { MODEL_UPPER : {row, model, status, rev, by, on, ecn} } - read only. */
+function controlMap_() {
+  const sh = dataSS_().getSheetByName(CONTROL_SHEET);
+  const map = {};
+  if (!sh || sh.getLastRow() < 2) return map;
+  sh.getRange(2, 1, sh.getLastRow() - 1, CONTROL_HDR.length).getValues().forEach((r, i) => {
+    if (r[0]) map[norm_(r[0])] = {
+      row: i + 2, model: String(r[0]), status: String(r[1]) || 'Unlocked',
+      rev: Number(r[2]) || 0, by: txt_(r[3]), on: txt_(r[4]), ecn: txt_(r[5])
+    };
+  });
+  return map;
+}
+
+function getControl_(model) {
+  return controlMap_()[norm_(model)] || { row: 0, model: model, status: 'Unlocked', rev: 0, by: '', on: '', ecn: '' };
+}
+
+function setControl_(model, c) {
+  const sh = sysSheet_(CONTROL_SHEET, CONTROL_HDR);
+  const old = getControl_(model);
+  const vals = [model, c.status, c.rev, c.by, c.on, c.ecn];
+  if (old.row) sh.getRange(old.row, 1, 1, CONTROL_HDR.length).setValues([vals]);
+  else appendRows_(sh, [vals]);
+}
+
+function countParts_(sheet, mh) {
+  const n = sheet.getLastRow() - HEADER_ROW;
+  if (n <= 0) return 0;
+  return sheet.getRange(HEADER_ROW + 1, partColIn_(sheet, mh), n, 1).getValues()
+    .filter(r => norm_(r[0])).length;
+}
+
+
+function getControlData() {
+  const ctrl = controlMap_();
+  const mh = headersOf_(dataSS_().getSheetByName(SHEET_NAME));
+  return getModelSheets_().map(s => {
+    const c = ctrl[norm_(s.getName())];
+    return {
+      model: s.getName(), parts: countParts_(s, mh),
+      status: c ? c.status : 'Unlocked', rev: c ? c.rev : 0,
+      by: c ? c.by : '', on: c ? c.on : '', ecn: c ? c.ecn : ''
+    };
+  });
+}
+
+function lockBom(model) {
+  return withLock_(() => {
+    const ss = dataSS_();
+    const sh = ss.getSheetByName(model);
+    if (!sh || isSystemSheet_(model)) throw uerr_('Model sheet not found: ' + model);
+    const mh = headersOf_(ss.getSheetByName(SHEET_NAME));
+    if (countParts_(sh, mh) === 0) throw uerr_('BOM is empty - add parts before locking.');
+    const c = getControl_(model);
+    if (c.status === 'Locked') throw uerr_(model + ' is already locked.');
+    const rev = c.row ? c.rev + 1 : 0;   // first lock = Rev 0, re-lock after unlock = next rev
+    setControl_(model, { status: 'Locked', rev: rev, by: user_(), on: now_(), ecn: c.ecn });
+    appendRows_(migratedSheet_(ECN_SHEET, ECN_HDR),
+      [[now_(), '-', model, rev, '', 'BOM LOCKED', '', '', 'BOM baseline locked', '', '', user_()]]);
+    try {
+      const p = sh.protect();
+      p.setDescription(PROTECT_DESC);
+      p.setWarningOnly(true);
+    } catch (e) { Logger.log('Protect failed: ' + e.message); }
+    return { ok: true };
+  });
+}
+
+function unlockBom(model, reason) {
+  return withLock_(() => {
+    const ss = dataSS_();
+    const sh = ss.getSheetByName(model);
+    if (!sh) throw uerr_('Model sheet not found: ' + model);
+    if (!String(reason || '').trim()) throw uerr_('Enter a reason for unlocking.');
+    const c = getControl_(model);
+    if (c.status !== 'Locked') throw uerr_(model + ' is not locked.');
+    setControl_(model, { status: 'Unlocked', rev: c.rev, by: c.by, on: c.on, ecn: c.ecn });
+    appendRows_(migratedSheet_(ECN_SHEET, ECN_HDR),
+      [[now_(), '-', model, c.rev, '', 'BOM UNLOCKED', '', '', String(reason).trim(), '', '', user_()]]);
+    try {
+      sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => {
+        if (p.getDescription() === PROTECT_DESC) p.remove();
+      });
+    } catch (e) { Logger.log('Unprotect failed: ' + e.message); }
+    return { ok: true };
+  });
+}
+
+// ---------------------------- master + BOM change engine ----------------------------
+/** 1-based column number of the first header matching re, or 0 if none. */
+function findCol_(headers, re) {
+  const i = headers.findIndex(h => re.test(String(h)));
+  return i >= 0 ? i + 1 : 0;
+}
+
+function readMaster_() {
+  const master = dataSS_().getSheetByName(SHEET_NAME);
+  const mh = headersOf_(master);
+  const last = master.getLastRow();
+  let mVals = [], mForm = [];
+  if (last > HEADER_ROW) {
+    const rng = master.getRange(HEADER_ROW + 1, 1, last - HEADER_ROW, mh.length);
+    mVals = rng.getValues();
+    mForm = rng.getFormulas();
+  }
+  const idx = {};
+  mVals.forEach((r, i) => {
+    const k = norm_(r[COL_PART_NO - 1]);
+    if (k && !(k in idx)) idx[k] = i;
+  });
+  // Description / image-URL columns are found by header name (e.g. "Description",
+  // "Part Description", "Image_URL"), so this works whatever order PART_MASTER uses.
+  // Falls back to the fixed DESC_COL / COL_IMAGE_URL only if no header matches.
+  const descCol = findCol_(mh, /desc/i) || DESC_COL;
+  const urlCol  = findCol_(mh, /image.*url|url.*image/i) || COL_IMAGE_URL;
+  return { mh: mh, mVals: mVals, mForm: mForm, idx: idx, descCol: descCol, urlCol: urlCol };
+}
+
+/** Description + image URL of PART_MASTER row i (0-based), or blanks if i is undefined. */
+function masterExtra_(ctx, i) {
+  if (i === undefined || i === null) return { desc: '', img: '' };
+  return {
+    desc: ctx.descCol ? String(ctx.mVals[i][ctx.descCol - 1] || '').trim() : '',
+    img:  ctx.urlCol  ? String(ctx.mVals[i][ctx.urlCol  - 1] || '').trim() : ''
+  };
+}
+
+/** Makes sure the model sheet has headers and a QPS column. */
+function ensureHeaders_(sheet, masterHeaders) {
+  if (sheet.getLastRow() === 0 || sheet.getLastColumn() === 0) {
+    sheet.getRange(1, 1, 1, masterHeaders.length + 1)
+      .setValues([masterHeaders.concat([QPS_HEADER])]);
+  }
+  const headers = headersOf_(sheet);
+  let qpsCol = headers.findIndex(h => norm_(h) === QPS_HEADER) + 1;
+  if (!qpsCol) {
+    qpsCol = headers.length + 1;
+    sheet.getRange(HEADER_ROW, qpsCol).setValue(QPS_HEADER);
+    headers.push(QPS_HEADER);
+  }
+  return { headers: headers, qpsCol: qpsCol };
+}
+
+/** Finds { row, qps } of a part in a model sheet, or null. */
+function findInModel_(sheet, partNo, masterHeaders) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= HEADER_ROW) return null;
+  const pc   = partColIn_(sheet, masterHeaders);
+  const vals = sheet.getRange(HEADER_ROW + 1, pc, lastRow - HEADER_ROW, 1).getValues();
+  const key  = norm_(partNo);
+  for (let i = 0; i < vals.length; i++) {
+    if (norm_(vals[i][0]) === key) {
+      const row = HEADER_ROW + 1 + i;
+      const qc  = headersOf_(sheet).findIndex(h => norm_(h) === QPS_HEADER) + 1;
+      return { row: row, qps: qc ? sheet.getRange(row, qc).getValue() : '' };
+    }
+  }
+  return null;
+}
+
+/** Works out what would change in one model sheet. Writes nothing (except a missing header). */
+function planBom_(sheet, ctx, items, remove) {
+  const h  = ensureHeaders_(sheet, ctx.mh);
+  const pc = partColIn_(sheet, ctx.mh);
+  const n  = Math.max(sheet.getLastRow() - HEADER_ROW, 0);
+  const existing = {};
+  let qv = [];
+  if (n > 0) {
+    const pv = sheet.getRange(HEADER_ROW + 1, pc, n, 1).getValues();
+    qv = sheet.getRange(HEADER_ROW + 1, h.qpsCol, n, 1).getValues();
+    pv.forEach((r, i) => {
+      const k = norm_(r[0]);
+      if (k && !(k in existing)) existing[k] = i;
+    });
+  }
+  const changes = [], newRows = [], missing = [], removeIdx = [];
+
+  (items || []).forEach(it => {
+    const k = norm_(it.partNo), q = Number(it.qps);
+    if (!(q > 0)) throw uerr_('Invalid QPS for ' + it.partNo);
+    if (k in existing) {
+      const old = qv[existing[k]][0];
+      if (Number(old) !== q) {
+        changes.push({ partNo: it.partNo, action: 'QPS changed', oldQ: old, newQ: q });
+        qv[existing[k]][0] = q;
+      }
+    } else if (k in ctx.idx) {
+      const i = ctx.idx[k];
+      newRows.push(h.headers.map((name, j) => {
+        if (j + 1 === h.qpsCol) return q;
+        const m = ctx.mh.findIndex(x => norm_(x) === norm_(name));
+        if (m < 0) return '';
+        return ctx.mForm[i][m] || ctx.mVals[i][m];
+      }));
+      changes.push({ partNo: it.partNo, action: 'Added', oldQ: '', newQ: q });
+    } else {
+      missing.push(it.partNo);
+    }
+  });
+
+  (remove || []).forEach(p => {
+    const k = norm_(p);
+    if (k in existing) {
+      removeIdx.push(existing[k]);
+      changes.push({ partNo: p, action: 'Removed', oldQ: qv[existing[k]][0], newQ: '' });
+    }
+  });
+  return { h: h, n: n, qv: qv, newRows: newRows, removeIdx: removeIdx, changes: changes, missing: missing };
+}
+
+function applyBom_(sheet, plan) {
+  if (plan.n > 0 && plan.changes.some(c => c.action === 'QPS changed'))
+    sheet.getRange(HEADER_ROW + 1, plan.h.qpsCol, plan.n, 1).setValues(plan.qv);
+  if (plan.newRows.length) {
+    const start = Math.max(sheet.getLastRow(), HEADER_ROW) + 1;
+    sheet.getRange(start, 1, plan.newRows.length, plan.h.headers.length).setValues(plan.newRows);
+    sheet.setRowHeights(start, plan.newRows.length, ROW_HEIGHT_PX);
+  }
+  plan.removeIdx.slice().sort((a, b) => b - a).forEach(i => sheet.deleteRow(HEADER_ROW + 1 + i));
+}
+
+/**
+ * Applies plans for one or more models. Locked models with changes
+ * need an ECN (checked BEFORE anything is written) and get logged.
+ */
+function commitPlans_(list, ecn) {
+  const ctrl = controlMap_();
+  const locked = list.filter(x => x.plan.changes.length &&
+    (ctrl[norm_(x.sheet.getName())] || {}).status === 'Locked');
+
+  let e = null;
+  if (locked.length) {
+    const no   = String((ecn && ecn.no) || '').trim();
+    const desc = String((ecn && ecn.desc) || '').trim();
+    if (!no || !desc)
+      throw uerr_('BOM of ' + locked.map(x => x.sheet.getName()).join(', ') +
+        ' is LOCKED. Enter the ECN number and a change description.');
+    e = { no: no, desc: desc };
+  }
+
+  list.forEach(x => applyBom_(x.sheet, x.plan));
+
+  if (e) {
+    const rows = [];
+    locked.forEach(x => {
+      const name = x.sheet.getName();
+      const c = ctrl[norm_(name)];
+      const rev = (c.rev || 0) + 1;
+      setControl_(name, { status: 'Locked', rev: rev, by: c.by, on: c.on, ecn: e.no });
+      x.plan.changes.forEach(ch =>
+        rows.push([now_(), e.no, name, rev, ch.partNo, ch.action, ch.oldQ, ch.newQ, e.desc, '', '', user_()]));
+    });
+    appendRows_(migratedSheet_(ECN_SHEET, ECN_HDR), rows);
+  }
+}
+
+
+/** Next auto ECN number: one past the highest existing ECN-#### in ECN_HISTORY. */
+function nextEcnNo_() {
+  const sh = migratedSheet_(ECN_SHEET, ECN_HDR);
+  let max = 0;
+  if (sh.getLastRow() > 1) {
+    sh.getRange(2, 2, sh.getLastRow() - 1, 1).getValues().forEach(r => {
+      const m = /^ECN-(\d+)$/i.exec(String(r[0]).trim());
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+  }
+  return 'ECN-' + ('0000' + (max + 1)).slice(-4);
+}
+
+/** Looks up one part inside a model's current BOM, for the "before part" check in the ECN wizard. */
+function getPartInModel(model, partNo) {
+  const b = getVerifyBom(model);
+  const key = norm_(partNo);
+  const found = b.parts.find(p => norm_(p.partNo) === key);
+  return {
+    locked: b.locked, rev: b.rev,
+    found: !!found,
+    desc: found ? found.desc : '', img: found ? found.img : '', qps: found ? found.qps : ''
+  };
+}
+
+/** Looks up one part in PART_MASTER itself, for live-checking new part numbers in the ECN wizard. */
+function getMasterPart(partNo) {
+  const ctx = readMaster_();
+  const i = ctx.idx[norm_(partNo)];
+  if (i === undefined) return { found: false, desc: '', img: '' };
+  const ex = masterExtra_(ctx, i);
+  return { found: true, desc: ex.desc, img: ex.img };
+}
+
+/**
+ * Combined check for one "after" (new) part number in the ECN wizard: is it
+ * in PART_MASTER at all, and - separately - is it already in the selected
+ * model's current BOM (and at what QPS). The UI uses the second part to
+ * offer "add to" / "subtract from" the existing QPS instead of just
+ * overwriting it, for when the new part happens to already be on the BOM.
+ */
+function getAfterPartInfo(model, partNo) {
+  const master = getMasterPart(partNo);
+  let inModel = { found: false, qps: '' };
+  if (model) {
+    try {
+      const r = getPartInModel(model, partNo);
+      inModel = { found: r.found, qps: r.qps };
+    } catch (e) { /* model not found yet, etc. - ignore, treat as not in model */ }
+  }
+  return { master: master, inModel: inModel };
+}
+
+/** Bulk version of getPartInModel - checks several "before" part numbers in one call (one sheet read). */
+function getPartsInModel(model, partNos) {
+  const b = getVerifyBom(model);
+  const byKey = {};
+  b.parts.forEach(p => { byKey[norm_(p.partNo)] = p; });
+  return (partNos || []).map(partNo => {
+    const found = byKey[norm_(partNo)];
+    return {
+      partNo: partNo, locked: b.locked, rev: b.rev, found: !!found,
+      desc: found ? found.desc : '', img: found ? found.img : '', qps: found ? found.qps : ''
+    };
+  });
+}
+
+/** Bulk version of getMasterPart - checks several "after" part numbers in one call (one sheet read). */
+function getMasterParts(partNos) {
+  const ctx = readMaster_();
+  return (partNos || []).map(partNo => {
+    const i = ctx.idx[norm_(partNo)];
+    if (i === undefined) return { partNo: partNo, found: false, desc: '', img: '' };
+    const ex = masterExtra_(ctx, i);
+    return { partNo: partNo, found: true, desc: ex.desc, img: ex.img };
+  });
+}
+
+/** Today's date as yyyy-MM-dd in the spreadsheet's timezone, for the ECN wizard's effective-date default. */
+function getTodayStr() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+/**
+ * Replaces one or more existing BOM parts with one or more new parts each
+ * (a split, a straight swap, or a bulk batch of several old parts at once -
+ * e.g. pasted in bulk from Excel). Always generates and logs ONE ECN
+ * covering the whole batch, regardless of whether the model is currently
+ * locked, and always bumps the model's BOM revision once - this tool is
+ * the explicit "make an ECN" path.
+ *
+ * payload = { model, oldParts:[partNo,...] (or legacy oldPart: string),
+ *             newParts:[{partNo,qps}], received (bool),
+ *             docBase64, docMime, docName, reason, effectiveDate }
+ */
+function runEcnChange(payload) {
+  return withLock_(() => {
+    const ss = dataSS_();
+    const model = String(payload.model || '').trim();
+    const reason = String(payload.reason || '').trim();
+    const effectiveDate = String(payload.effectiveDate || '').trim();
+    const newParts = payload.newParts || [];
+
+    // Accept either the new bulk "oldParts" array or the original single
+    // "oldPart" string, de-duplicated and with blanks dropped.
+    let oldParts = Array.isArray(payload.oldParts) ? payload.oldParts.slice() : [];
+    if (!oldParts.length && payload.oldPart) oldParts = [payload.oldPart];
+    oldParts = oldParts.map(p => String(p || '').trim()).filter(Boolean);
+    const seenOld = {};
+    oldParts = oldParts.filter(p => {
+      const k = norm_(p);
+      if (seenOld[k]) return false;
+      seenOld[k] = true;
+      return true;
+    });
+
+    const sheet = ss.getSheetByName(model);
+    if (!sheet || isSystemSheet_(model)) throw uerr_('Model sheet not found: ' + model);
+    if (!oldParts.length) throw uerr_('Enter at least one before (old) part number.');
+    if (!newParts.length) throw uerr_('Enter at least one after (new) part number.');
+    if (!reason) throw uerr_('Enter the reason for the change.');
+    if (!effectiveDate) throw uerr_('Enter the effective date.');
+    if (payload.received && !docLink_(payload.docUrl)) throw uerr_('Paste the link to the ECN document, or answer "No" if you have not received it yet.');
+
+    const ctx = readMaster_();
+    const notFound = oldParts.filter(p => !findInModel_(sheet, p, ctx.mh));
+    if (notFound.length)
+      throw uerr_('Not found in ' + model + '\'s current BOM, so they cannot be replaced: ' +
+        notFound.join(', ') + '. Check the part number(s) and try again.');
+
+    // If the same new part number is listed more than once (typed twice, or
+    // split across rows by mistake), merge those rows into one by summing
+    // their QPS rather than rejecting the ECN.
+    const mergedByKey = {};
+    const mergedOrder = [];
+    newParts.forEach(p => {
+      const k = norm_(p.partNo);
+      if (!k) throw uerr_('One of the new part rows has no part number.');
+      const q = Number(p.qps);
+      if (!(q > 0)) throw uerr_('Enter a valid QPS for ' + p.partNo + '.');
+      if (mergedByKey[k]) {
+        mergedByKey[k].qps += q;
+      } else {
+        mergedByKey[k] = { partNo: p.partNo, qps: q };
+        mergedOrder.push(k);
+      }
+    });
+    const mergedNewParts = mergedOrder.map(k => mergedByKey[k]);
+
+    // A part listed in BOTH the before and after lists (e.g. "replace P2
+    // with P2 + P4", meaning "keep P2, also add P4") must not be deleted -
+    // only parts that are being removed outright go to planBom_'s remove list.
+    const keptKeys = {};
+    mergedNewParts.forEach(p => { keptKeys[norm_(p.partNo)] = true; });
+    const removeParts = oldParts.filter(p => !keptKeys[norm_(p)]);
+
+    const plan = planBom_(sheet, ctx, mergedNewParts, removeParts);
+    if (plan.missing.length)
+      throw uerr_('Not in PART_MASTER yet, so they cannot be added: ' + plan.missing.join(', ') +
+        '. Add them to PART_MASTER first, then run this ECN again.');
+
+    const ecnNo = nextEcnNo_();
+    const docUrl = payload.received ? docLink_(payload.docUrl) : '';
+
+    applyBom_(sheet, plan);
+
+    const c = getControl_(model);
+    const rev = (c.row ? c.rev : -1) + 1;
+    setControl_(model, { status: c.status || 'Unlocked', rev: rev, by: c.by, on: c.on, ecn: ecnNo });
+
+    const rows = plan.changes.map(ch =>
+      [now_(), ecnNo, model, rev, ch.partNo, ch.action, ch.oldQ, ch.newQ, reason, effectiveDate, docUrl, user_()]);
+    appendRows_(migratedSheet_(ECN_SHEET, ECN_HDR), rows);
+
+    return {
+      ok: true, ecnNo: ecnNo, model: model, rev: rev, docUrl: docUrl,
+      removed: removeParts, added: mergedNewParts.map(p => p.partNo + ' (QPS ' + p.qps + ')')
+    };
+  });
+}
+
+/** Recent ECN_HISTORY rows, newest first, optionally filtered to one model. */
+function getEcnLog(model) {
+  const sh = migratedSheet_(ECN_SHEET, ECN_HDR);
+  if (sh.getLastRow() < 2) return [];
+  const want = model ? norm_(model) : '';
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, ECN_HDR.length).getValues()
+    .filter(r => !want || norm_(r[2]) === want)
+    .map(r => ({
+      when: txt_(r[0]), ecnNo: txt_(r[1]), model: txt_(r[2]), rev: txt_(r[3]), part: txt_(r[4]),
+      action: txt_(r[5]), oldQ: txt_(r[6]), newQ: txt_(r[7]), reason: txt_(r[8]),
+      effectiveDate: txt_(r[9]), docUrl: txt_(r[10]), by: txt_(r[11])
+    }));
+  return rows.reverse().slice(0, 300);
+}
+
+/**
+ * All ECN_HISTORY rows sharing one ECN number, grouped for the "Edit ECN"
+ * panel: the shared metadata (model, reason, effective date, document) plus
+ * the list of individual part changes it covers (read-only - editing here
+ * only corrects the metadata, never re-applies the BOM change).
+ */
+function getEcnByNo(ecnNo) {
+  const want = norm_(ecnNo);
+  const sh = migratedSheet_(ECN_SHEET, ECN_HDR);
+  if (sh.getLastRow() < 2) return null;
+  const all = sh.getRange(2, 1, sh.getLastRow() - 1, ECN_HDR.length).getValues();
+  const mine = all.filter(r => norm_(r[1]) === want);
+  if (!mine.length) return null;
+  const first = mine[0];
+  return {
+    ecnNo: txt_(first[1]), model: txt_(first[2]), rev: txt_(first[3]),
+    reason: txt_(first[8]), effectiveDate: txt_(first[9]), docUrl: txt_(first[10]), by: txt_(first[11]),
+    changes: mine.map(r => ({
+      part: txt_(r[4]), action: txt_(r[5]), oldQ: txt_(r[6]), newQ: txt_(r[7]), when: txt_(r[0])
+    }))
+  };
+}
+
+/**
+ * Data for a formatted, printable ECN report: one entry per ECN (not per
+ * part-change row), with its Before (old/removed) parts and After
+ * (new/added, or qty-changed-to) parts separated out - each with its
+ * PART_MASTER description alongside the part number - plus the reason,
+ * effective date, the BOM revision it produced, who raised it and the
+ * saved document link. Newest first.
+ *
+ * model: filter to just that model, or '' / omit for every model.
+ * ecnNo: filter to just that one ECN number, or '' / omit for every ECN
+ *        (within whatever model filter also applies).
+ */
+function getEcnReportData(model, ecnNo) {
+  const sh = migratedSheet_(ECN_SHEET, ECN_HDR);
+  if (sh.getLastRow() < 2) return [];
+  const want = model ? norm_(model) : '';
+  const wantEcn = ecnNo ? norm_(ecnNo) : '';
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, ECN_HDR.length).getValues()
+    .filter(r => (!want || norm_(r[2]) === want) && (!wantEcn || norm_(r[1]) === wantEcn) && String(r[4]).trim()); // part-level rows only
+
+  const ctx = readMaster_();
+  const descOf = partNo => { const i = ctx.idx[norm_(partNo)]; return i === undefined ? '' : masterExtra_(ctx, i).desc; };
+
+  const groups = {};
+  const order = [];
+  rows.forEach(r => {
+    const no = txt_(r[1]);
+    if (!groups[no]) {
+      groups[no] = {
+        ecnNo: no, model: txt_(r[2]), rev: Number(r[3]) || 0, when: txt_(r[0]),
+        reasons: [], effectiveDate: txt_(r[9]), docUrl: txt_(r[10]), by: txt_(r[11]),
+        before: [], after: []
+      };
+      order.push(no);
+    }
+    const g = groups[no];
+    if (txt_(r[0]) > g.when) g.when = txt_(r[0]); // latest timestamp among this ECN's rows
+    const reason = txt_(r[8]);
+    if (reason && g.reasons.indexOf(reason) < 0) g.reasons.push(reason); // several when ECNs were merged
+    const partNo = txt_(r[4]), action = txt_(r[5]), oldQ = r[6], newQ = r[7], desc = descOf(partNo);
+    if (action === 'Removed') {
+      g.before.push({ partNo: partNo, desc: desc, qps: oldQ, action: action });
+    } else if (action === 'Added') {
+      g.after.push({ partNo: partNo, desc: desc, qps: newQ, action: action });
+    } else { // 'QPS changed' - the same part, before AND after at different quantities
+      g.before.push({ partNo: partNo, desc: desc, qps: oldQ, action: action });
+      g.after.push({ partNo: partNo, desc: desc, qps: newQ, action: action });
+    }
+  });
+
+  return order.map(no => {
+    const g = groups[no];
+    g.reason = g.reasons.join(' | ');
+    delete g.reasons;
+    return g;
+  }).sort((a, b) => (b.rev - a.rev) || (a.when < b.when ? 1 : -1));
+}
+
+/** Every ECN number on record (optionally for one model), for the report's ECN picker. */
+function getAllEcnNos(model) {
+  const sh = migratedSheet_(ECN_SHEET, ECN_HDR);
+  if (sh.getLastRow() < 2) return [];
+  const want = model ? norm_(model) : '';
+  const seen = {};
+  const out = [];
+  sh.getRange(2, 1, sh.getLastRow() - 1, ECN_HDR.length).getValues().forEach(r => {
+    const no = txt_(r[1]);
+    if (!no || !String(r[4]).trim()) return;
+    if (want && norm_(r[2]) !== want) return;
+    if (seen[no]) return;
+    seen[no] = true;
+    out.push({ ecnNo: no, model: txt_(r[2]) });
+  });
+  return out.sort((a, b) => a.ecnNo < b.ecnNo ? 1 : -1);
+}
+
+/**
+ * Corrects an ECN's metadata (reason / effective date / document) after the
+ * fact, across every ECN_HISTORY row filed under that ECN number. Does NOT
+ * touch which parts were added or removed - that record is the audit trail
+ * of what actually happened on the sheet, and reopening it would break the
+ * link between ECN_HISTORY and the BOM. To change the parts themselves,
+ * generate a new ECN instead.
+ *
+ * payload = { ecnNo, reason, effectiveDate, received(bool), docBase64,
+ *             docMime, docName, keepExistingDoc(bool) }
+ */
+function updateEcnMeta(payload) {
+  return withLock_(() => {
+    const ecnNo = String(payload.ecnNo || '').trim();
+    const reason = String(payload.reason || '').trim();
+    const effectiveDate = String(payload.effectiveDate || '').trim();
+    if (!ecnNo) throw uerr_('Missing ECN number.');
+    if (!reason) throw uerr_('Enter the reason for the change.');
+    if (!effectiveDate) throw uerr_('Enter the effective date.');
+    if (payload.received && !payload.keepExistingDoc && !docLink_(payload.docUrl))
+      throw uerr_('Paste the link to the ECN document, or keep the existing one.');
+
+    const sh = migratedSheet_(ECN_SHEET, ECN_HDR);
+    const last = sh.getLastRow();
+    if (last < 2) throw uerr_('ECN ' + ecnNo + ' was not found.');
+    const rng = sh.getRange(2, 1, last - 1, ECN_HDR.length);
+    const vals = rng.getValues();
+    const want = norm_(ecnNo);
+    const idxs = [];
+    vals.forEach((r, i) => { if (norm_(r[1]) === want) idxs.push(i); });
+    if (!idxs.length) throw uerr_('ECN ' + ecnNo + ' was not found.');
+
+    const model = txt_(vals[idxs[0]][2]);
+    let docUrl = txt_(vals[idxs[0]][10]);
+    if (payload.received && !payload.keepExistingDoc) {
+      docUrl = docLink_(payload.docUrl);
+    } else if (!payload.received) {
+      docUrl = '';
+    }
+
+    idxs.forEach(i => {
+      vals[i][8] = reason;        // Description / reason
+      vals[i][9] = effectiveDate; // Effective_Date
+      vals[i][10] = docUrl;       // Document_Link
+    });
+    rng.setValues(vals);
+
+    return { ok: true, ecnNo: ecnNo, model: model, docUrl: docUrl, rowsUpdated: idxs.length };
+  });
+}
+
+/**
+ * Deletes an ECN that was done by mistake: reverses what it changed on the
+ * model's live BOM (an "Added" part is removed again, a "Removed" part is
+ * put back at its old QPS, a "QPS changed" part is put back to its old
+ * QPS), then deletes its rows from ECN_HISTORY and renumbers later
+ * revisions to close the gap.
+ *
+ * This works on ANY ECN for the model, not only the latest one. It is safe
+ * to do even when a later ECN exists, as long as that later ECN never
+ * touched the same part(s) - in that case the live sheet still holds
+ * exactly what this ECN set those parts to, so putting them back is
+ * correct. If a later ECN DID touch the same part(s), reversing this one
+ * blindly could clobber that later change, so it's refused instead, naming
+ * which ECN(s) are in the way.
+ */
+function deleteEcn(ecnNo) {
+  return withLock_(() => {
+    const want = norm_(ecnNo);
+    const sh = migratedSheet_(ECN_SHEET, ECN_HDR);
+    const last = sh.getLastRow();
+    if (last < 2) throw uerr_('ECN ' + ecnNo + ' was not found.');
+    const rng = sh.getRange(2, 1, last - 1, ECN_HDR.length);
+    const vals = rng.getValues();
+    const idxs = [];
+    vals.forEach((r, i) => { if (norm_(r[1]) === want) idxs.push(i); });
+    if (!idxs.length) throw uerr_('ECN ' + ecnNo + ' was not found.');
+
+    const model = txt_(vals[idxs[0]][2]);
+    const ecnRev = Number(vals[idxs[0]][3]) || 0;
+    const sheet = dataSS_().getSheetByName(model);
+    if (!sheet || isSystemSheet_(model)) throw uerr_('Model sheet not found: ' + model);
+
+    const hasPartRows = idxs.some(i => String(vals[i][4]).trim());
+    if (!hasPartRows) throw uerr_('ECN ' + ecnNo + ' has no part changes to undo.');
+
+    const modelWant = norm_(model);
+    const touchedParts = {};
+    idxs.forEach(i => { const p = txt_(vals[i][4]); if (p) touchedParts[norm_(p)] = true; });
+
+    // Any LATER row for this model (a different ECN, a higher Rev) that touched the same part(s)?
+    const conflicts = {};
+    vals.forEach((r, i) => {
+      if (idxs.indexOf(i) >= 0) return;
+      if (norm_(r[2]) !== modelWant) return;
+      if (Number(r[3]) <= ecnRev) return;
+      const p = txt_(r[4]);
+      if (p && touchedParts[norm_(p)]) conflicts[txt_(r[1])] = true;
+    });
+    const conflictList = Object.keys(conflicts);
+    if (conflictList.length)
+      throw uerr_('Cannot delete ' + ecnNo + ' - ' + conflictList.join(', ') +
+        ' changed the same part(s) afterwards (' + Object.keys(touchedParts).join(', ') + '). ' +
+        'Delete ' + (conflictList.length > 1 ? 'those ECNs' : conflictList[0]) + ' first (most recent first), ' +
+        'or use "BOM version history" to restore an earlier revision instead.');
+
+    const ctx = readMaster_();
+    const toAdd = [], toRemove = [];
+    idxs.forEach(i => {
+      const r = vals[i];
+      const partNo = txt_(r[4]);
+      if (!partNo) return;
+      const action = txt_(r[5]);
+      const oldQ = r[6];
+      if (action === 'Added') toRemove.push(partNo);
+      else toAdd.push({ partNo: partNo, qps: oldQ }); // "Removed" or "QPS changed" -> put old QPS back
+    });
+
+    const plan = planBom_(sheet, ctx, toAdd, toRemove);
+    if (plan.missing.length)
+      throw uerr_('Cannot undo ' + ecnNo + ' - part(s) no longer in PART_MASTER: ' + plan.missing.join(', '));
+    applyBom_(sheet, plan);
+
+    const keepRows = vals.filter((r, i) => idxs.indexOf(i) < 0);
+
+    // Close the numbering gap: if other rows still occupy ecnRev (e.g. it was a merged
+    // revision with more than one ECN in it), later revisions keep their numbers as-is;
+    // otherwise everything after ecnRev shifts down by one.
+    const stillAtEcnRev = keepRows.some(r => norm_(r[2]) === modelWant && Number(r[3]) === ecnRev);
+    const shiftAmount = stillAtEcnRev ? 0 : 1;
+    keepRows.forEach(r => {
+      if (norm_(r[2]) !== modelWant) return;
+      const rv = Number(r[3]);
+      if (rv > ecnRev) r[3] = rv - shiftAmount;
+    });
+
+    sh.getRange(2, 1, last - 1, ECN_HDR.length).clearContent();
+    if (keepRows.length) sh.getRange(2, 1, keepRows.length, ECN_HDR.length).setValues(keepRows);
+
+    const c = getControl_(model);
+    let newRev;
+    if (c.rev === ecnRev) newRev = stillAtEcnRev ? ecnRev : ecnRev - 1;
+    else if (c.rev > ecnRev) newRev = c.rev - shiftAmount;
+    else newRev = c.rev;
+
+    let lastEcnNo = '';
+    keepRows.forEach(r => { if (norm_(r[2]) === modelWant && Number(r[3]) === newRev) lastEcnNo = txt_(r[1]); });
+    setControl_(model, { status: c.status || 'Unlocked', rev: newRev, by: c.by, on: c.on, ecn: lastEcnNo });
+
+    return { ok: true, ecnNo: ecnNo, model: model, newRev: newRev, partsReverted: idxs.length };
+  });
+}
+
+/**
+ * Removes an ECN's rows from ECN_HISTORY WITHOUT touching the live BOM at
+ * all - for cleaning up a duplicate/accidental entry whose changes are
+ * already reflected by another ECN (e.g. the same change got submitted
+ * twice), where the current BOM is already correct and only the extra
+ * history record needs to go. Unlike deleteEcn(), this does nothing to the
+ * model's sheet, so it never conflicts with later ECNs - but for that same
+ * reason it's on the caller to be sure the ECN being removed is genuinely
+ * redundant. If its changes are NOT duplicated elsewhere, removing its
+ * record this way leaves the BOM looking like it changed with no ECN to
+ * explain why. Still closes the revision-numbering gap it leaves behind.
+ */
+function deleteEcnRecordOnly(ecnNo) {
+  return withLock_(() => {
+    const want = norm_(ecnNo);
+    const sh = migratedSheet_(ECN_SHEET, ECN_HDR);
+    const last = sh.getLastRow();
+    if (last < 2) throw uerr_('ECN ' + ecnNo + ' was not found.');
+    const rng = sh.getRange(2, 1, last - 1, ECN_HDR.length);
+    const vals = rng.getValues();
+    const idxs = [];
+    vals.forEach((r, i) => { if (norm_(r[1]) === want) idxs.push(i); });
+    if (!idxs.length) throw uerr_('ECN ' + ecnNo + ' was not found.');
+
+    const model = txt_(vals[idxs[0]][2]);
+    const ecnRev = Number(vals[idxs[0]][3]) || 0;
+    const modelWant = norm_(model);
+
+    const keepRows = vals.filter((r, i) => idxs.indexOf(i) < 0);
+
+    const stillAtEcnRev = keepRows.some(r => norm_(r[2]) === modelWant && Number(r[3]) === ecnRev);
+    const shiftAmount = stillAtEcnRev ? 0 : 1;
+    keepRows.forEach(r => {
+      if (norm_(r[2]) !== modelWant) return;
+      const rv = Number(r[3]);
+      if (rv > ecnRev) r[3] = rv - shiftAmount;
+    });
+
+    sh.getRange(2, 1, last - 1, ECN_HDR.length).clearContent();
+    if (keepRows.length) sh.getRange(2, 1, keepRows.length, ECN_HDR.length).setValues(keepRows);
+
+    const c = getControl_(model);
+    let newRev;
+    if (c.rev === ecnRev) newRev = stillAtEcnRev ? ecnRev : ecnRev - 1;
+    else if (c.rev > ecnRev) newRev = c.rev - shiftAmount;
+    else newRev = c.rev;
+
+    let lastEcnNo = '';
+    keepRows.forEach(r => { if (norm_(r[2]) === modelWant && Number(r[3]) === newRev) lastEcnNo = txt_(r[1]); });
+    setControl_(model, { status: c.status || 'Unlocked', rev: newRev, by: c.by, on: c.on, ecn: lastEcnNo });
+
+    return { ok: true, ecnNo: ecnNo, model: model, newRev: newRev, rowsRemoved: idxs.length };
+  });
+}
+
+// ======================================================================
+//              BOM VERSION HISTORY (view / restore an old revision)
+// ======================================================================
+
+/** Every part-level ECN_HISTORY row for one model, in the order they were logged. */
+function ecnPartRowsFor_(model) {
+  const sh = migratedSheet_(ECN_SHEET, ECN_HDR);
+  if (sh.getLastRow() < 2) return [];
+  const want = norm_(model);
+  return sh.getRange(2, 1, sh.getLastRow() - 1, ECN_HDR.length).getValues()
+    .filter(r => norm_(r[2]) === want && String(r[4]).trim()) // same model, Part_No not blank
+    .map(r => ({
+      when: txt_(r[0]), ecnNo: txt_(r[1]), rev: Number(r[3]) || 0, partNo: txt_(r[4]),
+      action: txt_(r[5]), oldQ: r[6], newQ: r[7], reason: txt_(r[8])
+    }));
+}
+
+/**
+ * Every revision checkpoint recorded for a model (one entry per distinct
+ * Rev value in ECN_HISTORY), newest first, each showing the ECN(s) and
+ * reason(s) that produced it and how many parts it touched. The live
+ * current BOM (its rev, from BOM_CONTROL) is flagged separately so the UI
+ * can mark it "(current)".
+ */
+function getBomRevisions(model) {
+  const rows = ecnPartRowsFor_(model);
+  const byRev = {};
+  const order = [];
+  rows.forEach(r => {
+    if (!byRev[r.rev]) { byRev[r.rev] = { rev: r.rev, when: r.when, ecnNos: [], reasons: [], count: 0 }; order.push(r.rev); }
+    const g = byRev[r.rev];
+    g.when = r.when; // keep the latest timestamp seen for this rev
+    if (g.ecnNos.indexOf(r.ecnNo) < 0) g.ecnNos.push(r.ecnNo);
+    if (g.reasons.indexOf(r.reason) < 0) g.reasons.push(r.reason);
+    g.count++;
+  });
+  const curRev = getControl_(model).rev;
+  return order.sort((a, b) => b - a).map(rev => {
+    const g = byRev[rev];
+    return { rev: rev, when: g.when, ecnNo: g.ecnNos.join(', '), reason: g.reasons.join(' | '), partsChanged: g.count, isCurrent: rev === curRev };
+  });
+}
+
+/**
+ * Reconstructs the model's BOM as it stood at a given revision by replaying
+ * every part-level ECN_HISTORY row up to and including that revision, in
+ * order. Description/image come from PART_MASTER as it is today (those
+ * aren't tracked per-revision), so only part numbers and QPS are historical.
+ */
+function getBomAtRevision(model, rev) {
+  const target = Number(rev);
+  const ctx = readMaster_();
+  const map = {}; // norm partNo -> { partNo, qps }
+  let lastWhen = '', lastEcn = '';
+  ecnPartRowsFor_(model).forEach(r => {
+    if (r.rev > target) return;
+    const key = norm_(r.partNo);
+    if (r.action === 'Removed') {
+      delete map[key];
+    } else {
+      map[key] = { partNo: r.partNo, qps: r.newQ };
+    }
+    lastWhen = r.when; lastEcn = r.ecnNo;
+  });
+  const parts = Object.keys(map).map(k => {
+    const row = map[k];
+    const ex = masterExtra_(ctx, ctx.idx[k]);
+    return { partNo: row.partNo, desc: ex.desc, img: ex.img, qps: row.qps };
+  }).sort((a, b) => a.partNo.localeCompare(b.partNo));
+  return { rev: target, model: model, asOfWhen: lastWhen, asOfEcn: lastEcn, parts: parts };
+}
+
+/** CSV download of a model's BOM as it stood at a given historical revision. */
+function getBomRevisionCsv(model, rev) {
+  const snap = getBomAtRevision(model, rev);
+  const rowsOut = [['Part No', 'Description', 'QPS']];
+  snap.parts.forEach(p => rowsOut.push([p.partNo, p.desc, p.qps]));
+  const csv = rowsOut.map(r => r.map(csvField_).join(',')).join('\r\n');
+  return { csv: csv, filename: model + '_rev' + rev + '_BOM.csv' };
+}
+
+/**
+ * Restores a model's live BOM to match how it stood at an older revision.
+ * This does not rewind BOM_CONTROL's revision number - it computes the
+ * difference between the target revision and today's BOM and applies that
+ * as a brand-new ECN (so the restore itself is fully audited, same as any
+ * other BOM change), which bumps the revision forward by one as usual.
+ */
+function restoreBomVersion(model, rev, reason) {
+  return withLock_(() => {
+    const ss = dataSS_();
+    const sheet = ss.getSheetByName(model);
+    if (!sheet || isSystemSheet_(model)) throw uerr_('Model sheet not found: ' + model);
+    const r = String(reason || '').trim() || ('Restored to Rev ' + rev);
+
+    const target = getBomAtRevision(model, rev);
+    const current = getVerifyBom(model);
+    const targetKeys = {};
+    target.parts.forEach(p => { targetKeys[norm_(p.partNo)] = true; });
+    const removeList = current.parts
+      .filter(p => !targetKeys[norm_(p.partNo)])
+      .map(p => p.partNo);
+
+    const ctx = readMaster_();
+    const plan = planBom_(sheet, ctx, target.parts, removeList);
+    if (plan.missing.length)
+      throw uerr_('Revision ' + rev + ' includes part(s) no longer in PART_MASTER: ' + plan.missing.join(', ') +
+        '. Add them back to PART_MASTER first, then restore again.');
+    if (!plan.changes.length)
+      return { ok: true, ecnNo: '', model: model, rev: current.rev, changes: 0, note: 'Already matches revision ' + rev + ' - nothing to restore.' };
+
+    applyBom_(sheet, plan);
+
+    const ecnNo = nextEcnNo_();
+    const c = getControl_(model);
+    const newRev = (c.row ? c.rev : -1) + 1;
+    setControl_(model, { status: c.status || 'Unlocked', rev: newRev, by: c.by, on: c.on, ecn: ecnNo });
+
+    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const rows = plan.changes.map(ch =>
+      [now_(), ecnNo, model, newRev, ch.partNo, ch.action, ch.oldQ, ch.newQ, r, today, '', user_()]);
+    appendRows_(migratedSheet_(ECN_SHEET, ECN_HDR), rows);
+
+    return { ok: true, ecnNo: ecnNo, model: model, rev: newRev, restoredToRev: rev, changes: plan.changes.length };
+  });
+}
+
+/**
+ * Merges two or more ADJACENT (consecutive) revisions of a model's BOM
+ * history into one: the same single revision number, AND the same single
+ * ECN number, so "BOM version history" shows one combined entry and the
+ * "ECN history / edit" tab in Generate ECN shows one combined ECN row
+ * (with every part change that happened across the merged revisions listed
+ * under it) instead of several. The individual part-level change rows
+ * themselves are kept exactly as they happened - only the Rev and ECN_No
+ * they're filed under change. The lowest-numbered of the ECNs being merged
+ * is kept as the surviving ECN number (its reason/date/document become the
+ * combined ECN's); every later revision number shifts down to stay
+ * contiguous. The live BOM itself is never touched, because the final part
+ * list only depends on the order the changes happened in, not how they
+ * happen to be numbered or filed. This cannot be undone.
+ */
+function mergeBomRevisions(model, revs) {
+  return withLock_(() => {
+    model = String(model || '').trim();
+    if (!model) throw uerr_('Missing model.');
+    let list = (revs || []).map(Number).filter(n => !isNaN(n));
+    list = Array.from(new Set(list)).sort((a, b) => a - b);
+    if (list.length < 2) throw uerr_('Pick at least two revisions to merge.');
+    for (let i = 1; i < list.length; i++) {
+      if (list[i] !== list[i - 1] + 1)
+        throw uerr_('Only adjacent revisions can be merged together (e.g. Rev 2 and Rev 3) - not revisions with a gap between them.');
+    }
+    const minMerged = list[0];
+    const maxMerged = list[list.length - 1];
+
+    const sh = migratedSheet_(ECN_SHEET, ECN_HDR);
+    const last = sh.getLastRow();
+    if (last < 2) throw uerr_('No ECN history found for ' + model + '.');
+    const rng = sh.getRange(2, 1, last - 1, ECN_HDR.length);
+    const vals = rng.getValues();
+    const modelWant = norm_(model);
+
+    const foundRevs = {};
+    vals.forEach(r => { if (norm_(r[2]) === modelWant) foundRevs[Number(r[3])] = true; });
+    const missing = list.filter(rv => !foundRevs[rv]);
+    if (missing.length) throw uerr_('Revision(s) not found for ' + model + ': ' + missing.join(', '));
+
+    // The surviving ECN number: the lowest-numbered ECN among the merged revisions.
+    const ecnNum_ = no => { const m = /(\d+)\s*$/.exec(String(no || '')); return m ? Number(m[1]) : Infinity; };
+    let targetEcnNo = '';
+    vals.forEach(r => {
+      if (norm_(r[2]) !== modelWant) return;
+      const rv = Number(r[3]);
+      if (rv < minMerged || rv > maxMerged) return;
+      const no = txt_(r[1]);
+      if (!targetEcnNo || ecnNum_(no) < ecnNum_(targetEcnNo)) targetEcnNo = no;
+    });
+
+    const mergedEcnNos = new Set();
+    const shift = rv => {
+      if (rv < minMerged) return rv;
+      if (rv <= maxMerged) return minMerged;
+      return rv - (list.length - 1);
+    };
+    vals.forEach(r => {
+      if (norm_(r[2]) !== modelWant) return;
+      const origRev = Number(r[3]);
+      if (origRev >= minMerged && origRev <= maxMerged) {
+        mergedEcnNos.add(txt_(r[1]));
+        r[1] = targetEcnNo; // consolidate every row in range under the one surviving ECN number
+      }
+      r[3] = shift(origRev);
+    });
+    rng.setValues(vals);
+
+    const c = getControl_(model);
+    const newCurRev = shift(c.rev);
+    const newLastEcn = (c.rev >= minMerged && c.rev <= maxMerged) ? targetEcnNo : c.ecn;
+    if (newCurRev !== c.rev || newLastEcn !== c.ecn)
+      setControl_(model, { status: c.status || 'Unlocked', rev: newCurRev, by: c.by, on: c.on, ecn: newLastEcn });
+
+    return {
+      ok: true, model: model, mergedInto: minMerged,
+      targetEcnNo: targetEcnNo, revisionsMerged: list.length, ecnsMerged: mergedEcnNos.size, newCurrentRev: newCurRev
+    };
+  });
+}
+
+function assignPart(payload) {
+  return withLock_(() => {
+    const ss  = dataSS_();
+    const ctx = readMaster_();
+    if (!(norm_(payload.partNo) in ctx.idx))
+      throw uerr_('Part ' + payload.partNo + ' not found in ' + SHEET_NAME);
+
+    const per = {};   // model -> { items, remove }
+    (payload.add || []).forEach(a => {
+      (per[a.model] = per[a.model] || { items: [], remove: [] }).items.push({ partNo: payload.partNo, qps: a.qps });
+    });
+    (payload.remove || []).forEach(m => {
+      (per[m] = per[m] || { items: [], remove: [] }).remove.push(payload.partNo);
+    });
+
+    const list = Object.keys(per).map(name => {
+      const sheet = ss.getSheetByName(name);
+      if (!sheet || isSystemSheet_(name)) throw uerr_('Sheet not found: ' + name);
+      return { sheet: sheet, plan: planBom_(sheet, ctx, per[name].items, per[name].remove) };
+    });
+
+    commitPlans_(list, payload.ecn);
+
+    const done = [];
+    list.forEach(x => {
+      const name = x.sheet.getName();
+      if (!x.plan.changes.length) { done.push(name + ': no change'); return; }
+      x.plan.changes.forEach(c => {
+        if (c.action === 'Added') done.push(name + ': added with QPS ' + c.newQ);
+        else if (c.action === 'Removed') done.push(name + ': removed');
+        else done.push(name + ': QPS ' + c.oldQ + ' -> ' + c.newQ);
+      });
+    });
+    return { ok: true, done: done };
+  });
+}
+
+/** All model sheet names + every part in PART_MASTER (with description + image). */
+function getBomData() {
+  const ctx = readMaster_();
+  const parts = [], seen = {};
+  ctx.mVals.forEach((r, i) => {
+    const p = String(r[COL_PART_NO - 1]).trim();
+    if (!p || seen[norm_(p)]) return;
+    seen[norm_(p)] = true;
+    const ex = masterExtra_(ctx, i);
+    parts.push({ partNo: p, desc: ex.desc, img: ex.img });
+  });
+  return { models: getModelSheets_().map(s => s.getName()), parts: parts };
+}
+
+/** { parts:{ PART_UPPER: qps }, locked, rev } for one model sheet. */
+function getModelParts(name) {
+  const ss    = dataSS_();
+  const sheet = ss.getSheetByName(name);
+  const out   = {};
+  const c     = getControl_(name);
+  if (!sheet || sheet.getLastRow() <= HEADER_ROW)
+    return { parts: out, locked: c.status === 'Locked', rev: c.rev };
+
+  const mh = headersOf_(ss.getSheetByName(SHEET_NAME));
+  const pc = partColIn_(sheet, mh);
+  const qc = headersOf_(sheet).findIndex(h => norm_(h) === QPS_HEADER) + 1;
+  const n  = sheet.getLastRow() - HEADER_ROW;
+  const pv = sheet.getRange(HEADER_ROW + 1, pc, n, 1).getValues();
+  const qv = qc ? sheet.getRange(HEADER_ROW + 1, qc, n, 1).getValues() : null;
+  pv.forEach((r, i) => {
+    const k = norm_(r[0]);
+    if (k) out[k] = qv ? qv[i][0] : '';
+  });
+  return { parts: out, locked: c.status === 'Locked', rev: c.rev };
+}
+
+/** payload = { model, newModel, items:[{partNo,qps}], remove:[partNo], ecn:{no,desc} } */
+function saveBom(payload) {
+  return withLock_(() => {
+    const ss  = dataSS_();
+    const ctx = readMaster_();
+
+    let sheet, created = false;
+    const nm = String(payload.newModel || '').trim();
+    if (nm) {
+      if (isSystemSheet_(nm)) throw uerr_('"' + nm + '" is a reserved sheet name.');
+      if (ss.getSheetByName(nm)) throw uerr_('A sheet named "' + nm + '" already exists.');
+      sheet = ss.insertSheet(nm);
+      created = true;
+    } else {
+      sheet = ss.getSheetByName(payload.model);
+      if (!sheet || isSystemSheet_(payload.model)) throw uerr_('Model sheet not found: ' + payload.model);
+    }
+
+    try {
+      const plan = planBom_(sheet, ctx, payload.items || [], payload.remove || []);
+      commitPlans_([{ sheet: sheet, plan: plan }], payload.ecn);
+      const cnt = a => plan.changes.filter(c => c.action === a).length;
+      return {
+        ok: true, model: sheet.getName(),
+        models: getModelSheets_().map(s => s.getName()),
+        added: cnt('Added'), updated: cnt('QPS changed'), removed: cnt('Removed'),
+        missing: plan.missing
+      };
+    } catch (err) {
+      if (created) ss.deleteSheet(sheet);
+      throw err;
+    }
+  });
+}
+
+/** Model list for the dialog, with lock state. */
+function getVerifyModels() {
+  const ctrl = controlMap_();
+  return getModelSheets_().map(s => {
+    const c = ctrl[norm_(s.getName())];
+    return { name: s.getName(), locked: !!(c && c.status === 'Locked'), rev: c ? c.rev : 0 };
+  });
+}
+
+/** Current BOM of a model: [{partNo, desc, img, qps}] + lock info. */
+function getVerifyBom(model) {
+  const ss    = dataSS_();
+  const sheet = ss.getSheetByName(model);
+  if (!sheet || isSystemSheet_(model)) throw uerr_('Model sheet not found: ' + model);
+  const ctx = readMaster_();
+  const c   = getControl_(model);
+  const parts = [];
+  const n = sheet.getLastRow() - HEADER_ROW;
+  if (n > 0) {
+    const pc = partColIn_(sheet, ctx.mh);
+    const qc = headersOf_(sheet).findIndex(h => norm_(h) === QPS_HEADER) + 1;
+    const pv = sheet.getRange(HEADER_ROW + 1, pc, n, 1).getValues();
+    const qv = qc ? sheet.getRange(HEADER_ROW + 1, qc, n, 1).getValues() : null;
+    pv.forEach((r, i) => {
+      const p = String(r[0]).trim();
+      if (!p) return;
+      const ex = masterExtra_(ctx, ctx.idx[norm_(p)]);
+      parts.push({ partNo: p, desc: ex.desc, img: ex.img, qps: qv ? qv[i][0] : '' });
+    });
+  }
+  return { locked: c.status === 'Locked', rev: c.rev, parts: parts };
+}
+
+// BOM-interface style column order for the lot detail log: identifying
+// columns first, then the same fields the BOM builder shows (Part No,
+// Description, Image, QPS), then what the lot actually used, with Result last.
+const LOT_HDR = ['Ver_ID', 'Model', 'Lot_No', 'BOM_Rev', 'Part_No', 'Description', 'Image_URL',
+                 'BOM_QPS', 'Lot_Part_No', 'Lot_QPS', 'Remark', 'Result'];
+
+/**
+ * p = { model, lot, by, remarks, rows:[{partNo, desc, qps, ok, actualPart, actualQps, remark, extra}] }
+ * Appends one line to BOM_VERIFY_LOG and one line per part to LOT_BOM_DETAIL.
+ */
+function saveVerification(p) {
+  return withLock_(() => {
+    const ss    = dataSS_();
+    const model = String(p.model || '').trim();
+    const lot   = String(p.lot || '').trim();
+    if (!model || !ss.getSheetByName(model)) throw uerr_('Choose a model.');
+    if (!lot) throw uerr_('Enter the Lot No.');
+
+    const c    = getControl_(model);
+    const vlog = sysSheet_(VERIFY_SHEET, VERIFY_HDR);
+    const dsh  = migratedSheet_(LOT_SHEET, LOT_HDR);
+    const verId = 'VER-' + ('0000' + vlog.getLastRow()).slice(-4);
+
+    const detail = [];
+    let deviations = 0, checked = 0;
+
+    (p.rows || []).forEach(r => {
+      const remark = String(r.remark || '').trim();
+      let lotPart, lotQps, result, bomPart = String(r.partNo || '').trim(), bomQps = r.qps,
+          desc = String(r.desc || '').trim(), img = String(r.img || '').trim();
+
+      if (r.extra) {
+        lotPart = String(r.actualPart || '').trim();
+        if (!lotPart) return;               // empty extra row - ignore
+        lotQps = r.actualQps === '' || r.actualQps === null ? '' : Number(r.actualQps);
+        result = 'Extra part';
+        bomPart = ''; bomQps = ''; desc = ''; img = '';
+      } else {
+        checked++;
+        if (r.ok) {
+          lotPart = bomPart; lotQps = bomQps; result = 'Matched';
+        } else {
+          lotPart = String(r.actualPart || '').trim();
+          const aq = String(r.actualQps === null || r.actualQps === undefined ? '' : r.actualQps).trim();
+          lotQps = aq === '' ? bomQps : Number(aq);
+          if (!lotPart)                              { result = 'Not used in lot'; lotQps = ''; }
+          else if (norm_(lotPart) !== norm_(bomPart)) result = 'Part changed';
+          else if (Number(lotQps) !== Number(bomQps)) result = 'QPS changed';
+          else                                        result = 'Matched';
+        }
+      }
+      if (result !== 'Matched') deviations++;
+      detail.push([verId, model, lot, c.rev, bomPart, desc, img, bomQps, lotPart, lotQps, remark, result]);
+    });
+
+    if (!detail.length) throw uerr_('This model has no BOM parts to verify.');
+    const overall = deviations === 0 ? 'All matched' : 'Deviation';
+
+    appendRows_(dsh, detail);
+    appendRows_(vlog, [[verId, now_(), model, lot, c.rev, c.status === 'Locked' ? 'Locked' : 'Not locked',
+      checked, deviations, overall, String(p.by || '').trim() || user_(), String(p.remarks || '').trim()]]);
+    return { ok: true, verId: verId, result: overall, deviations: deviations, checked: checked };
+  });
+}
+
+function verifyRowToObj_(r) {
+  return {
+    verId: txt_(r[0]), when: txt_(r[1]), model: txt_(r[2]), lot: txt_(r[3]), rev: txt_(r[4]),
+    bomStatus: txt_(r[5]), checked: txt_(r[6]), dev: txt_(r[7]), result: txt_(r[8]),
+    by: txt_(r[9]), remarks: txt_(r[10])
+  };
+}
+
+/** All verifications of a model, newest first. */
+function getLotList(model) {
+  const sh = sysSheet_(VERIFY_SHEET, VERIFY_HDR);
+  if (sh.getLastRow() < 2) return [];
+  const out = [];
+  sh.getRange(2, 1, sh.getLastRow() - 1, VERIFY_HDR.length).getValues().forEach(r => {
+    if (norm_(r[2]) === norm_(model)) out.push(verifyRowToObj_(r));
+  });
+  return out.reverse();
+}
+
+function findVerification_(verId) {
+  const sh = sysSheet_(VERIFY_SHEET, VERIFY_HDR);
+  if (sh.getLastRow() < 2) return null;
+  const v = sh.getRange(2, 1, sh.getLastRow() - 1, VERIFY_HDR.length).getValues();
+  for (let i = 0; i < v.length; i++) if (txt_(v[i][0]) === verId) return verifyRowToObj_(v[i]);
+  return null;
+}
+
+/** Detail rows in BOM-interface order: Part_No, Description, Image, BOM_QPS, Lot_Part_No, Lot_QPS, Remark, Result. */
+function getLotDetailRows_(verId) {
+  const sh = migratedSheet_(LOT_SHEET, LOT_HDR);
+  if (sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, LOT_HDR.length).getValues()
+    .filter(r => txt_(r[0]) === verId)
+    .map(r => ({ part: txt_(r[4]), desc: txt_(r[5]), img: txt_(r[6]), bomQps: txt_(r[7]),
+                 lotPart: txt_(r[8]), lotQps: txt_(r[9]), remark: txt_(r[10]), result: txt_(r[11]) }));
+}
+
+/** The BOM as verified for one lot (BOM + what was actually used). */
+function getLotBom(verId) {
+  return { info: findVerification_(verId), rows: getLotDetailRows_(verId) };
+}
+
+
+/** One CSV field, quoted if it needs it. */
+function csvField_(v) {
+  const s = txt_(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+/** CSV text of one lot's verification, same columns as exportLotBom, Result last. Client triggers the download. */
+function getLotCsv(verId) {
+  const info = findVerification_(verId);
+  if (!info) throw uerr_('Verification not found: ' + verId);
+  const rows = getLotDetailRows_(verId);
+  const hdr = ['Part_No', 'Description', 'Image_URL', 'BOM_QPS', 'Lot_Part_No', 'Lot_QPS', 'Remark', 'Result'];
+  const lines = [
+    ['Model', info.model].map(csvField_).join(','),
+    ['Lot_No', info.lot].map(csvField_).join(','),
+    ['BOM_Rev', info.rev, info.bomStatus].map(csvField_).join(','),
+    ['Result', info.result, info.dev + ' deviation(s)'].map(csvField_).join(','),
+    ['Verified', info.when, info.by].map(csvField_).join(','),
+    '',
+    hdr.map(csvField_).join(',')
+  ];
+  if (!rows.length) {
+    lines.push(csvField_('No part rows were recorded for this verification ' +
+      '(its BOM had 0 parts at the time, or it predates part-level logging). Re-verify this lot for a full record.'));
+  }
+  rows.forEach(r => lines.push([r.part, r.desc, r.img, r.bomQps, r.lotPart, r.lotQps, r.remark, r.result].map(csvField_).join(',')));
+  return {
+    filename: 'BOM_Verification_' + info.model + '_' + info.lot + '_' + info.verId + '.csv',
+    csv: lines.join('\r\n')
+  };
+}
+
+/** CSV text of a model's current BOM (Part_No, Description, Image_URL, QPS). Client triggers the download. */
+function getModelBomCsv(model) {
+  const b = getVerifyBom(model);
+  const hdr = ['Part_No', 'Description', 'Image_URL', 'QPS'];
+  const lines = [
+    ['Model', model].map(csvField_).join(','),
+    ['BOM_Rev', b.rev, b.locked ? 'Locked' : 'Not locked'].map(csvField_).join(','),
+    ['Parts', b.parts.length].map(csvField_).join(','),
+    '',
+    hdr.map(csvField_).join(',')
+  ];
+  if (!b.parts.length) lines.push(csvField_('This model has no parts in its BOM yet.'));
+  b.parts.forEach(p => lines.push([p.partNo, p.desc, p.img, p.qps].map(csvField_).join(',')));
+  return { filename: 'BOM_' + model + '.csv', csv: lines.join('\r\n') };
+}
+
+const COMPARE_SHEET      = 'BOM_COMPARE';
+const COMPARE_SHOW_IMAGE = true;   // true = add part thumbnail column (makes rows tall)
+
+
+const TWO_SHEET = 'MODEL_COMPARE';
+
+/** Common / only-in-A / only-in-B parts of two model sheets. */
+function compareTwoModels(a, b) {
+  if (!a || !b) throw uerr_('Choose both models.');
+  if (norm_(a) === norm_(b)) throw uerr_('Choose two different models.');
+  const A = getVerifyBom(a), B = getVerifyBom(b);
+
+  const mapB = {};
+  B.parts.forEach(p => { mapB[norm_(p.partNo)] = p; });
+  const seenA = {};
+  const common = [], onlyA = [], onlyB = [];
+
+  A.parts.forEach(p => {
+    const k = norm_(p.partNo);
+    seenA[k] = true;
+    const o = mapB[k];
+    if (o) common.push({ part: p.partNo, desc: p.desc, img: p.img, qa: p.qps, qb: o.qps,
+                         same: Number(p.qps) === Number(o.qps) });
+    else   onlyA.push({ part: p.partNo, desc: p.desc, img: p.img, q: p.qps });
+  });
+  B.parts.forEach(p => {
+    if (!seenA[norm_(p.partNo)]) onlyB.push({ part: p.partNo, desc: p.desc, img: p.img, q: p.qps });
+  });
+
+  return {
+    a: { name: a, locked: A.locked, rev: A.rev, count: A.parts.length },
+    b: { name: b, locked: B.locked, rev: B.rev, count: B.parts.length },
+    common: common, onlyA: onlyA, onlyB: onlyB
+  };
+}
+
+/** Where is one part used? Same shape as getSelectedPart(), but by part number (web version of the sidebar). */
+function getPartUsage(partNo) {
+  partNo = String(partNo || '').trim();
+  if (!partNo) return { ok: false, msg: 'Enter a part number.' };
+  const ctx = readMaster_();
+  const i = ctx.idx[norm_(partNo)];
+  if (i === undefined) return { ok: false, msg: partNo + ' is not in ' + SHEET_NAME + '.' };
+  const real = String(ctx.mVals[i][COL_PART_NO - 1]).trim();
+  const ex = masterExtra_(ctx, i);
+  const ctrl = controlMap_();
+  const models = getModelSheets_().map(s => {
+    const f = findInModel_(s, real, ctx.mh);
+    const c = ctrl[norm_(s.getName())];
+    return { name: s.getName(), listed: !!f, qps: f ? f.qps : '', locked: !!(c && c.status === 'Locked') };
+  });
+  return { ok: true, partNo: real, desc: ex.desc, img: ex.img, models: models };
+}
+
+// ---------------- portal overrides ----------------
+let CUR_USER_ = '';
+function uerr_(m) { const e = new Error(m); e.userMsg = true; return e; }
+function dataSS_() { return getSpreadsheet(); }
+function user_() { return CUR_USER_ || 'unknown'; }
+function withLock_(fn) {
+  const l = LockService.getScriptLock();
+  l.waitLock(30000);
+  try { return fn(); } finally { l.releaseLock(); }
+}
+function docLink_(u) {
+  u = String(u || '').replace(/^'/, '').trim();
+  return /^https:\/\/[A-Za-z0-9.-]+\.[A-Za-z]{2,}(\/[^\s"<>]*)?$/.test(u) && u.length < 600 ? u : '';
+}
+// The portal's own tabs are never model BOMs, whatever they hold.
+const PORTAL_TABS_ = ['batches','master','users','sessions','models','rework','lothistory','fai','fai_detail','faispec',
+                      'duplicates','serialexceptions'];
+function hasPartNo_(s) {
+  if (s.getLastColumn() < 1) return false;
+  const h = s.getRange(HEADER_ROW, 1, 1, Math.min(s.getLastColumn(), 40)).getValues()[0];
+  return h.some(x => String(x).toLowerCase().replace(/[^a-z0-9]/g, '') === 'partno');
+}
+function reservedName_(name) {
+  name = String(name || '');
+  return [SHEET_NAME, COMPARE_SHEET, CONTROL_SHEET, ECN_SHEET, VERIFY_SHEET, LOT_SHEET, LOTVIEW_SHEET, TWO_SHEET].indexOf(name) >= 0 ||
+         PORTAL_TABS_.indexOf(name.toLowerCase()) >= 0;
+}
+function isSystemSheet_(name) {
+  if (reservedName_(name)) return true;
+  const s = dataSS_().getSheetByName(name);
+  return !!s && s.getLastRow() > 0 && !hasPartNo_(s);   // an existing tab that is not a BOM
+}
+function getModelSheets_() {
+  return dataSS_().getSheets().filter(s => !reservedName_(s.getName()) && hasPartNo_(s));
+}
+function sysSheet_(name, headers) {
+  const ss = dataSS_();
+  let sh = ss.getSheetByName(name);
+  if (sh) return sh;
+  sh = ss.insertSheet(name);
+  sh.getRange(1, 1, sh.getMaxRows(), headers.length).setNumberFormat('@');
+  sh.getRange(1, 1, 1, headers.length).setValues([headers])
+    .setFontWeight('bold').setBackground('#1a73e8').setFontColor('#ffffff');
+  sh.setFrozenRows(1);
+  return sh;
+}
+function modelOk_(model) {
+  const sh = dataSS_().getSheetByName(String(model || ''));
+  if (!sh || isSystemSheet_(model) || !hasPartNo_(sh)) throw uerr_('Model BOM not found: ' + model);
+  return sh;
+}
+
+/** Every model side by side (read only; nothing is written to a sheet). */
+function compareAll() {
+  const ctx = readMaster_();
+  const names = [], parts = {};
+  getModelSheets_().forEach(s => {
+    const name = s.getName();
+    names.push(name);
+    const n = s.getLastRow() - HEADER_ROW;
+    if (n <= 0) return;
+    const pc = partColIn_(s, ctx.mh);
+    const qc = headersOf_(s).findIndex(h => norm_(h) === QPS_HEADER) + 1;
+    const pv = s.getRange(HEADER_ROW + 1, pc, n, 1).getValues();
+    const qv = qc ? s.getRange(HEADER_ROW + 1, qc, n, 1).getValues() : null;
+    pv.forEach((r, i) => {
+      const raw = String(r[0]).trim(), k = norm_(raw);
+      if (!k) return;
+      if (!parts[k]) parts[k] = { partNo: raw, q: {} };
+      parts[k].q[name] = qv ? qv[i][0] : '';
+    });
+  });
+  const total = names.length;
+  const rows = Object.keys(parts).map(k => {
+    const p = parts[k];
+    const used = names.filter(n => n in p.q);
+    const qs = used.map(n => String(p.q[n]));
+    const ex = masterExtra_(ctx, ctx.idx[k]);
+    return { partNo: p.partNo, desc: ex.desc, img: ex.img, qps: names.map(n => n in p.q ? p.q[n] : null),
+             used: used.length,
+             status: used.length === total ? 'Common' : used.length === 1 ? 'Only in ' + used[0] : 'Shared',
+             check: used.length < 2 ? '' : (qs.filter((x, i) => qs.indexOf(x) === i).length === 1 ? 'Same' : 'Different') };
+  }).sort((a, b) => b.used - a.used || a.partNo.localeCompare(b.partNo));
+  return { models: names, rows: rows };
+}
+
+/** PART_MASTER as a list (part, description, image link) for pickers. */
+function masterList() {
+  return getBomData();
+}
+function dedupe() { return withLock_(() => dedupePartMaster_()); }
+
+// fn -> [write?, argument names]; anything else cannot be called
+const API_ = {
+  getControlData: [0, []], getVerifyModels: [0, []], getBomData: [0, []], getTodayStr: [0, []],
+  getVerifyBom: [0, ['model']], getModelParts: [0, ['model']], getModelBomCsv: [0, ['model']],
+  getEcnLog: [0, ['model']], getAllEcnNos: [0, ['model']], getEcnByNo: [0, ['ecnNo']],
+  getEcnReportData: [0, ['model', 'ecnNo']], getBomRevisions: [0, ['model']],
+  getBomAtRevision: [0, ['model', 'rev']], getBomRevisionCsv: [0, ['model', 'rev']],
+  getPartInModel: [0, ['model', 'partNo']], getMasterPart: [0, ['partNo']],
+  getAfterPartInfo: [0, ['model', 'partNo']], getPartsInModel: [0, ['model', 'partNos']],
+  getMasterParts: [0, ['partNos']], getLotList: [0, ['model']], getLotBom: [0, ['verId']],
+  getLotCsv: [0, ['verId']], compareTwoModels: [0, ['a', 'b']], compareAll: [0, []],
+  getPartUsage: [0, ['partNo']],
+  lockBom: [1, ['model']], unlockBom: [1, ['model', 'reason']], runEcnChange: [1, ['payload']],
+  updateEcnMeta: [1, ['payload']], deleteEcn: [1, ['ecnNo']], deleteEcnRecordOnly: [1, ['ecnNo']],
+  restoreBomVersion: [1, ['model', 'rev', 'reason']], mergeBomRevisions: [1, ['model', 'revs']],
+  assignPart: [1, ['payload']], saveBom: [1, ['payload']], dedupe: [1, []]
+};
+const FNS_ = {
+  getControlData, getVerifyModels, getBomData, getTodayStr, getVerifyBom, getModelParts, getModelBomCsv,
+  getEcnLog, getAllEcnNos, getEcnByNo, getEcnReportData, getBomRevisions, getBomAtRevision, getBomRevisionCsv,
+  getPartInModel, getMasterPart, getAfterPartInfo, getPartsInModel, getMasterParts, getLotList, getLotBom,
+  getLotCsv, compareTwoModels, compareAll, getPartUsage, lockBom, unlockBom, runEcnChange, updateEcnMeta,
+  deleteEcn, deleteEcnRecordOnly, restoreBomVersion, mergeBomRevisions, assignPart, saveBom, dedupe
+};
+// Functions that take a model name check it is a real model BOM first.
+const MODEL_ARG_ = { model: 1, a: 1, b: 1 };
+
+function clean_(v, depth) {
+  if (depth > 6) return null;
+  if (Array.isArray(v)) return v.slice(0, 2000).map(x => clean_(x, depth + 1));
+  if (v && typeof v === 'object') {
+    const o = {};
+    Object.keys(v).slice(0, 50).forEach(k => { o[k] = clean_(v[k], depth + 1); });
+    return o;
+  }
+  if (typeof v === 'string') return safe_(v, 2000);
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  return typeof v === 'boolean' ? v : (v == null ? '' : null);
+}
+
+function call(d) {
+  const fn = String(d.fn || '');
+  const spec = API_[fn];
+  if (!spec || !FNS_[fn]) return { ok: false, error: 'Unknown BOM tool.' };
+  const a = (d.args && typeof d.args === 'object' && !Array.isArray(d.args)) ? clean_(d.args, 0) : {};
+  CUR_USER_ = String(d._session && (d._session.name || d._session.username) || '');
+  try {
+    const args = spec[1].map(name => {
+      const v = a[name];
+      if (MODEL_ARG_[name] && v !== '' && v != null) modelOk_(v);
+      if (name === 'payload' && v && v.model && !v.newModel) modelOk_(v.model);
+      if (name === 'payload' && v && v.newModel) {
+        if (!NAME_RE_.test(String(v.newModel))) throw uerr_('Model names may use letters, numbers, spaces and - _ . / ( ) # & only.');
+      }
+      return v == null ? '' : v;
+    });
+    if (fn === 'assignPart') ((a.payload || {}).add || []).concat(((a.payload || {}).remove || []).map(m => ({ model: m })))
+      .forEach(x => modelOk_(x.model));
+    const data = FNS_[fn].apply(null, args);
+    return { ok: true, write: !!spec[0], data: data === undefined ? null : data };
+  } catch (e) {
+    if (e && e.userMsg) return { ok: false, error: e.message };
+    console.error('BOM ' + fn + ' failed: ' + (e && e.stack || e));
+    return { ok: false, error: 'Could not complete that. Please try again, or ask an admin to check the Apps Script log.' };
+  }
+}
+return { call: call, isWrite: fn => !!(API_[fn] && API_[fn][0]) };
+})();
+function bomCall(d){ return BOMX.call(d); }
