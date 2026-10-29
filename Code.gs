@@ -24,9 +24,10 @@ var MODULES        = ["bomverify","sampling","reports","createbatch","models","d
 var DEFAULT_ACCESS = ["bomverify","sampling"];
 // Actions any signed-in user may call (reading, own password)
 var ALWAYS_ACTIONS = ["logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword"];
+// recordRework (rework data + reoffer) belongs to the sampling module
 // Actions unlocked by a module; everything not listed here or above is admin only
 var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify",
-                      checkSerial:"sampling", submitLot:"sampling",
+                      checkSerial:"sampling", submitLot:"sampling", recordRework:"sampling",
                       createBatch:"createbatch",
                       saveModel:"models", deleteModel:"models",
                       scanDuplicates:"data", searchRecords:"data", removeDuplicates:"data", approveSerial:"data"};
@@ -43,6 +44,14 @@ var MAX_BODY_CHARS   = 500000;  // largest request accepted
 var COL_BOM_STATUS = 16;   // "", Pending, Passed, Failed, Waived  ("" = created before the BOM step)
 var COL_BOM_VER    = 17;   // Ver_ID of the verification that set the status
 var COL_FAI_STATUS = 18;   // reserved for FAI inspection
+var COL_ROUND      = 19;   // inspection round of the lot: 1 = first offer, 2+ = reoffer after rework
+var COL_REOFFER    = 20;   // serial numbers picked for the current reoffer (comma separated)
+var MASTER_ROUND_COL = 20; // Master: round the sample row belongs to (blank = 1)
+
+// Lot status (Batches column F): Open -> (defect) Hold -> (rework saved) Reoffered -> ... -> Closed
+var LOT_STATUSES   = ["Open","Hold","Reoffered","Closed"];
+var CHECKPOINTS    = ["Aesthetic","General","Functional","Screen","Black dot"];
+var UNIT_STATUSES  = ["Reworked OK","Scrapped"];
 
 function getSpreadsheet(){
   return SpreadsheetApp.openById(SS_ID);
@@ -103,7 +112,7 @@ function doPost(e){
         return json_({ok:false, error: ACTION_MODULE[action] ? "You do not have access to this. Ask an admin to give you the " + moduleName_(ACTION_MODULE[action]) + " module." : "Only an admin can do this."});
       data._session = sess;
       // record who did it from the session, not from what the browser sent
-      if(action === "submitLot") data.inspector = sess.name;
+      if(action === "submitLot" || action === "recordRework" || action === "holdLot") data.inspector = sess.name;
       if(action === "submitBomVerification") data.by = sess.name;
       if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser","setUserAccess"].indexOf(action) > -1){
         data.createdBy = sess.username; data.updatedBy = sess.username; data.by = sess.username;
@@ -163,6 +172,12 @@ function doPost(e){
     }
     if(action === "deleteModel"){
       result = deleteModel(data);
+    }
+    if(action === "recordRework"){
+      result = recordRework(data);
+    }
+    if(action === "holdLot"){
+      result = holdLot(data);
     }
     if(action === "getLotUnits"){
       result = getLotUnits(data);
@@ -592,7 +607,9 @@ function getBatches(){
       prodMonthCode2: rawPM2,
       bomStatus     : String(r[COL_BOM_STATUS-1]||""),
       bomVerId      : String(r[COL_BOM_VER-1]||""),
-      faiStatus     : String(r[COL_FAI_STATUS-1]||"")
+      faiStatus     : String(r[COL_FAI_STATUS-1]||""),
+      round         : Number(r[COL_ROUND-1]) || 1,
+      reofferSerials: String(r[COL_REOFFER-1]||"").split(",").map(function(x){ return x.trim(); }).filter(String)
     });
   }
   return {ok:true, batches:out};
@@ -651,7 +668,7 @@ function updateLot(d){
   var rows  = sheet.getDataRange().getValues();
   for(var i = 1; i < rows.length; i++){
     if(rows[i][0] === d.batchName && rows[i][1] === d.lotNumber){
-      if(d.status !== undefined && ["Open","Closed"].indexOf(String(d.status)) === -1) return {ok:false, error:"Status must be Open or Closed"};
+      if(d.status !== undefined && LOT_STATUSES.indexOf(String(d.status)) === -1) return {ok:false, error:"Status must be Open, Hold, Reoffered or Closed"};
       if(d.bdMax !== undefined && (isNaN(Number(d.bdMax)) || Number(d.bdMax) < 0)) return {ok:false, error:"Black dot limit is not valid"};
       if(d.model !== undefined && !findModel_(d.model)) return {ok:false, error:"Model not found"};
       if(d.prodMonthCode !== undefined && !/^'?\d{0,4}$/.test(String(d.prodMonthCode))) return {ok:false, error:"Production month is not valid"};
@@ -689,13 +706,16 @@ function deleteLot(d){
 }
 
 function checkSerial(d){
-  if(!d.serial) return {ok:true, exists:false};
-  var rows = getOrCreateSheet("Master",[]).getDataRange().getValues();
+  var sn = normSerial_(d.serial);
+  if(!sn) return {ok:true, exists:false};
+  var bn = String(d.batchName||""), ln = String(d.lotNumber||"");
+  var rows = getOrCreateSheet("Master",[]).getDataRange().getValues(), sameLot = false;
   for(var i = 1; i < rows.length; i++){
-    if(String(rows[i][4]) === String(d.serial))
-      return {ok:true, exists:true, batch:rows[i][2], lot:rows[i][3]};
+    if(normSerial_(rows[i][4]) !== sn) continue;
+    if(bn && String(rows[i][2]) === bn && String(rows[i][3]) === ln){ sameLot = true; continue; }
+    return {ok:true, exists:true, batch:rows[i][2], lot:rows[i][3]};
   }
-  return {ok:true, exists:false};
+  return {ok:true, exists:false, sameLot:sameLot};
 }
 
 function submitLot(d){
@@ -703,39 +723,67 @@ function submitLot(d){
   lock.waitLock(30000);
   try{ return submitLotLocked_(d); } finally { lock.releaseLock(); }
 }
+function lotRowOf_(bRows, batchName, lotNumber){
+  for(var i = 1; i < bRows.length; i++)
+    if(String(bRows[i][0]) === String(batchName) && String(bRows[i][1]) === String(lotNumber)) return i;
+  return -1;
+}
+function logLot_(batch, lot, round, event, details, by){
+  var sh = getOrCreateSheet("LotHistory", ["Time","Batch","Lot","Round","Event","Details","By"]);
+  sh.appendRow([new Date(), safe_(batch, 80), safe_(lot, 100), round, event, safe_(details, 1000), safe_(by, 80)]);
+}
+/* Any defective sample puts the whole lot on HOLD straight away (submitted with the samples inspected so far).
+   PASS needs every sample inspected and none defective. */
 function submitLotLocked_(d){
-  // The lot must exist and still be open; everything about the lot is read from the sheet
   var bsh   = getOrCreateSheet("Batches",[]);
+  ensureStageHeaders_(bsh);
   var bRows = bsh.getDataRange().getValues();
-  var lotRow = -1;
-  for(var i=1;i<bRows.length;i++){
-    if(String(bRows[i][0])===String(d.batchName) && String(bRows[i][1])===String(d.lotNumber)){ lotRow = i; break; }
-  }
+  var lotRow = lotRowOf_(bRows, d.batchName, d.lotNumber);
   if(lotRow < 0) return {ok:false, error:"Lot not found. Refresh and try again."};
-  if(String(bRows[lotRow][5])==='Closed')
-    return {ok:false, error:'This lot is already submitted and closed. Duplicate submission blocked.'};
+  var status = String(bRows[lotRow][5]);
+  if(status === 'Closed') return {ok:false, error:'This lot is already submitted and closed. Duplicate submission blocked.'};
+  if(status === 'Hold') return {ok:false, error:'This lot is on hold. Record the rework data to reoffer it.'};
   // Flow gate: sampling needs BOM verification passed (or waived) for batches created with the flow
   var bs = String(bRows[lotRow][COL_BOM_STATUS-1]||"");
   if(bs === "Pending" || bs === "Failed")
     return {ok:false, error:"BOM verification for " + d.batchName + " is " + (bs === "Pending" ? "not done yet" : "failed") + ". Sampling can start after BOM verification passes."};
 
   var lotResult = String(d.lotResult||"");
-  if(lotResult !== "PASS" && lotResult !== "FAIL") return {ok:false, error:"Lot result must be PASS or FAIL"};
+  if(lotResult !== "PASS" && lotResult !== "HOLD") return {ok:false, error:"Lot result must be PASS or HOLD"};
+  var round = Number(bRows[lotRow][COL_ROUND-1]) || 1;
   var lotSize = Number(bRows[lotRow][2]) || FIXED_LOT;
   var sampleSize = Number(bRows[lotRow][3]) || FIXED_SAMPLE;
   var units = Array.isArray(d.units) ? d.units : [];
-  if(units.length !== sampleSize) return {ok:false, error:"Expected " + sampleSize + " samples, got " + units.length};
+  var pf = function(v){ return String(v) === "Pass" ? "Pass" : "Fail"; };
+  var defective = units.filter(function(u){ return pf(u && u.sampleResult) === "Fail"; }).length;
+  if(lotResult === "PASS"){
+    if(units.length !== sampleSize) return {ok:false, error:"Expected " + sampleSize + " samples, got " + units.length};
+    if(defective) return {ok:false, error:"A defective sample puts the lot on hold; it cannot pass."};
+    var need = String(bRows[lotRow][COL_REOFFER-1]||"").split(",").map(function(x){ return normSerial_(x); }).filter(String);
+    var got = {}; units.forEach(function(u){ got[normSerial_(u.serial)] = true; });
+    var missing = need.filter(function(x){ return !got[x]; });
+    if(missing.length) return {ok:false, error:"The reoffer must include these reworked units: " + missing.join(", ")};
+  } else {
+    if(!defective) return {ok:false, error:"Hold needs at least one defective sample."};
+    if(units.length < 1 || units.length > sampleSize) return {ok:false, error:"Between 1 and " + sampleSize + " samples expected"};
+  }
   var fgPassQty = lotResult === "PASS" ? lotSize : 0;
 
   var master = getOrCreateSheet("Master",[]);
   if(master.getRange(1, 19).getValue() === "") master.getRange(1, 19).setValue("BDSpec");
+  if(master.getRange(1, MASTER_ROUND_COL).getValue() === "") master.getRange(1, MASTER_ROUND_COL).setValue("Round");
 
-  // Rule: a serial number is recorded only once, ever
+  // Rule: a serial number is recorded only once, except when the same lot re-inspects it after rework
   var seen = {}, existing = {}, clash = [];
   var mRows = master.getDataRange().getValues();
+  var thisBatch = String(bRows[lotRow][0]), thisLot = String(bRows[lotRow][1]);
   for(var x = 1; x < mRows.length; x++){
     var sx = normSerial_(mRows[x][4]);
-    if(sx && !existing[sx]) existing[sx] = String(mRows[x][3]||"");
+    if(!sx) continue;
+    var same = String(mRows[x][2]) === thisBatch && String(mRows[x][3]) === thisLot;
+    var rx = Number(mRows[x][MASTER_ROUND_COL-1]) || 1;
+    if(same && rx < round) continue;              // inspected in an earlier round of this lot: fine
+    if(!existing[sx]) existing[sx] = String(mRows[x][3]||"");
   }
   for(var k = 0; k < units.length; k++){
     var su = normSerial_(units[k] && units[k].serial);
@@ -746,22 +794,120 @@ function submitLotLocked_(d){
   }
   if(clash.length) return {ok:false, error:"Duplicate serial number, nothing was saved: " + clash.join(", ")};
 
-  var pf = function(v){ return String(v) === "Pass" ? "Pass" : "Fail"; };
   var out = units.map(function(u){
     var ts = u.inspectedAt ? new Date(u.inspectedAt) : new Date();
     if(isNaN(ts.getTime()) || ts > new Date(Date.now() + 86400000)) ts = new Date();
-    return [ts, safe_(d.inspector, 80), String(bRows[lotRow][0]), String(bRows[lotRow][1]), safe_(normSerial_(u.serial), 40),
+    return [ts, safe_(d.inspector, 80), thisBatch, thisLot, safe_(normSerial_(u.serial), 40),
       pf(u.aes), pf(u.general), pf(u.func), pf(u.screen), safe_(u.bd, 300),
       safe_(u.remark, 500), pf(u.sampleResult), lotResult,
       Number(bRows[lotRow][9]) || "", Number(bRows[lotRow][10]) || "",
       safe_(bRows[lotRow][11], 80), safe_(d.prodMonthCode, 5), fgPassQty,
-      safe_(d.bdSpec, 500)];
+      safe_(d.bdSpec, 500), round];
   });
   master.getRange(master.getLastRow() + 1, 1, out.length, out[0].length).setValues(out);
 
-  bsh.getRange(lotRow+1, 6).setValue("Closed");
-  bsh.getRange(lotRow+1, 9).setValue(lotResult);
-  bsh.getRange(lotRow+1, 14).setValue(fgPassQty);
+  if(lotResult === "PASS"){
+    bsh.getRange(lotRow+1, 6).setValue("Closed");
+    bsh.getRange(lotRow+1, 9).setValue("PASS");
+    bsh.getRange(lotRow+1, 14).setValue(fgPassQty);
+    bsh.getRange(lotRow+1, COL_REOFFER).setValue("");
+    logLot_(thisBatch, thisLot, round, "Passed", units.length + " samples, none defective" + (round > 1 ? " (reoffer)" : ""), d.inspector);
+  } else {
+    bsh.getRange(lotRow+1, 6).setValue("Hold");
+    bsh.getRange(lotRow+1, 9).setValue("HOLD");
+    bsh.getRange(lotRow+1, 14).setValue(0);
+    var bad = units.filter(function(u){ return pf(u.sampleResult) === "Fail"; }).map(function(u){ return normSerial_(u.serial); });
+    logLot_(thisBatch, thisLot, round, "Hold", "Defective: " + bad.join(", ") + " (" + units.length + " samples inspected)", d.inspector);
+  }
+  return {ok:true, result:lotResult, round:round};
+}
+
+/* Rework of a lot on hold. Saves every reworked unit against its inspection check point,
+   then reoffers the lot: the defective sample units always go into the new sample,
+   the rest are picked at random from the reworked units; any slots left are scanned fresh. */
+function recordRework(d){
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try{
+    var bsh = getOrCreateSheet("Batches",[]);
+    ensureStageHeaders_(bsh);
+    var bRows = bsh.getDataRange().getValues();
+    var lotRow = lotRowOf_(bRows, d.batchName, d.lotNumber);
+    if(lotRow < 0) return {ok:false, error:"Lot not found. Refresh and try again."};
+    if(String(bRows[lotRow][5]) !== "Hold") return {ok:false, error:"Only a lot on hold can be reworked."};
+    var thisBatch = String(bRows[lotRow][0]), thisLot = String(bRows[lotRow][1]);
+    var round = Number(bRows[lotRow][COL_ROUND-1]) || 1;
+    var sampleSize = Number(bRows[lotRow][3]) || FIXED_SAMPLE;
+    var lotSize = Number(bRows[lotRow][2]) || FIXED_LOT;
+
+    var items = Array.isArray(d.items) ? d.items : [];
+    var count = parseInt(d.unitsReworked, 10);
+    if(!(count >= 1)) return {ok:false, error:"Enter the number of units reworked."};
+    if(count > lotSize) return {ok:false, error:"Units reworked cannot be more than the lot size (" + lotSize + ")."};
+    if(items.length !== count) return {ok:false, error:"You entered " + count + " units reworked but listed " + items.length + " serial numbers. They must match."};
+    var seen = {}, clean = [];
+    for(var i = 0; i < items.length; i++){
+      var it = items[i] || {}, sn = normSerial_(it.serial);
+      if(!/^[A-Z0-9]{1,40}$/.test(sn)) return {ok:false, error:"Row " + (i+1) + ": serial number is missing or not valid"};
+      if(seen[sn]) return {ok:false, error:"Serial " + sn + " is listed twice"};
+      seen[sn] = true;
+      var cp = String(it.checkpoint||"");
+      if(CHECKPOINTS.indexOf(cp) === -1) return {ok:false, error:"Row " + (i+1) + ": choose the inspection check point"};
+      var st = String(it.status||"");
+      if(UNIT_STATUSES.indexOf(st) === -1) return {ok:false, error:"Row " + (i+1) + ": choose the unit status"};
+      if(!String(it.defect||"").trim()) return {ok:false, error:"Row " + (i+1) + ": describe the defect"};
+      if(!String(it.action||"").trim()) return {ok:false, error:"Row " + (i+1) + ": describe the rework done"};
+      clean.push({serial:sn, checkpoint:cp, defect:String(it.defect), action:String(it.action), status:st});
+    }
+
+    // defective sample units of this round must all be in the rework list
+    var mRows = getOrCreateSheet("Master",[]).getDataRange().getValues(), bad = [];
+    for(var m = 1; m < mRows.length; m++){
+      if(String(mRows[m][2]) !== thisBatch || String(mRows[m][3]) !== thisLot) continue;
+      if((Number(mRows[m][MASTER_ROUND_COL-1]) || 1) !== round) continue;
+      if(String(mRows[m][11]) === "Fail") bad.push(normSerial_(mRows[m][4]));
+    }
+    var notListed = bad.filter(function(x){ return !seen[x]; });
+    if(notListed.length) return {ok:false, error:"Add the defective sample units to the rework list: " + notListed.join(", ")};
+
+    // reoffer sample: defective units first (unless scrapped), then random reworked units
+    var byS = {}; clean.forEach(function(c){ byS[c.serial] = c; });
+    var must = bad.filter(function(x){ return byS[x] && byS[x].status !== "Scrapped"; });
+    var pool = clean.filter(function(c){ return c.status !== "Scrapped" && must.indexOf(c.serial) === -1; }).map(function(c){ return c.serial; });
+    for(var p = pool.length - 1; p > 0; p--){ var q = Math.floor(Math.random() * (p + 1)); var t = pool[p]; pool[p] = pool[q]; pool[q] = t; }
+    var pick = must.concat(pool).slice(0, sampleSize);
+
+    var rid = "RW-" + Utilities.formatDate(new Date(), TZ, "yyyyMMdd-HHmmss");
+    var rsh = getOrCreateSheet("Rework", ["ReworkID","Time","Batch","Lot","Round","UnitsReworked","SerialNumber","CheckPoint","Defect","ReworkAction","UnitStatus","InReoffer","Remarks","By"]);
+    var now = new Date();
+    var rows = clean.map(function(c){
+      return [rid, now, safe_(thisBatch, 80), safe_(thisLot, 100), round, count, "'" + c.serial, c.checkpoint, safe_(c.defect, 300),
+              safe_(c.action, 300), c.status, pick.indexOf(c.serial) > -1 ? "Yes" : "No", safe_(d.remarks||"", 500), safe_(d.inspector, 80)];
+    });
+    rsh.getRange(rsh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+
+    bsh.getRange(lotRow+1, 6).setValue("Reoffered");
+    bsh.getRange(lotRow+1, 9).setValue("");
+    bsh.getRange(lotRow+1, COL_ROUND).setValue(round + 1);
+    bsh.getRange(lotRow+1, COL_REOFFER).setValue(pick.join(","));
+    var scrapped = clean.filter(function(c){ return c.status === "Scrapped"; }).length;
+    logLot_(thisBatch, thisLot, round, "Rework", rid + ": " + count + " units reworked" + (scrapped ? ", " + scrapped + " scrapped" : ""), d.inspector);
+    logLot_(thisBatch, thisLot, round + 1, "Reoffered", pick.length + " units picked (" + must.length + " defective" + (pick.length < sampleSize ? ", " + (sampleSize - pick.length) + " to scan fresh" : "") + ")", d.inspector);
+    return {ok:true, reworkId:rid, round:round + 1, reoffer:pick, fresh:sampleSize - pick.length};
+  } finally { lock.releaseLock(); }
+}
+
+/* Admin: put a lot that failed under the old rule on hold, so it can be reworked and reoffered. */
+function holdLot(d){
+  var bsh = getOrCreateSheet("Batches",[]);
+  ensureStageHeaders_(bsh);
+  var bRows = bsh.getDataRange().getValues();
+  var lotRow = lotRowOf_(bRows, d.batchName, d.lotNumber);
+  if(lotRow < 0) return {ok:false, error:"Lot not found"};
+  if(String(bRows[lotRow][8]) !== "FAIL") return {ok:false, error:"Only a failed lot can be moved to hold"};
+  bsh.getRange(lotRow+1, 6).setValue("Hold");
+  bsh.getRange(lotRow+1, 9).setValue("HOLD");
+  logLot_(String(bRows[lotRow][0]), String(bRows[lotRow][1]), Number(bRows[lotRow][COL_ROUND-1]) || 1, "Hold", "Failed lot moved to hold for rework", d.inspector);
   return {ok:true};
 }
 
@@ -962,13 +1108,35 @@ function getLotUnits(d){
     if(String(r[2]) !== bn || String(r[3]) !== ln) continue;
     out.push({
       time: r[0] instanceof Date ? r[0].toISOString() : String(r[0]||""),
-      inspector: String(r[1]||""), serial: String(r[4]||""),
+      inspector: String(r[1]||""), serial: normSerial_(r[4]),
       aes: String(r[5]||""), general: String(r[6]||""), func: String(r[7]||""), screen: String(r[8]||""),
       bd: String(r[9]||""), remark: String(r[10]||""),
-      sampleResult: String(r[11]||""), lotResult: String(r[12]||"")
+      sampleResult: String(r[11]||""), lotResult: String(r[12]||""),
+      round: Number(r[MASTER_ROUND_COL-1]) || 1
     });
   }
-  return {ok:true, units:out};
+  var hist = [], rw = [];
+  var hs = getSpreadsheet().getSheetByName("LotHistory");
+  if(hs){
+    var hv = hs.getDataRange().getValues();
+    for(var h = 1; h < hv.length; h++){
+      if(String(hv[h][1]) !== bn || String(hv[h][2]) !== ln) continue;
+      hist.push({time: hv[h][0] instanceof Date ? hv[h][0].toISOString() : String(hv[h][0]||""), round:Number(hv[h][3])||1,
+                 event:String(hv[h][4]||""), details:String(hv[h][5]||""), by:String(hv[h][6]||"")});
+    }
+  }
+  var rs = getSpreadsheet().getSheetByName("Rework");
+  if(rs){
+    var rv = rs.getDataRange().getValues();
+    for(var k = 1; k < rv.length; k++){
+      if(String(rv[k][2]) !== bn || String(rv[k][3]) !== ln) continue;
+      rw.push({id:String(rv[k][0]), time: rv[k][1] instanceof Date ? rv[k][1].toISOString() : String(rv[k][1]||""),
+               round:Number(rv[k][4])||1, unitsReworked:Number(rv[k][5])||0, serial:normSerial_(rv[k][6]), checkpoint:String(rv[k][7]||""),
+               defect:String(rv[k][8]||""), action:String(rv[k][9]||""), status:String(rv[k][10]||""), inReoffer:String(rv[k][11]||"") === "Yes",
+               remarks:String(rv[k][12]||""), by:String(rv[k][13]||"")});
+    }
+  }
+  return {ok:true, units:out, history:hist, rework:rw};
 }
 
 /****************************************************
@@ -1030,7 +1198,10 @@ function findDuplicates_(rows, exc){
     var sn = normSerial_(rows[i][4]);
     if(!sn) continue;
     // Approved exceptions: duplicates are only checked inside the same lot
+    var rnd = Number(rows[i][MASTER_ROUND_COL-1]) || 1;
+    // approved exceptions are only checked inside the same lot; reoffer rounds re-inspect the same units on purpose
     var s = exc[sn] ? sn + "||" + String(rows[i][3]||"") : sn;
+    if(rnd > 1) s = sn + "||" + String(rows[i][3]||"") + "||r" + rnd;
     if(!bySerial[s]){ bySerial[s] = []; order.push(s); }
     bySerial[s].push(i);
   }
@@ -1141,6 +1312,9 @@ function ensureStageHeaders_(sheet){
   if(h[0] === "") sheet.getRange(1, COL_BOM_STATUS).setValue("BOMStatus");
   if(h[1] === "") sheet.getRange(1, COL_BOM_VER).setValue("BOMVerId");
   if(h[2] === "") sheet.getRange(1, COL_FAI_STATUS).setValue("FAIStatus");
+  var h2 = sheet.getRange(1, COL_ROUND, 1, 2).getValues()[0];
+  if(h2[0] === "") sheet.getRange(1, COL_ROUND).setValue("Round");
+  if(h2[1] === "") sheet.getRange(1, COL_REOFFER).setValue("ReofferSerials");
 }
 function bomSS_(){ return SpreadsheetApp.openById(BOM_SS_ID); }
 function headerIndex_(row){

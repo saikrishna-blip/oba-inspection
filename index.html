@@ -314,6 +314,36 @@ select.field{cursor:pointer;appearance:none;background-image:linear-gradient(45d
 .tool-title{font-family:var(--font-display);font-size:24px;font-weight:400}
 .tool-frame{flex:1;width:min(1320px,calc(100% - 24px));margin:0 auto 12px;border:1px solid var(--line);border-radius:var(--radius-lg);background:#f6f8fb;min-height:0;box-shadow:var(--shadow-2)}
 @media (max-width:760px){ .tool-bar{padding:8px 12px;flex-wrap:wrap} }
+/* ── Hold, rework, reoffer ───────────────────────────── */
+.badge-hold{background:var(--color-warn-bg);color:var(--color-warn);border-color:var(--color-warn-border)}
+.lot-tile.t-hold{background:var(--color-warn-bg);border:1.5px solid var(--color-warn);color:var(--color-warn)}
+.lot-tile.t-reoffer{border:1.5px dashed var(--color-warn);color:var(--color-warn);background:var(--panel)}
+.lm-cell.c-hold{background:var(--color-warn-bg);border:1.5px solid var(--color-warn)}
+.lm-cell.c-reoffer{border:1.5px dashed var(--color-warn)}
+.text-warn{color:var(--color-warn)}
+.hold-note,.hold-banner,.reoffer-banner,.reoffer-box{padding:12px 16px;border-radius:12px;margin:12px 18px;font-size:14px;line-height:1.5}
+.hold-note,.hold-banner{background:var(--color-warn-bg);border:1px solid var(--color-warn-border);color:var(--ink)}
+.hold-banner{margin:0 0 14px;border-left:4px solid var(--color-warn)}
+.reoffer-banner{margin:0 0 14px;background:var(--open-bg);border:1px solid var(--open-line);color:var(--ink)}
+.reoffer-box{background:var(--panel);border:1px solid var(--line)}
+.reoffer-list{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px}
+.samp-serial-inp.locked{background:var(--sunk);border-style:dashed}
+.timeline{list-style:none;margin:0 0 6px;padding:0 0 0 14px;border-left:2px solid var(--line)}
+.timeline li{position:relative;padding:4px 0 8px 10px;font-size:13.5px}
+.timeline li::before{content:"";position:absolute;left:-21px;top:9px;width:10px;height:10px;border-radius:50%;background:var(--panel);border:2px solid var(--ink-3)}
+.timeline li.tl-hold::before{border-color:var(--color-warn);background:var(--color-warn-bg)}
+.timeline li.tl-passed::before{border-color:var(--lime-deep);background:var(--lime)}
+.timeline li.tl-reoffered::before{border-color:var(--open)}
+.rw-paste{display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:10px;align-items:start}
+.rw-paste-f{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rw-paste-f .btn{grid-column:span 2;justify-self:start}
+.rw-table td{vertical-align:top}
+.rw-table .field{min-width:130px;padding:8px 10px;font-size:13.5px}
+.rw-table tr.rw-err td{background:var(--color-warn-bg)}
+.rw-count{font-family:var(--font-display);font-size:34px;line-height:1.2}
+.rw-probs{margin-top:12px;padding:10px 14px;border-radius:10px;background:var(--color-warn-bg);border:1px solid var(--color-warn-border);font-size:13.5px}
+@media (max-width:760px){ .rw-paste{grid-template-columns:1fr} }
+
 /* ── Users and access ─────────────────────────────────── */
 .user-card .uc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:10px}
 .uc-name{font-weight:700;font-size:17px}
@@ -560,6 +590,7 @@ let recSearch = {q:'', loading:false, res:null};  // record lookup (admin)
 let userList = null;        // admin: users (no passwords)
 let bomModels = [];         // models in the BOM sheet (BOM_CONTROL)
 let activeBom = null;       // BOM verification in progress
+let activeRework = null;    // rework entry for a lot on hold
 let bomResult = null;       // {batch, loading, data} verification result being viewed
 let session = null;         // {token, expiresAt, partdbUrl, bomSheetUrl}
 let page = 'home';          // home | batches | create | models | data | users | reports | bom (see PAGE_INFO)
@@ -587,8 +618,11 @@ function mmyyInp(c){ if(!c||c.length!==4)return''; return'20'+c.slice(2)+'-'+c.s
 // DRAFT AUTO-SAVE (so in-progress inspections survive refresh/close)
 // ═══════════════════════════════════════════════════════════
 function draftKey(lot){
-  return 'oba_draft_'+(user?user.username:'anon')+'_'+lot.batchName+'_'+lot.lotNumber;
+  return 'oba_draft_'+(user?user.username:'anon')+'_'+lot.batchName+'_'+lot.lotNumber+((lot.round||1)>1?'_r'+lot.round:'');
 }
+/* Lot state used everywhere: pass, fail (old rule), hold, reoffer, open, closed */
+function lotState(l){ return l.result==='PASS'?'pass':l.result==='FAIL'?'fail':l.status==='Hold'?'hold':l.status==='Reoffered'?'reoffer':l.status==='Open'?'open':'closed'; }
+function inspectable(l){ return l.status==='Open'||l.status==='Reoffered'; }
 function saveDraft(){
   if(!activeLot) return;
   // Stamp each sample with its completion time if not already stamped
@@ -648,7 +682,7 @@ function restoreSession(){
   }catch(e){}
   return false;
 }
-function resetApp(){ introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; samples=[]; expandedSample=null; saveSession(); }
+function resetApp(){ introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; activeRework=null; samples=[]; expandedSample=null; saveSession(); }
 let expiredShown=false;
 async function api(action,data={}){
   data.action=action;
@@ -751,11 +785,12 @@ function groupBatches(){
     const batchQty   = Number(lots[0].batchQty)||0;
     const totalLots  = Number(lots[0].totalLots)||lots.length;
     const completed  = lots.filter(l=>l.status==='Closed').length;
-    const pending    = lots.filter(l=>l.status==='Open').length;
+    const pending    = lots.filter(l=>l.status==='Open'||l.status==='Reoffered').length;
+    const holdLots   = lots.filter(l=>l.status==='Hold').length;
     const passLots   = lots.filter(l=>l.result==='PASS').length;
     const failLots   = lots.filter(l=>l.result==='FAIL').length;
     const fgTotal    = lots.reduce((s,l)=>s+Number(l.fgPassQty||0),0);
-    return{name,lots,batchQty,totalLots,completed,pending,passLots,failLots,fgTotal,
+    return{name,lots,batchQty,totalLots,completed,pending,holdLots,passLots,failLots,fgTotal,
            model:lots[0].model||'',prodMonthCode:lots[0].prodMonthCode||'',prodMonthCode2:lots[0].prodMonthCode2||'',
            bomStatus:lots[0].bomStatus||'',bomVerId:lots[0].bomVerId||''};
   });
@@ -834,7 +869,7 @@ function freshSamples(n){
     num:i+1,serial:'',serialError:'',
     aestheticPass:true,generalPass:true,funcPass:true,screenPass:true,
     bdNoDot:true,bdVisible:false,bdD:'',bdN:'',bdDS:'',bdArea:'A',
-    remark:''
+    remark:'',locked:false
   }));
 }
 
@@ -845,19 +880,27 @@ function tallyLot(){
     if(r==='FAIL-MINOR') minor++;
     if(r==='FAIL-MAJOR') major++;
   });
-  return{minor,major,passed:minor<=1&&major===0,filled:samples.filter(s=>sampleResult(s)!=='PENDING').length};
+  return{minor,major,defective:minor+major,passed:minor+major===0,filled:samples.filter(s=>sampleResult(s)!=='PENDING').length};
 }
 
 // ═══════════════════════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════════════════════
-function render(){ document.getElementById('app').innerHTML=buildPage(); bindEvents(); }
+let rendering=false;
+function render(){
+  // replacing the page blurs the focused field, whose change handler may ask for another render: run that one afterwards
+  if(rendering){ setTimeout(render,0); return; }
+  rendering=true;
+  try{ document.getElementById('app').innerHTML=buildPage(); bindEvents(); }
+  finally{ rendering=false; }
+}
 
 function buildPage(){
   if(!API)          return buildSetup();
   if(!user)         return buildLogin();
   if(activeLot)     return buildInspection();
   if(activeBom)     return buildBomVerify();
+  if(activeRework)  return buildRework();
   if(page==='bom' && can('bommgmt')) return buildBomMgmt();
   return buildDashboard();
 }
@@ -1112,11 +1155,12 @@ function buildBatchesBody(isAdmin){
   const groups=groupBatches();
   let html='';
   // BATCH + LOT BROWSER
-  const stOf=l=>l.result==='PASS'?'pass':l.result==='FAIL'?'fail':l.status==='Open'?'open':'closed';
+  const stOf=lotState;
+  const inFilter=(l,k)=>k==='all'||(k==='open'?inspectable(l):stOf(l)===k);
   const lotNo=l=>{const m=String(l.lotNumber).match(/(\d+)\s*$/);return m?m[1]:l.lotNumber;};
   const inBatch=l=>!view.batch||l.batchName===view.batch;
-  const matches=l=>(view.status==='all'||stOf(l)===view.status)&&(!view.q||String(l.lotNumber).toLowerCase().includes(view.q.trim().toLowerCase()));
-  const cnt=k=>batches.filter(l=>inBatch(l)&&(k==='all'||stOf(l)===k)).length;
+  const matches=l=>inFilter(l,view.status)&&(!view.q||String(l.lotNumber).toLowerCase().includes(view.q.trim().toLowerCase()));
+  const cnt=k=>batches.filter(l=>inBatch(l)&&inFilter(l,k)).length;
   html+=`<div id="batchList" class="rv" style="--i:1">`;
   if(groups.length===0){
     html+=`<div class="card" style="text-align:center;padding:40px;color:var(--ink-3)">No batches yet. ${isAdmin?'<button class="btn btn-primary btn-sm navGo" data-go="create" style="margin-left:8px">Create a batch</button>':'Ask an admin to create a batch.'}</div>`;
@@ -1124,21 +1168,21 @@ function buildBatchesBody(isAdmin){
     html+=`<div class="lot-toolbar">
       <div><label class="lbl" for="fBatch">Batch</label>
         <select id="fBatch" class="field"><option value="">All batches (${groups.length})</option>${groups.map(g=>`<option value="${esc(g.name)}" ${g.name===view.batch?'selected':''}>${esc(g.name)}, ${g.completed} of ${g.totalLots} lots done</option>`).join('')}</select></div>
-      <div><span class="lbl">Show lots</span><div class="seg" role="group" aria-label="Filter lots by status">${[['all','All'],['open','Open'],['pass','Passed'],['fail','Failed']].map(([k,l])=>`<button class="seg-btn fStatus ${view.status===k?'on':''}" data-k="${k}" aria-pressed="${view.status===k}">${l}<span>${cnt(k)}</span></button>`).join('')}</div></div>
+      <div><span class="lbl">Show lots</span><div class="seg" role="group" aria-label="Filter lots by status">${[['all','All'],['open','To inspect'],['hold','On hold'],['pass','Passed'],['fail','Failed']].map(([k,l])=>`<button class="seg-btn fStatus ${view.status===k?'on':''}" data-k="${k}" aria-pressed="${view.status===k}">${l}<span>${cnt(k)}</span></button>`).join('')}</div></div>
       <div><label class="lbl" for="fSearch">Find a lot</label><input id="fSearch" class="field" type="search" value="${esc(view.q)}" placeholder="Lot number, e.g. 12"></div>
     </div>`;
     groups.filter(g=>!view.batch||g.name===view.batch).forEach(g=>{
       const pct2=g.totalLots?Math.round(g.completed/g.totalLots*100):0;
       const lots=g.lots.filter(matches);
       const locked=g.bomStatus==='Pending'||g.bomStatus==='Failed';
-      const nextOpen=(!isAdmin&&can('sampling')&&!locked)?g.lots.find(l=>l.status==='Open'):null;
+      const nextOpen=(!isAdmin&&can('sampling')&&!locked)?g.lots.find(inspectable):null;
       html+=`<div class="batch-group fade">
       <div class="batch-hdr">
         <div>
           <div class="batch-name">${esc(g.name)}</div>
           <div class="batch-meta">
             ${esc(modelLabel(g.model))}, production <b>${mmyyDisp(g.prodMonthCode)}${g.prodMonthCode2?' / '+mmyyDisp(g.prodMonthCode2):''}</b>, <b>${g.batchQty||'?'}</b> units in <b>${g.totalLots}</b> lots<br>
-            <b>${g.completed}</b> inspected, <b>${g.pending}</b> open,
+            <b>${g.completed}</b> inspected, <b>${g.pending}</b> open${g.holdLots?`, <b class="text-warn">${g.holdLots}</b> on hold`:''},
             <b class="text-pass">${g.passLots}</b> passed, <b class="text-fail">${g.failLots}</b> failed, <b class="text-pass">${g.fgTotal}</b> units released
           </div>
         </div>
@@ -1157,10 +1201,10 @@ function buildBatchesBody(isAdmin){
       } else {
         html+=`<div class="lot-grid" role="list">${lots.map(l=>{
           const ri=batches.indexOf(l), st=stOf(l), key=l.batchName+'||'+l.lotNumber;
-          const draft=(!isAdmin&&can('sampling')&&l.status==='Open')?loadDraft(l):null;
+          const draft=(!isAdmin&&can('sampling')&&inspectable(l))?loadDraft(l):null;
           const cls=draft?'t-draft':(st==='open'&&locked)?'t-lock':'t-'+st;
           const lk=st==='open'&&locked;
-          const word=draft?'Draft':lk?'Locked':st==='pass'?'Pass':st==='fail'?'Fail':st==='open'?'Open':'Closed';
+          const word=draft?'Draft':lk?'Locked':st==='pass'?'Pass':st==='fail'?'Fail':st==='hold'?'Hold':st==='reoffer'?'Reoffer':st==='open'?'Open':'Closed';
           return `<button class="lot-tile ${cls} lotTile ${selLot===key?'sel':''}" data-ri="${ri}" role="listitem" aria-pressed="${selLot===key}" title="${esc(l.lotNumber)}: ${word}"><span class="lt-no">${esc(lotNo(l))}</span><span class="lt-st">${word}</span></button>`;
         }).join('')}</div>`;
       }
@@ -1175,20 +1219,23 @@ function buildBatchesBody(isAdmin){
 
 // ─── DASHBOARD HERO + LOT MAP ─────────────────────────────
 function buildHero(groups,isAdmin){
-  const st=l=>l.result==='PASS'?'pass':l.result==='FAIL'?'fail':l.status==='Open'?((l.bomStatus==='Pending'||l.bomStatus==='Failed')?'lock':'open'):'closed';
+  const st=l=>{const x=lotState(l); return x==='open'&&(l.bomStatus==='Pending'||l.bomStatus==='Failed')?'lock':x;};
   const all=batches, pass=all.filter(l=>l.result==='PASS').length, fail=all.filter(l=>l.result==='FAIL').length;
-  const open=all.filter(l=>l.status==='Open').length, lockedB=groups.filter(g=>g.bomStatus==='Pending'||g.bomStatus==='Failed');
-  const nextLot=(!isAdmin&&can('sampling'))?all.find(l=>l.status==='Open'&&!samplingLocked(l.batchName)):null;
+  const hold=all.filter(l=>l.status==='Hold').length;
+  const open=all.filter(l=>l.status!=='Closed').length, lockedB=groups.filter(g=>g.bomStatus==='Pending'||g.bomStatus==='Failed');
+  const nextLot=(!isAdmin&&can('sampling'))?all.find(l=>inspectable(l)&&!samplingLocked(l.batchName)):null;
+  const holdLot=can('sampling')?all.find(l=>l.status==='Hold'):null;
   const today=new Date().toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'});
   let title, text;
   if(!all.length){ title='No batches yet.'; text=isAdmin?'Create the first batch. It starts with BOM verification, then sampling.':'Batches appear here once an admin creates them.'; }
   else if(!open){ title=`All ${all.length} lots are inspected.`; text=`${pass} passed${fail?`, ${fail} failed`:''}. Nothing is waiting for sampling.`; }
   else { title=`${pass} lots passed, ${open} still to inspect.`;
-    const bits=[]; if(lockedB.length) bits.push(`${lockedB.length} batch${lockedB.length===1?' is':'es are'} waiting for BOM verification`); if(fail) bits.push(`${fail} lot${fail===1?' has':'s have'} failed`);
+    const bits=[]; if(hold) bits.push(`${hold} lot${hold===1?' is':'s are'} on hold for rework`); if(lockedB.length) bits.push(`${lockedB.length} batch${lockedB.length===1?' is':'es are'} waiting for BOM verification`); if(fail) bits.push(`${fail} lot${fail===1?' has':'s have'} failed`);
     text=(bits.length?bits.join(' and ')+'. ':'')+`${groups.length} batch${groups.length===1?'':'es'} in total.`; }
   const actions=isAdmin
     ? `<button class="btn btn-primary navGo" data-go="create" type="button">Create a batch</button><button class="btn btn-ghost navGo" data-go="batches" type="button">View batches</button><button class="btn btn-ghost navGo" data-go="bom" type="button">BOM management</button>`
     : (nextLot?`<button class="btn btn-primary startBtn" data-ri="${batches.indexOf(nextLot)}" type="button">Inspect next open lot</button>`:'')
+      + (holdLot?`<button class="btn ${nextLot?'btn-ghost':'btn-primary'} heroHold" data-ri="${batches.indexOf(holdLot)}" type="button">Rework ${esc(holdLot.lotNumber)}</button>`:'')
       + (lockedB.length&&can('bomverify')?`<button class="btn ${nextLot?'btn-ghost':'btn-primary'} heroJump" data-batch="${esc(lockedB[0].name)}" type="button">Verify BOM for ${esc(lockedB[0].name)}</button>`:'')
       + `<button class="btn btn-ghost navGo" data-go="batches" type="button">View batches</button>`;
   const rows=groups.slice().reverse().map(g=>`<div class="lm-row"><div class="lm-name">${esc(g.name)}<span>${g.completed}/${g.totalLots}</span></div>
@@ -1202,7 +1249,7 @@ function buildHero(groups,isAdmin){
     </div>
     <figure class="lotmap rv" style="--i:2" aria-labelledby="lotmapTitle">
       <div class="lotmap-h"><figcaption class="lotmap-t" id="lotmapTitle">Lot map</figcaption>
-        <div class="lotmap-legend" aria-hidden="true"><span><i style="background:var(--lime);border-color:var(--lime-deep)"></i>Passed</span><span><i style="background:var(--color-danger-solid);border-color:var(--color-danger-solid)"></i>Failed</span><span><i style="border:1.5px solid var(--open)"></i>Open</span><span><i style="background:var(--sunk);border-style:dashed"></i>Locked</span></div></div>
+        <div class="lotmap-legend" aria-hidden="true"><span><i style="background:var(--lime);border-color:var(--lime-deep)"></i>Passed</span><span><i style="background:var(--color-danger-solid);border-color:var(--color-danger-solid)"></i>Failed</span><span><i style="background:var(--color-warn-bg);border:1.5px solid var(--color-warn)"></i>On hold</span><span><i style="border:1.5px solid var(--open)"></i>Open</span><span><i style="background:var(--sunk);border-style:dashed"></i>Locked</span></div></div>
       ${rows?`<div class="lm-rows">${rows}</div>`:`<div class="lm-empty">Lots will appear here as batches are created.</div>`}
     </figure>
   </section>`;
@@ -1398,40 +1445,75 @@ function buildBomVerify(){
 
 // ─── LOT DETAIL ───────────────────────────────────────────
 function fmtDate(v){ const d=new Date(v); return isNaN(d)?(v||'-'):d.toLocaleString([], {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function lotBadge(lot){
+  const x=lotState(lot);
+  return x==='pass'?'<span class="badge badge-pass">Passed</span>':x==='fail'?'<span class="badge badge-fail">Failed</span>':
+    x==='hold'?'<span class="badge badge-hold">On hold, rework needed</span>':x==='reoffer'?`<span class="badge badge-open">Reoffered, round ${lot.round||2}</span>`:
+    x==='open'?'<span class="badge badge-open">Open</span>':'<span class="badge badge-closed">Closed</span>';
+}
 function buildLotDetail(lot,isAdmin){
   const ri=batches.indexOf(lot), key=lot.batchName+'||'+lot.lotNumber;
-  const draft=(!isAdmin&&can('sampling')&&lot.status==='Open')?loadDraft(lot):null;
-  const st=lot.result==='PASS'?'<span class="badge badge-pass">Passed</span>':lot.result==='FAIL'?'<span class="badge badge-fail">Failed</span>':lot.status==='Open'?'<span class="badge badge-open">Open</span>':'<span class="badge badge-closed">Closed</span>';
+  const canInspect=!isAdmin&&can('sampling')&&inspectable(lot);
+  const draft=canInspect?loadDraft(lot):null;
+  const round=lot.round||1;
   let h=`<section class="lot-detail" aria-label="${esc(lot.lotNumber)} details">
     <div class="ld-head">
-      <div><div class="ld-title">${esc(lot.lotNumber)}</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${st}${draft?`<span class="badge badge-open">Draft, ${draft.samples.filter(s=>s.serial).length} of ${draft.samples.length} samples</span>`:''}</div></div>
+      <div><div class="ld-title">${esc(lot.lotNumber)}</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${lotBadge(lot)}${draft?`<span class="badge badge-open">Draft, ${draft.samples.filter(s=>s.serial).length} of ${draft.samples.length} samples</span>`:''}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${!isAdmin&&can('sampling')&&lot.status==='Open'&&samplingLocked(lot.batchName)?`<span class="text-muted">Sampling starts after BOM verification passes</span>`:''}
-        ${!isAdmin&&can('sampling')&&lot.status==='Open'&&!samplingLocked(lot.batchName)?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume inspection':'Start inspection'}</button>`:''}
+        ${canInspect&&samplingLocked(lot.batchName)?`<span class="text-muted">Sampling starts after BOM verification passes</span>`:''}
+        ${canInspect&&!samplingLocked(lot.batchName)?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume inspection':lot.status==='Reoffered'?`Inspect reoffer (round ${round})`:'Start inspection'}</button>`:''}
+        ${lot.status==='Hold'&&can('sampling')?`<button class="btn btn-primary btn-sm reworkBtn" data-ri="${ri}">Record rework and reoffer</button>`:''}
+        ${isAdmin&&lot.result==='FAIL'?`<button class="btn btn-ghost btn-sm holdLotBtn" data-ri="${ri}">Move to hold for rework</button>`:''}
         ${isAdmin?`<button class="btn btn-ghost btn-sm editBtn" data-ri="${ri}">Edit lot</button><button class="btn btn-ghost btn-sm delLotBtn" data-ri="${ri}" style="color:var(--fail)">Delete lot</button>`:''}
         <button class="btn btn-ghost btn-sm lotCloseBtn" aria-label="Close lot details">Close</button>
       </div>
     </div>
     <div class="facts">
-      <div>Lot size<b>${lot.lotSize} units</b></div>
-      <div>Samples<b>${lot.sampleSize}</b></div>
+      <div>Lot size<b>${esc(lot.lotSize)} units</b></div>
+      <div>Samples<b>${esc(lot.sampleSize)}</b></div>
       <div>Model<b>${esc(modelLabel(lot.model))}</b></div>
       <div>Production<b>${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' / '+mmyyDisp(lot.prodMonthCode2):''}</b></div>
-      <div>Released<b>${lot.fgPassQty?lot.fgPassQty+' units':'—'}</b></div>
-      <div>Created<b>${esc(fmtDate(lot.createdAt))}</b></div>
+      <div>Inspection round<b>${round}${round>1?' (reoffer)':''}</b></div>
+      <div>Released<b>${lot.fgPassQty?esc(lot.fgPassQty)+' units':'—'}</b></div>
     </div>
     <div id="editArea${ri}" class="hidden" style="padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--line)"></div>`;
-  if(lot.status==='Closed'||lot.result){
+  if(lot.status==='Hold') h+=`<div class="hold-note"><b>This lot is on hold.</b> A defective sample was found. Record the rework done on the lot: how many units were reworked, and each serial number against its inspection check point. The lot is then reoffered with 13 units picked for re-inspection, always including the defective ones.</div>`;
+  if(lot.status==='Reoffered'){
+    const rs=lot.reofferSerials||[], fresh=Math.max((lot.sampleSize||13)-rs.length,0);
+    h+=`<div class="reoffer-box"><div style="font-weight:700;margin-bottom:6px">Reoffer, round ${round}: units to inspect</div>
+      <div class="reoffer-list">${rs.map((x,i)=>`<span class="mono">${i+1}. ${esc(x)}</span>`).join('')}${fresh?`<span class="text-muted">${fresh} more to pick fresh from the lot</span>`:''}</div>
+      <div class="text-muted" style="font-size:12.5px;margin-top:6px">These serial numbers are filled in for you when the reoffer inspection starts. The defective units from the last round are always included.</div></div>`;
+  }
+  const hasRecords=lot.status!=='Open'||lot.result||round>1;
+  if(hasRecords){
     const c=lotUnits[key];
-    h+=`<div class="res-wrap"><div style="font-weight:700;margin-bottom:8px">Sample results</div>`;
-    if(!c||c.loading) h+=`<div class="text-muted">Loading sample results…</div>`;
+    h+=`<div class="res-wrap">`;
+    if(!c||c.loading) h+=`<div class="text-muted">Loading lot records…</div>`;
     else if(c.error) h+=`<div class="err">${esc(c.error)}</div>`;
-    else if(!c.units.length) h+=`<div class="text-muted">No sample records found for this lot.</div>`;
     else {
-      const cell=v=>`<td class="${/fail/i.test(v)?'bad':''}">${esc(v||'-')}</td>`;
-      h+=`<div style="overflow-x:auto"><table class="res-table"><thead><tr><th>#</th><th>Serial</th><th>Aes</th><th>Gen</th><th>Func</th><th>Scr</th><th>Black dot</th><th>Result</th><th>Remark</th><th>Inspected</th></tr></thead><tbody>
-        ${c.units.map((u,i)=>`<tr class="${/fail/i.test(u.sampleResult)?'row-bad':''}"><td>${i+1}</td><td style="font-family:var(--code);white-space:nowrap">${esc(u.serial)}</td>${cell(u.aes)}${cell(u.general)}${cell(u.func)}${cell(u.screen)}<td>${esc(u.bd)}</td>${cell(u.sampleResult)}<td>${esc(u.remark)}</td><td style="white-space:nowrap">${esc(u.inspector)}<br><span class="text-muted">${esc(fmtDate(u.time))}</span></td></tr>`).join('')}
-      </tbody></table></div>`;
+      const rounds=[...new Set((c.units||[]).map(u=>u.round||1).concat((c.rework||[]).map(r=>r.round||1)))].sort((x,y)=>x-y);
+      if(c.history&&c.history.length){
+        h+=`<div style="font-weight:700;margin-bottom:8px">Lot status history</div><ol class="timeline">${c.history.map(e=>`<li class="tl-${esc(e.event.toLowerCase())}"><b>${esc(e.event)}</b> <span class="text-muted">round ${esc(e.round)}, ${esc(fmtDate(e.time))}, ${esc(e.by)}</span><div>${esc(e.details)}</div></li>`).join('')}</ol>`;
+      }
+      if(!rounds.length) h+=`<div class="text-muted">No sample records found for this lot.</div>`;
+      rounds.forEach(rn=>{
+        const us=(c.units||[]).filter(u=>(u.round||1)===rn);
+        if(us.length){
+          const cell=v=>`<td class="${/fail/i.test(v)?'bad':''}">${esc(v||'-')}</td>`;
+          h+=`<div style="font-weight:700;margin:14px 0 8px">Sample results${rounds.length>1||rn>1?`, round ${rn}${rn>1?' (reoffer)':''}`:''}</div>
+          <div style="overflow-x:auto"><table class="res-table"><thead><tr><th>#</th><th>Serial</th><th>Aes</th><th>Gen</th><th>Func</th><th>Scr</th><th>Black dot</th><th>Result</th><th>Remark</th><th>Inspected</th></tr></thead><tbody>
+            ${us.map((u,i)=>`<tr class="${/fail/i.test(u.sampleResult)?'row-bad':''}"><td>${i+1}</td><td style="font-family:var(--code);white-space:nowrap">${esc(u.serial)}</td>${cell(u.aes)}${cell(u.general)}${cell(u.func)}${cell(u.screen)}<td>${esc(u.bd)}</td>${cell(u.sampleResult)}<td>${esc(u.remark)}</td><td style="white-space:nowrap">${esc(u.inspector)}<br><span class="text-muted">${esc(fmtDate(u.time))}</span></td></tr>`).join('')}
+          </tbody></table></div>`;
+        }
+        const rw=(c.rework||[]).filter(r=>(r.round||1)===rn);
+        if(rw.length){
+          h+=`<div style="font-weight:700;margin:14px 0 8px">Rework after round ${rn}: ${esc(rw[0].unitsReworked)} units reworked <span class="text-muted" style="font-weight:400">(${esc(rw[0].id)}, ${esc(rw[0].by)}, ${esc(fmtDate(rw[0].time))})</span></div>
+          ${rw[0].remarks?`<div class="text-muted" style="margin-bottom:6px">${esc(rw[0].remarks)}</div>`:''}
+          <div style="overflow-x:auto"><table class="res-table"><thead><tr><th>#</th><th>Serial</th><th>Check point</th><th>Defect</th><th>Rework done</th><th>Unit status</th><th>In reoffer</th></tr></thead><tbody>
+            ${rw.map((r,i)=>`<tr class="${r.status==='Scrapped'?'row-muted':''}"><td>${i+1}</td><td style="font-family:var(--code);white-space:nowrap">${esc(r.serial)}</td><td>${esc(r.checkpoint)}</td><td>${esc(r.defect)}</td><td>${esc(r.action)}</td><td>${esc(r.status)}</td><td>${r.inReoffer?'Yes':'—'}</td></tr>`).join('')}
+          </tbody></table></div>`;
+        }
+      });
     }
     h+=`</div>`;
   } else {
@@ -1443,8 +1525,8 @@ async function loadLotUnits(lot){
   const k=lot.batchName+'||'+lot.lotNumber;
   lotUnits[k]={loading:true};
   const r=await api('getLotUnits',{batchName:lot.batchName,lotNumber:lot.lotNumber});
-  lotUnits[k]=r.ok?{units:r.units||[]}:{error:(r.error||'').toLowerCase().includes('unknown')?'Sample results need the latest backend version.':(r.error||'Could not load sample results')};
-  if(!activeLot && selLot===k) render();
+  lotUnits[k]=r.ok?{units:r.units||[],history:r.history||[],rework:r.rework||[]}:{error:(r.error||'').toLowerCase().includes('unknown')?'Sample results need the latest backend version.':(r.error||'Could not load sample results')};
+  if(!activeLot && !activeRework && selLot===k) render();
 }
 
 // ─── DATA RECORDS PANEL (admin) ───────────────────────────
@@ -1578,11 +1660,109 @@ function buildModelsPanel(){
   </div>`;
 }
 
+// ─── REWORK (lot on hold) ─────────────────────────────────
+const CHECKPOINTS=['Aesthetic','General','Functional','Screen','Black dot'];
+const UNIT_STATUSES=['Reworked OK','Scrapped'];
+function reworkDraftKey(lot){ return 'oba_rework_'+(user?user.username:'anon')+'_'+lot.batchName+'_'+lot.lotNumber+'_r'+(lot.round||1); }
+function saveReworkDraft(){ if(!activeRework) return; try{ localStorage.setItem(reworkDraftKey(activeRework.lot),JSON.stringify({count:activeRework.count,items:activeRework.items,remarks:activeRework.remarks})); }catch(e){} }
+function checkpointOf(u){
+  if(/fail/i.test(u.general)) return 'General'; if(/fail/i.test(u.func)) return 'Functional'; if(/fail/i.test(u.screen)) return 'Screen';
+  if(/fail/i.test(u.bd)) return 'Black dot'; if(/fail/i.test(u.aes)) return 'Aesthetic'; return '';
+}
+async function openRework(lot){
+  const r=await api('getLotUnits',{batchName:lot.batchName,lotNumber:lot.lotNumber});
+  if(!r.ok){ toast(r.error||'Could not load the lot','err'); return; }
+  const round=lot.round||1;
+  const bad=(r.units||[]).filter(u=>(u.round||1)===round&&/fail/i.test(u.sampleResult));
+  let d=null; try{ d=JSON.parse(localStorage.getItem(reworkDraftKey(lot))||'null'); }catch(e){}
+  const items=d&&d.items&&d.items.length?d.items:bad.map(u=>({serial:u.serial,checkpoint:checkpointOf(u),defect:u.remark&&u.remark!=='OK'?u.remark:'',action:'',status:'Reworked OK',fromSample:true}));
+  activeRework={lot,bad:bad.map(u=>u.serial),items,count:d?d.count:'',remarks:d?d.remarks||'':'',paste:'',pasteCp:'Functional',pasteDefect:'',pasteAction:'',pasteStatus:'Reworked OK',saving:false};
+  render(); window.scrollTo(0,0);
+}
+function reworkRowError(it){
+  const lot=activeRework.lot;
+  const e=validateSerial(it.serial,lot.model,lot.prodMonthCode,[],lot.prodMonthCode2||'');
+  if(e) return e;
+  if(!CHECKPOINTS.includes(it.checkpoint)) return 'Choose the check point';
+  if(!String(it.defect||'').trim()) return 'Describe the defect';
+  if(!String(it.action||'').trim()) return 'Describe the rework done';
+  return '';
+}
+function reworkProblems(){
+  const a=activeRework, p=[];
+  const n=parseInt(a.count);
+  if(!(n>=1)) p.push('Enter the number of units reworked');
+  else if(n!==a.items.length) p.push(`Units reworked is ${n} but ${a.items.length} serial number${a.items.length===1?' is':'s are'} listed`);
+  const missing=a.bad.filter(x=>!a.items.some(it=>it.serial===x));
+  if(missing.length) p.push('Defective units missing from the list: '+missing.join(', '));
+  const bad=a.items.map((it,i)=>[i,reworkRowError(it)]).filter(x=>x[1]);
+  if(bad.length) p.push(`${bad.length} row${bad.length===1?'':'s'} need${bad.length===1?'s':''} attention`);
+  const sn={}; a.items.forEach(it=>{ sn[it.serial]=(sn[it.serial]||0)+1; });
+  const dups=Object.keys(sn).filter(k=>sn[k]>1); if(dups.length) p.push('Listed twice: '+dups.join(', '));
+  return p;
+}
+function buildRework(){
+  const a=activeRework, lot=a.lot, round=lot.round||1, probs=reworkProblems();
+  const opt=(list,v)=>list.map(x=>`<option ${x===v?'selected':''}>${esc(x)}</option>`).join('');
+  const rows=a.items.map((it,i)=>{ const err=reworkRowError(it); return `<tr class="${err?'rw-err':''}">
+      <td>${i+1}</td>
+      <td><input class="field mono rwF" data-i="${i}" data-f="serial" value="${esc(it.serial)}" ${it.fromSample?'readonly title="Defective sample unit"':''} aria-label="Serial ${i+1}">${it.fromSample?'<div class="text-fail" style="font-size:11.5px;margin-top:2px">Defective sample</div>':''}</td>
+      <td><select class="field rwF" data-i="${i}" data-f="checkpoint" aria-label="Check point ${i+1}"><option value="">Choose…</option>${opt(CHECKPOINTS,it.checkpoint)}</select></td>
+      <td><input class="field rwF" data-i="${i}" data-f="defect" value="${esc(it.defect)}" placeholder="Defect found" maxlength="300" aria-label="Defect ${i+1}"></td>
+      <td><input class="field rwF" data-i="${i}" data-f="action" value="${esc(it.action)}" placeholder="Rework done" maxlength="300" aria-label="Rework ${i+1}"></td>
+      <td><select class="field rwF" data-i="${i}" data-f="status" aria-label="Unit status ${i+1}">${opt(UNIT_STATUSES,it.status)}</select></td>
+      <td>${it.fromSample?'':`<button class="btn btn-ghost btn-sm rwDel" data-i="${i}" aria-label="Remove row ${i+1}">✕</button>`}${err?`<div class="err" style="font-size:11.5px;margin-top:2px">${esc(err)}</div>`:''}</td></tr>`;}).join('');
+  return `<div class="page">
+  <header class="hdr">
+    <div class="hdr-left"><div class="logo"><img src="${LOGO_SRC}" alt="Lumio"></div>
+      <div><div class="hdr-title">Rework and reoffer</div><div class="hdr-sub">${esc(lot.lotNumber)}</div></div></div>
+    <div class="hdr-right"><span class="text-muted">${esc(user.name)}</span>${themeToggleHtml()}<button id="btnRwBack" class="btn btn-ghost btn-sm" title="Your entries are kept as a draft">← Back to batches</button></div>
+  </header>
+  <div class="main">
+    <section class="bench fade" style="grid-template-columns:1fr">
+      <div>
+        <div class="bench-title">${esc(lot.lotNumber)} <span class="badge badge-hold" style="vertical-align:middle">On hold</span></div>
+        <div class="bench-sub">${esc(modelLabel(lot.model))}, lot of ${esc(lot.lotSize)} units, round ${round}. Defective sample unit${a.bad.length===1?'':'s'}: <b class="mono">${esc(a.bad.join(', ')||'none recorded')}</b>.<br>
+        List every unit that was reworked with its inspection check point. When you save, the lot is reoffered: ${esc(lot.sampleSize)} units are picked for re-inspection, the defective units first and the rest at random from the reworked units.</div>
+      </div>
+    </section>
+    <div class="card">
+      <div class="form-2" style="max-width:640px">
+        <div class="fg"><label class="lbl" for="rwCount">Number of units reworked</label><input id="rwCount" class="field mono" type="number" min="1" max="${esc(lot.lotSize)}" value="${esc(a.count)}" placeholder="e.g. 12"></div>
+        <div class="fg"><span class="lbl">Serial numbers listed</span><div class="rw-count ${parseInt(a.count)===a.items.length?'text-pass':'text-warn'}">${a.items.length}</div></div>
+      </div>
+      <div class="lbl" style="margin:6px 0 8px">Add reworked units</div>
+      <div class="rw-paste">
+        <textarea id="rwPaste" class="field mono" rows="3" placeholder="Scan or paste serial numbers, one per line">${esc(a.paste)}</textarea>
+        <div class="rw-paste-f">
+          <select id="rwPCp" class="field" aria-label="Check point for these units">${opt(CHECKPOINTS,a.pasteCp)}</select>
+          <input id="rwPDef" class="field" placeholder="Defect (same for all)" value="${esc(a.pasteDefect)}" maxlength="300">
+          <input id="rwPAct" class="field" placeholder="Rework done (same for all)" value="${esc(a.pasteAction)}" maxlength="300">
+          <select id="rwPSt" class="field" aria-label="Unit status">${opt(UNIT_STATUSES,a.pasteStatus)}</select>
+          <button id="btnRwAdd" class="btn btn-ghost">Add to list</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;margin-top:16px"><table class="res-table rw-table"><thead><tr><th>#</th><th>Serial number</th><th>Inspection check point</th><th>Defect</th><th>Rework done</th><th>Unit status</th><th></th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="7" class="text-muted">No units listed yet.</td></tr>'}</tbody></table></div>
+      <div class="fg" style="margin-top:14px"><label class="lbl" for="rwRemarks">Rework remarks</label><input id="rwRemarks" class="field" value="${esc(a.remarks)}" maxlength="500" placeholder="Optional"></div>
+      ${probs.length?`<div class="rw-probs">${probs.map(x=>`<div>• ${esc(x)}</div>`).join('')}</div>`:''}
+      <button id="btnRwSave" class="btn btn-primary" ${probs.length||a.saving?'disabled':''} style="margin-top:12px">${a.saving?'Saving…':'Save rework and reoffer lot'}</button>
+      <div class="text-muted" style="font-size:12.5px;margin-top:8px">Scrapped units are saved but not reoffered. If fewer than ${esc(lot.sampleSize)} units can be picked, the remaining samples are scanned fresh from the lot during the reoffer inspection.</div>
+    </div>
+  </div>
+  <footer class="pg-footer">LUMIO Quality Management - Projector</footer>
+  </div>`;
+}
+
 // ─── INSPECTION ───────────────────────────────────────────
 function buildInspection(){
   const lot=activeLot;
-  const {minor,major,passed,filled}=tallyLot();
+  const {minor,major,passed,filled,defective}=tallyLot();
   const allReady=filled===samples.length&&samples.every(s=>!s.serialError&&s.serial);
+  // a defective sample puts the lot on hold straight away; samples started but not finished must be finished or cleared
+  const holdReady=defective>0&&samples.every(s=>!s.serial||(!s.serialError&&sampleResult(s)!=='PENDING'));
+  const firstBad=samples.findIndex(s=>sampleResult(s).startsWith('FAIL'));
+  const round=lot.round||1;
 
   const slots=samples.map((s,i)=>{const r=sampleResult(s);const c=r==='PASS'?'s-pass':r==='FAIL-MINOR'?'s-minor':r==='FAIL-MAJOR'?'s-major':'';const tl=r==='PASS'?'pass':r==='FAIL-MINOR'?'minor fail':r==='FAIL-MAJOR'?'major fail':'not inspected yet';return `<button class="slot ${c}" data-i="${i}" title="Sample ${i+1}: ${tl}" aria-label="Go to sample ${i+1}, ${tl}">${i+1}</button>`;}).join('');
   let html=`<div class="page">
@@ -1602,18 +1782,20 @@ function buildInspection(){
   <div class="main">
   <section class="bench fade">
     <div>
-      <div class="bench-title">${esc(lot.lotNumber)}</div>
+      <div class="bench-title">${esc(lot.lotNumber)}${round>1?` <span class="badge badge-open" style="vertical-align:middle">Reoffer, round ${round}</span>`:''}</div>
       <div class="bench-sub">${esc(modelLabel(lot.model))} (serial code ${activeSpec?activeSpec.code:'?'}), production ${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' or '+mmyyDisp(lot.prodMonthCode2):''}<br>Lot of ${lot.lotSize} units, ${lot.sampleSize} samples. Black dot fails above ${activeSpec?activeSpec.maxD:'?'} mm.</div>
       <div class="verdict">
         <div><b>${filled}/${samples.length}</b>Inspected</div>
-        <div><b class="${minor<=1?(minor?'v-warn':''):'v-bad'}">${minor}</b>Minor (1 allowed)</div>
+        <div><b class="${minor?'v-bad':''}">${minor}</b>Minor (0 allowed)</div>
         <div><b class="${major===0?'':'v-bad'}">${major}</b>Major (0 allowed)</div>
-        <div><b class="${passed?'v-ok':'v-bad'}">${passed?'Passing':'Failing'}</b>Lot verdict</div>
+        <div><b class="${passed?'v-ok':'v-bad'}">${passed?'Passing':'On hold'}</b>Lot verdict</div>
       </div>
     </div>
     <div class="tray" style="--n:${samples.length}" role="group" aria-label="Sample tray">${slots}</div>
   </section>`;
 
+  if(defective>0) html+=`<div class="hold-banner" role="alert"><b>Sample ${firstBad+1} is defective. The whole lot goes on hold.</b> Any defect holds the lot. Put it on hold now with the ${filled} sample${filled===1?'':'s'} inspected; then record the rework and the lot is reoffered.</div>`;
+  if(round>1&&!defective) html+=`<div class="reoffer-banner">Reoffer inspection, round ${round}. Serial numbers marked with a lock were picked for you (defective units from the last round first, then random reworked units) and cannot be changed.${samples.some(s=>!s.locked)?' Scan fresh units from the lot into the empty rows.':''}</div>`;
   html+=`<div class="samp-table">
   <div class="samp-head" style="padding:10px 16px;display:flex;align-items:center;gap:12px;background:var(--sunk);border-bottom:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink-2)">
     <div style="width:30px;flex-shrink:0"></div>
@@ -1638,7 +1820,7 @@ function buildInspection(){
       <div class="samp-num-badge">${i+1}</div>
 
       <div class="samp-serial-wrap">
-        <input class="samp-serial-inp sSerial ${s.serialError?'err-field':''}" data-i="${i}" type="text" value="${esc(s.serial)}" placeholder="${activeSpec?activeSpec.code:'????'}${String(lot.prodMonthCode||'????').padStart(4,'0')}0000001">
+        <input class="samp-serial-inp sSerial ${s.serialError?'err-field':''} ${s.locked?'locked':''}" data-i="${i}" type="text" value="${esc(s.serial)}" ${s.locked?'readonly title="Picked for the reoffer"':''} placeholder="${activeSpec?activeSpec.code:'????'}${String(lot.prodMonthCode||'????').padStart(4,'0')}0000001">
         ${s.serialError?`<div class="err" style="margin-top:3px">${esc(s.serialError)}</div>`:''}
       </div>
 
@@ -1691,15 +1873,13 @@ function buildInspection(){
   html+=`<div class="insp-footer">
     <div class="insp-tally">
       <div>Samples filled: <b class="${filled===samples.length?'t-ok':'t-warn'}">${filled}/${samples.length}</b></div>
-      <div>Aesthetic (Minor): <b class="${minor<=1?'t-ok':'t-fail'}">${minor} / 1 allowed</b></div>
-      <div>Major defects: <b class="${major===0?'t-ok':'t-fail'}">${major} / 0 allowed</b></div>
-      <div>Lot verdict: <b class="${passed?'t-ok':'t-fail'}">${passed?'✓ PASS':'✗ FAIL'}</b></div>
+      <div>Defective samples: <b class="${defective?'t-fail':'t-ok'}">${defective} / 0 allowed</b></div>
+      <div>Lot verdict: <b class="${passed?'t-ok':'t-fail'}">${passed?'✓ PASS':'HOLD'}</b></div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <input id="lotRemarks" class="field" type="text" style="width:260px" value="${esc(lotRemarksVal)}" placeholder="General lot remarks (optional)">
-      <button id="btnSubmitLot" class="btn ${allReady?(passed?'btn-primary':'btn-danger'):''}" ${allReady?'':'disabled'} style="min-width:200px">
-        ${allReady?(passed?'✓ Submit Lot — PASS':'⚠ Submit Lot — FAIL'):`Complete all ${samples.length} samples to submit`}
-      </button>
+      ${defective?`<button id="btnSubmitLot" class="btn btn-danger" ${holdReady?'':'disabled'} style="min-width:200px">${holdReady?`Put lot on hold (${defective} defective)`:'Finish the started samples first'}</button>`
+      :`<button id="btnSubmitLot" class="btn ${allReady?'btn-primary':''}" ${allReady?'':'disabled'} style="min-width:200px">${allReady?'✓ Submit Lot — PASS':`Complete all ${samples.length} samples to submit`}</button>`}
     </div>
   </div>
 
@@ -1764,7 +1944,7 @@ function bindEvents(){
   document.querySelectorAll('.lmCell').forEach(b=>{ b.onclick=()=>{
     const lot=batches[parseInt(b.getAttribute('data-ri'))]; if(!lot) return;
     view.batch=lot.batchName; view.status='all'; view.q=''; selLot=lot.batchName+'||'+lot.lotNumber;
-    if((lot.status==='Closed'||lot.result)&&!lotUnits[selLot]) loadLotUnits(lot);
+    if((lot.status!=='Open'||lot.result||(lot.round||1)>1)&&!lotUnits[selLot]) loadLotUnits(lot);
     go('batches',()=>document.querySelector('.lot-detail')?.scrollIntoView({behavior:'smooth',block:'center'}));
   }; });
   if(document.querySelector('.main.intro')) setTimeout(()=>{ introDone=true; },1200);
@@ -2025,7 +2205,7 @@ function bindEvents(){
       render();
       if(selLot){
         document.querySelector('.lot-detail')?.scrollIntoView({behavior:'smooth',block:'nearest'});
-        if((lot.status==='Closed'||lot.result)&&!lotUnits[k]) loadLotUnits(lot);
+        if((lot.status!=='Open'||lot.result||(lot.round||1)>1)&&!lotUnits[k]) loadLotUnits(lot);
       }
     };
   });
@@ -2104,7 +2284,7 @@ function bindEvents(){
       if(!area.classList.contains('hidden')){ area.classList.add('hidden'); area.innerHTML=''; return; }
       area.classList.remove('hidden');
       area.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:10px">
-        <div><label class="lbl">Status</label><select id="eS${ri}" class="field"><option value="Open" ${lot.status==='Open'?'selected':''}>Open</option><option value="Closed" ${lot.status==='Closed'?'selected':''}>Closed</option></select></div>
+        <div><label class="lbl">Status</label><select id="eS${ri}" class="field"><option value="Open" ${lot.status==='Open'?'selected':''}>Open</option><option value="Hold" ${lot.status==='Hold'?'selected':''}>Hold</option><option value="Reoffered" ${lot.status==='Reoffered'?'selected':''}>Reoffered</option><option value="Closed" ${lot.status==='Closed'?'selected':''}>Closed</option></select></div>
         <div><label class="lbl">Model</label><select id="eMD${ri}" class="field">${modelOptions(lot.model)}${getModel(lot.model)?'':`<option value="${esc(lot.model)}" selected>${esc(lot.model)} (not in list)</option>`}</select></div>
         <div><label class="lbl">Prod Month 1</label><input id="ePM${ri}" class="field" type="month" value="${mmyyInp(lot.prodMonthCode)}"></div>
         <div><label class="lbl">Prod Month 2</label><input id="ePM2${ri}" class="field" type="month" value="${mmyyInp(lot.prodMonthCode2||'')}"></div>
@@ -2131,6 +2311,7 @@ function bindEvents(){
       const ri=parseInt(btn.getAttribute('data-ri'));
       const lot=batches[ri];
       if(samplingLocked(lot.batchName)){ toast('Sampling starts after BOM verification passes for this batch','err'); return; }
+      if(!inspectable(lot)){ toast(lot.status==='Hold'?'This lot is on hold. Record the rework first.':'This lot is not open for inspection','err'); return; }
       const spec=getModel(lot.model);
       if(!spec){ toast(`Model "${lot.model}" has no spec — ask admin to add it`,'err'); return; }
       activeSpec=spec; lotRemarksVal='';
@@ -2149,6 +2330,7 @@ function bindEvents(){
       }
       activeLot=lot; expandedSample=null;
       samples=freshSamples(activeLot.sampleSize||SAMPLE_N);
+      (lot.status==='Reoffered'?(lot.reofferSerials||[]):[]).slice(0,samples.length).forEach((sn,j)=>{ samples[j].serial=sn; samples[j].locked=true; });
       render();
     };
   });
@@ -2176,12 +2358,13 @@ function bindEvents(){
   document.querySelectorAll('.sSerial').forEach(el=>{
     el.onchange=async()=>{
       const i=parseInt(el.getAttribute('data-i'));
+      if(samples[i].locked){ el.value=samples[i].serial; return; }
       samples[i].serial=el.value.trim().toUpperCase();
       const used=samples.filter((_,j)=>j!==i&&samples[j].serial).map(s=>s.serial.toUpperCase());
       let err=validateSerial(samples[i].serial,activeLot.model,activeLot.prodMonthCode,used,activeLot.prodMonthCode2||'');
       if(!err && samples[i].serial){
         try{
-          const dup=await api('checkSerial',{serial:samples[i].serial});
+          const dup=await api('checkSerial',{serial:samples[i].serial,batchName:activeLot.batchName,lotNumber:activeLot.lotNumber});
           if(dup.ok && dup.exists) err='Duplicate — already exists in master data ('+(dup.batch||'')+' '+(dup.lot||'')+')';
         }catch(e){ /* ignore network errors on dup check */ }
       }
@@ -2246,15 +2429,60 @@ function bindEvents(){
   const lotRemarksEl=document.getElementById('lotRemarks');
   if(lotRemarksEl) lotRemarksEl.oninput=()=>{ lotRemarksVal=lotRemarksEl.value; saveDraft(); };
 
+  // Hold / rework / reoffer
+  document.querySelectorAll('.reworkBtn,.heroHold').forEach(b=>{ b.onclick=()=>{ const lot=batches[parseInt(b.getAttribute('data-ri'))]; if(lot) openRework(lot); }; });
+  document.querySelectorAll('.holdLotBtn').forEach(b=>{ b.onclick=async()=>{
+    const lot=batches[parseInt(b.getAttribute('data-ri'))];
+    if(!confirm(`Move ${lot.lotNumber} to hold so it can be reworked and reoffered?`)) return;
+    const r=await api('holdLot',{batchName:lot.batchName,lotNumber:lot.lotNumber});
+    if(r.ok){ toast(`${lot.lotNumber} is on hold`); lotUnits={}; await loadBatches(); const nl=batches.find(l=>l.batchName===lot.batchName&&l.lotNumber===lot.lotNumber); if(nl) loadLotUnits(nl); render(); } else toast(r.error||'Error','err');
+  }; });
+  if(activeRework){
+    const a=activeRework, rr=()=>{ saveReworkDraft(); render(); };
+    const back=document.getElementById('btnRwBack'); if(back) back.onclick=()=>{ saveReworkDraft(); activeRework=null; render(); };
+    const cnt=document.getElementById('rwCount'); if(cnt) cnt.onchange=()=>{ a.count=cnt.value; rr(); };
+    const rem=document.getElementById('rwRemarks'); if(rem) rem.oninput=()=>{ a.remarks=rem.value; saveReworkDraft(); };
+    [['rwPaste','paste'],['rwPDef','pasteDefect'],['rwPAct','pasteAction']].forEach(([id,k])=>{ const el=document.getElementById(id); if(el) el.oninput=()=>{ a[k]=el.value; }; });
+    [['rwPCp','pasteCp'],['rwPSt','pasteStatus']].forEach(([id,k])=>{ const el=document.getElementById(id); if(el) el.onchange=()=>{ a[k]=el.value; }; });
+    document.querySelectorAll('.rwF').forEach(el=>{ el.onchange=()=>{ const it=a.items[parseInt(el.dataset.i)]; if(!it||(it.fromSample&&el.dataset.f==='serial')) return; it[el.dataset.f]=el.dataset.f==='serial'?el.value.trim().toUpperCase():el.value; rr(); }; });
+    document.querySelectorAll('.rwDel').forEach(b=>{ b.onclick=()=>{ a.items.splice(parseInt(b.dataset.i),1); rr(); }; });
+    const add=document.getElementById('btnRwAdd'); if(add) add.onclick=()=>{
+      const sns=(a.paste.toUpperCase().match(/[A-Z0-9]{6,40}/g)||[]);
+      if(!sns.length){ toast('Scan or paste at least one serial number','err'); return; }
+      let added=0, skipped=0;
+      sns.forEach(sn=>{ if(a.items.some(it=>it.serial===sn)){ skipped++; return; } a.items.push({serial:sn,checkpoint:a.pasteCp,defect:a.pasteDefect,action:a.pasteAction,status:a.pasteStatus}); added++; });
+      a.paste=''; toast(`${added} unit${added===1?'':'s'} added${skipped?`, ${skipped} already listed`:''}`); rr();
+    };
+    const save=document.getElementById('btnRwSave'); if(save) save.onclick=async()=>{
+      if(reworkProblems().length) return;
+      const lot=a.lot;
+      if(!confirm(`Save rework for ${lot.lotNumber} (${a.items.length} units) and reoffer the lot?`)) return;
+      a.saving=true; render();
+      const r=await api('recordRework',{batchName:lot.batchName,lotNumber:lot.lotNumber,unitsReworked:parseInt(a.count),remarks:a.remarks,
+        items:a.items.map(it=>({serial:it.serial,checkpoint:it.checkpoint,defect:it.defect,action:it.action,status:it.status}))});
+      a.saving=false;
+      if(r.ok){
+        try{ localStorage.removeItem(reworkDraftKey(lot)); }catch(e){}
+        activeRework=null; lotUnits={};
+        toast(`Rework saved. ${lot.lotNumber} is reoffered with ${r.reoffer.length} units picked${r.fresh?`, ${r.fresh} to scan fresh`:''}.`);
+        await loadBatches();
+        view.batch=lot.batchName; view.status='all'; view.q=''; selLot=lot.batchName+'||'+lot.lotNumber;
+        const nl=batches.find(l=>l.batchName===lot.batchName&&l.lotNumber===lot.lotNumber); if(nl) loadLotUnits(nl);
+        go('batches',()=>document.querySelector('.lot-detail')?.scrollIntoView({block:'center'}));
+      } else { render(); toast(r.error||'Save failed','err'); }
+    };
+  }
+
   // Submit Lot
   const bsub=document.getElementById('btnSubmitLot');
   if(bsub) bsub.onclick=async()=>{
-    const {minor,major,passed}=tallyLot();
-    const lotResult=passed?'PASS':'FAIL';
+    const {passed,defective}=tallyLot();
+    const lotResult=defective?'HOLD':'PASS';
+    if(lotResult==='HOLD'&&!confirm(`Put ${activeLot.lotNumber} on hold?\n\n${defective} defective sample${defective===1?'':'s'} found. The inspected samples are saved and the lot waits for rework.`)) return;
     const fgPassQty=passed?Number(activeLot.lotSize):0;
     const lotRemarks=lotRemarksVal;
-
-    const units=samples.map(s=>{
+    const toSend=lotResult==='HOLD'?samples.filter(s=>sampleResult(s)!=='PENDING'):samples;
+    const units=toSend.map(s=>{
       const bd=evalBD(s);
       const r=sampleResult(s);
       const fails=[];
@@ -2291,9 +2519,12 @@ function bindEvents(){
 
     if(r.ok){
       clearDraft(activeLot);
-      toast(`${activeLot.lotNumber}: ${lotResult} | FG Pass: ${fgPassQty}`);
+      const done=activeLot;
+      toast(lotResult==='HOLD'?`${done.lotNumber} is on hold. Record the rework to reoffer it.`:`${done.lotNumber}: PASS | FG released: ${fgPassQty}`, lotResult==='HOLD'?'err':'ok');
       activeLot=null; activeSpec=null; samples=[]; expandedSample=null; lotUnits={};
-      await loadBatches(); render();
+      await loadBatches();
+      if(lotResult==='HOLD'){ view.batch=done.batchName; view.status='all'; view.q=''; selLot=done.batchName+'||'+done.lotNumber; const nl=batches.find(l=>l.batchName===done.batchName&&l.lotNumber===done.lotNumber); if(nl) loadLotUnits(nl); go('batches',()=>document.querySelector('.lot-detail')?.scrollIntoView({block:'center'})); }
+      else render();
     } else { saveDraft(); toast(r.error||'Save failed — draft kept locally','err'); }
   };
 }
