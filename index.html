@@ -658,6 +658,48 @@ tr.bx-sel td{background:var(--open-bg)}
   body.bx-printing .main{padding:0!important;width:100%!important;max-width:none!important}
   body.bx-printing .bx-rep{border:none;border-radius:0;padding:0;break-after:page}
 }
+
+/* ── Inspection bench polish ─────────────────────────── */
+.samp-head{position:sticky;top:86px;z-index:5}
+.samp-table{overflow:visible}
+.samp-table>.samp-head{border-radius:14px 14px 0 0}
+.samp-row{position:relative;transition:background .2s}
+.samp-row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent;transition:background .25s}
+.samp-row.is-pass::before{background:var(--lime)}
+.samp-row.is-fail::before{background:var(--color-danger-solid)}
+.samp-row:focus-within{background:color-mix(in srgb,var(--lime) 7%,var(--panel))}
+.samp-row.is-fail:focus-within{background:var(--fail-row)}
+.serial-box{position:relative}
+.serial-box .samp-serial-inp{padding-right:52px;font-variant-numeric:tabular-nums}
+.serial-count,.serial-lock{position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:11.5px;color:var(--ink-3);font-family:var(--code);pointer-events:none}
+.serial-count.full{color:var(--pass);font-weight:700}
+.mini-toggle{display:inline-flex;align-items:center;gap:6px;min-width:0;padding:0 11px;transition:background .15s,color .15s,border-color .15s,transform .12s var(--ease)}
+.mini-toggle:active{transform:scale(.95)}
+.mt-ic{font-size:12px;line-height:1;width:12px;text-align:center}
+.mini-toggle-pass .mt-ic{color:var(--pass)}
+.mini-toggle-fail{animation:failIn .22s var(--ease)}
+.samp-note-btn{height:36px;padding:0 11px;border-radius:7px;border:1px solid var(--line-strong);background:var(--panel);color:var(--ink-3);font-size:13px;font-weight:600;cursor:pointer}
+.samp-note-btn:hover{border-color:var(--ink);color:var(--ink)}
+.samp-note-btn.has-note{color:var(--ink);border-color:var(--ink);background:var(--sunk)}
+.samp-note-btn.has-note::after{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--lime-deep);margin-left:6px;vertical-align:middle}
+.samp-result-tag.tag-pop{animation:tagPop .38s var(--ease)}
+.samp-expand{animation:expandIn .2s var(--ease)}
+.insp-prog{display:grid;grid-template-columns:repeat(13,1fr);gap:3px;width:100%;order:-1}
+.insp-prog i{height:5px;border-radius:3px;background:var(--line);transition:background .3s}
+.insp-prog i.g-pass{background:var(--lime)}.insp-prog i.g-minor{background:var(--color-slot-minor)}.insp-prog i.g-major{background:var(--color-danger-solid)}
+.slot{height:44px;font-size:15px}
+.tray{grid-template-columns:repeat(var(--n,13),38px)}
+@keyframes tagPop{0%{transform:scale(.85)}55%{transform:scale(1.08)}100%{transform:none}}
+@keyframes failIn{0%{transform:scale(.92)}100%{transform:none}}
+@keyframes expandIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+/* ── Motion: page changes and toasts ─────────────────── */
+#app.pg-enter .main{animation:pgIn .26s var(--ease)}
+@keyframes pgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.toast{animation:toastIn .28s var(--ease);overflow:hidden}
+.toast::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:100%;background:currentColor;opacity:.25;transform-origin:left;animation:toastBar var(--t,3500ms) linear forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+@keyframes toastBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (max-width:900px){ .samp-head{position:static} }
 @media print{
   .hdr-right,.btn{display:none!important}
   body{background:#fff!important}
@@ -738,8 +780,10 @@ function draftKey(lot){
 /* Lot state used everywhere: pass, fail (old rule), hold, reoffer, open, closed */
 function lotState(l){ return l.result==='PASS'?'pass':l.result==='FAIL'?'fail':l.status==='Hold'?'hold':l.status==='Reoffered'?'reoffer':l.status==='Open'?'open':'closed'; }
 function inspectable(l){ return l.status==='Open'||l.status==='Reoffered'; }
+let draftSavedAt=null, prevResults={}, focusSerial=null;
 function saveDraft(){
   if(!activeLot) return;
+  draftSavedAt=new Date(); const ds=document.getElementById('draftAt'); if(ds) ds.textContent='Draft saved '+draftSavedAt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   // Stamp each sample with its completion time if not already stamped
   samples.forEach(s=>{
     if(!s.inspectedAt && sampleResult(s)!=='PENDING'){
@@ -782,10 +826,12 @@ function listDraftsForUser(){
 function toast(msg,type='ok'){
   clearTimeout(toastTimer);
   const el=document.getElementById('toast');
+  const ms=type==='err'?6000:3500;
   el.className=`toast toast-${type}`;
   el.textContent=msg;
-  el.style.display='block';
-  toastTimer=setTimeout(()=>{ el.style.display='none'; },3500);
+  el.style.setProperty('--t',ms+'ms');
+  el.style.display='block'; el.style.animation='none'; void el.offsetWidth; el.style.animation='';
+  toastTimer=setTimeout(()=>{ el.style.display='none'; },ms);
 }
 
 function saveSession(){ try{ if(user&&session) localStorage.setItem('oba_session',JSON.stringify({user,session})); else localStorage.removeItem('oba_session'); }catch(e){} }
@@ -931,6 +977,12 @@ function groupBatches(){
 // ═══════════════════════════════════════════════════════════
 // SERIAL VALIDATION
 // ═══════════════════════════════════════════════════════════
+/* the fixed start of every serial in this lot: model code + month (only when the lot has one production month) */
+function serialPrefix(lot){
+  const md=lot&&getModel(lot.model); if(!md) return '';
+  let pmc=String(lot.prodMonthCode||'').trim(); if(pmc.length===3) pmc='0'+pmc;
+  return md.code+(!lot.prodMonthCode2&&/^\d{4}$/.test(pmc)?pmc:'');
+}
 function validateSerial(serial,model,prodMonthCode,batchUsed,prodMonthCode2){
   const s=(serial||'').trim().toUpperCase();
   if(!/^\d{15}$/.test(s)) return 'Must be exactly 15 digits';
@@ -1112,10 +1164,17 @@ function routeFromHash(){
   page=p;
   bomTool=(p==='bom'&&parts[1]&&BOM_TOOLS.flatMap(g=>g.items).some(x=>x.k===parts[1]))?parts[1]:null;
 }
+/* page change: a short cross-fade where the browser supports it */
+function swapView(fn){
+  const reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  fn();   // rendered straight away, so code after go() sees the new page
+  const a=document.getElementById('app');
+  if(a&&!reduce){ a.classList.remove('pg-enter'); void a.offsetWidth; a.classList.add('pg-enter'); }
+}
 function go(route,after){
   const h='#/'+(route||'');
   if(location.hash!==h) history.pushState(null,'',h);
-  routeFromHash(); render(); window.scrollTo(0,0);
+  routeFromHash(); swapView(()=>{ render(); window.scrollTo(0,0); });
   if(page==='models'&&user&&!Object.keys(modelUsage).length&&!modelSuggestions.length) loadModelInsights();
   if(after) after();
 }
@@ -2602,6 +2661,7 @@ function buildInspection(){
   const holdReady=defective>0&&samples.every(s=>!s.serial||(!s.serialError&&sampleResult(s)!=='PENDING'));
   const firstBad=samples.findIndex(s=>sampleResult(s).startsWith('FAIL'));
   const round=lot.round||1;
+  if(prevResults._lot!==lot.batchName+'|'+lot.lotNumber+'|'+round) prevResults={_lot:lot.batchName+'|'+lot.lotNumber+'|'+round};
 
   const slots=samples.map((s,i)=>{const r=sampleResult(s);const c=r==='PASS'?'s-pass':r==='FAIL-MINOR'?'s-minor':r==='FAIL-MAJOR'?'s-major':'';const tl=r==='PASS'?'pass':r==='FAIL-MINOR'?'minor fail':r==='FAIL-MAJOR'?'major fail':'not inspected yet';return `<button class="slot ${c}" data-i="${i}" title="Sample ${i+1}: ${tl}" aria-label="Go to sample ${i+1}, ${tl}">${i+1}</button>`;}).join('');
   let html=`<div class="page">
@@ -2622,7 +2682,7 @@ function buildInspection(){
   <section class="bench fade">
     <div>
       <div class="bench-title">${esc(lot.lotNumber)}${round>1?` <span class="badge badge-open" style="vertical-align:middle">Reoffer, round ${round}</span>`:''}</div>
-      <div class="bench-sub">${esc(modelLabel(lot.model))} (serial code ${activeSpec?activeSpec.code:'?'}), production ${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' or '+mmyyDisp(lot.prodMonthCode2):''}<br>Lot of ${lot.lotSize} units, ${lot.sampleSize} samples. Black dot fails above ${activeSpec?activeSpec.maxD:'?'} mm.</div>
+      <div class="bench-sub">${esc(modelLabel(lot.model))} (serial code ${activeSpec?activeSpec.code:'?'}), production ${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' or '+mmyyDisp(lot.prodMonthCode2):''}<br>Lot of ${lot.lotSize} units, ${lot.sampleSize} samples. Black dot fails above ${activeSpec?activeSpec.maxD:'?'} mm.${serialPrefix(lot).length===8?`<br>Serials start with <b class="mono">${esc(serialPrefix(lot))}</b>: it is filled in for you, type the last 7 digits and press Enter.`:''}</div>
       <div class="verdict">
         <div><b>${filled}/${samples.length}</b>Inspected</div>
         <div><b class="${minor?'v-bad':''}">${minor}</b>Minor (0 allowed)</div>
@@ -2645,7 +2705,7 @@ function buildInspection(){
   <div class="samp-head" style="padding:10px 16px;display:flex;align-items:center;gap:12px;background:var(--sunk);border-bottom:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink-2)">
     <div style="width:30px;flex-shrink:0"></div>
     <div style="width:220px;flex-shrink:0">Serial number</div>
-    <div style="flex-shrink:0">Aesthetic, general, functional, screen, black dot <span style="font-weight:400;color:var(--ink-3)">(tap to mark fail)</span></div>
+    <div style="flex-shrink:0">Checkpoints <span style="font-weight:400;color:var(--ink-3)">all pass by default, click one to mark it failed</span></div>
     <div style="flex:1"></div>
     <div style="width:104px;text-align:center;flex-shrink:0">Result</div>
   </div>`;
@@ -2661,25 +2721,26 @@ function buildInspection(){
     const bdBtnCls=s.bdNoDot?'':(bd.ok?'bd-active-ok':'bd-active-fail');
     const bdBtnLabel=s.bdNoDot?'No dot':(s.bdVisible?(bd.incomplete?'Dot: finish':(bd.ok?'Dot OK':'Dot fail')):'Dot <2m view');
 
-    html+=`<div class="samp-row ${r.startsWith('FAIL')?'is-fail':''}" id="samp-row-${i}">
+    const changed=prevResults[i]!==undefined&&prevResults[i]!==r; prevResults[i]=r;
+    const ck=(f,l,kind)=>`<button class="mini-toggle ${s[f]?'mini-toggle-pass':'mini-toggle-fail'} sToggle" data-i="${i}" data-f="${f}" title="${l} (${kind}): click to mark ${s[f]?'failed':'passed'}" aria-pressed="${!s[f]}"><span class="mt-ic" aria-hidden="true">${s[f]?'✓':'✕'}</span>${l}</button>`;
+    html+=`<div class="samp-row ${r.startsWith('FAIL')?'is-fail':r==='PASS'?'is-pass':''}" id="samp-row-${i}">
       <div class="samp-num-badge">${i+1}</div>
 
       <div class="samp-serial-wrap">
-        <input class="samp-serial-inp sSerial ${s.serialError?'err-field':''} ${s.locked?'locked':''}" data-i="${i}" type="text" value="${esc(s.serial)}" ${s.locked?'readonly title="Picked for the reoffer"':''} placeholder="${activeSpec?activeSpec.code:'????'}${String(lot.prodMonthCode||'????').padStart(4,'0')}0000001">
+        <div class="serial-box"><input class="samp-serial-inp sSerial ${s.serialError?'err-field':''} ${s.locked?'locked':''}" data-i="${i}" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="${esc(s.serial)}" ${s.locked?'readonly title="Picked for the reoffer"':''} placeholder="Serial number" aria-label="Serial number of sample ${i+1}">
+          ${s.locked?'<span class="serial-lock" aria-hidden="true">🔒</span>':`<span class="serial-count" data-c="${i}" aria-hidden="true">${s.serial?s.serial.length+'/15':''}</span>`}</div>
         ${s.serialError?`<div class="err" style="margin-top:3px">${esc(s.serialError)}</div>`:''}
       </div>
 
       <div class="samp-toggles">
-        <button class="mini-toggle ${s.aestheticPass?'mini-toggle-pass':'mini-toggle-fail'} sToggle" data-i="${i}" data-f="aestheticPass" title="Aesthetic (Minor)">Aes</button>
-        <button class="mini-toggle ${s.generalPass?'mini-toggle-pass':'mini-toggle-fail'} sToggle" data-i="${i}" data-f="generalPass" title="General (Major)">Gen</button>
-        <button class="mini-toggle ${s.funcPass?'mini-toggle-pass':'mini-toggle-fail'} sToggle" data-i="${i}" data-f="funcPass" title="Functional (Major)">Func</button>
-        <button class="mini-toggle ${s.screenPass?'mini-toggle-pass':'mini-toggle-fail'} sToggle" data-i="${i}" data-f="screenPass" title="Screen (Major)">Scr</button>
-        <button class="samp-bd-toggle ${bdBtnCls} bdExpandBtn" data-i="${i}" title="Black Dot">${bdBtnLabel}</button>
+        ${ck('aestheticPass','Aesthetic','minor')}${ck('generalPass','General','major')}${ck('funcPass','Functional','major')}${ck('screenPass','Screen','major')}
+        <button class="samp-bd-toggle ${bdBtnCls} bdExpandBtn" data-i="${i}" title="Black dot: open the black dot check" aria-expanded="${isExpanded}">${bdBtnLabel}</button>
+        <button class="samp-note-btn bdExpandBtn ${s.remark?'has-note':''}" data-i="${i}" title="${s.remark?'Note: '+esc(s.remark):'Add a note to this sample'}" aria-label="Note for sample ${i+1}">Note</button>
       </div>
 
       <div class="samp-spacer"></div>
 
-      <span class="samp-result-tag" style="${rBg}">${rLbl}</span>
+      <span class="samp-result-tag ${changed?'tag-pop':''}" style="${rBg}">${rLbl}</span>
 
       ${isExpanded?`
       <div class="samp-expand">
@@ -2708,18 +2769,21 @@ function buildInspection(){
             <div class="bd-result ${bd.ok?'bd-ok':'bd-fail'}" ${bd.incomplete?'style="background:var(--minor-bg);border-color:var(--minor-line);color:var(--minor)"':''}>${bd.incomplete?'… INCOMPLETE':(bd.ok?'✓ OK':'✗ FAIL')}<br>${bd.reason}</div>
           </div>
         </div>`:`<div class="text-pass" style="font-size:13px;font-family:var(--num)">✓ No Black Dot — Acceptable</div>`}
-        <input class="samp-remark-inp sRemark" data-i="${i}" type="text" value="${esc(s.remark||'')}" placeholder="Optional remark or defect description">
+        <input class="samp-remark-inp sRemark" data-i="${i}" type="text" value="${esc(s.remark||'')}" placeholder="Note or defect description (optional)" aria-label="Note for sample ${i+1}">
       </div>`:''}
     </div>`;
   });
 
   html+=`</div>`;
 
+  const segs=samples.map(x=>{const q=sampleResult(x);return `<i class="${q==='PASS'?'g-pass':q==='FAIL-MINOR'?'g-minor':q==='FAIL-MAJOR'?'g-major':''}"></i>`;}).join('');
   html+=`<div class="insp-footer">
+    <div class="insp-prog" aria-hidden="true">${segs}</div>
     <div class="insp-tally">
       <div>Samples filled: <b class="${filled===samples.length?'t-ok':'t-warn'}">${filled}/${samples.length}</b></div>
       <div>Defective samples: <b class="${defective?'t-fail':'t-ok'}">${defective} / 0 allowed</b></div>
       <div>Lot verdict: <b class="${passed?'t-ok':'t-fail'}">${passed?'✓ PASS':'HOLD'}</b></div>
+      <div class="text-muted" id="draftAt">${draftSavedAt?'Draft saved '+draftSavedAt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):''}</div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <input id="lotRemarks" class="field" type="text" style="width:260px" value="${esc(lotRemarksVal)}" placeholder="General lot remarks (optional)">
@@ -3201,8 +3265,25 @@ function bindEvents(){
 
   // Sample serial input
   document.querySelectorAll('.sSerial').forEach(el=>{
+    const i0=parseInt(el.getAttribute('data-i')), pre=serialPrefix(activeLot);
+    el.onfocus=()=>{ if(!samples[i0].locked&&!el.value&&pre){ el.value=pre; el.dataset.pre='1'; } requestAnimationFrame(()=>{ try{ el.setSelectionRange(el.value.length,el.value.length); }catch(e){} }); };
+    el.onblur=()=>{ if(el.dataset.pre&&el.value===pre&&!samples[i0].serial){ el.value=''; delete el.dataset.pre; } };
+    el.oninput=()=>{
+      let v=el.value.replace(/\D/g,'');
+      // a full serial scanned or pasted after the filled-in start replaces it
+      if(v.length>15&&pre&&v.indexOf(pre)===0&&v.length-pre.length>=15) v=v.slice(pre.length,pre.length+15);
+      el.value=v.slice(0,15); const c=document.querySelector('.serial-count[data-c="'+i0+'"]'); if(c){ c.textContent=el.value.length?el.value.length+'/15':''; c.classList.toggle('full',el.value.length===15); } };
+    el.onkeydown=ev=>{
+      if(ev.key!=='Enter') return;
+      ev.preventDefault();
+      const nxt=samples.findIndex((x,j)=>j>i0&&!x.locked&&!x.serial);
+      focusSerial=nxt>-1?nxt:null;
+      if(el.value===pre&&!samples[i0].serial){ if(focusSerial!=null) document.querySelector('.sSerial[data-i="'+focusSerial+'"]')?.focus(); return; }
+      if(el.value.trim()!==samples[i0].serial) el.blur(); else if(focusSerial!=null){ document.querySelector('.sSerial[data-i="'+focusSerial+'"]')?.focus(); focusSerial=null; }
+    };
     el.onchange=async()=>{
       const i=parseInt(el.getAttribute('data-i'));
+      if(el.dataset.pre&&el.value===serialPrefix(activeLot)&&!samples[i].serial) return;
       if(samples[i].locked){ el.value=samples[i].serial; return; }
       samples[i].serial=el.value.trim().toUpperCase();
       const used=samples.filter((_,j)=>j!==i&&samples[j].serial).map(s=>s.serial.toUpperCase());
@@ -3216,6 +3297,8 @@ function bindEvents(){
       samples[i].serialError=err;
       saveDraft();
       render();
+      if(err){ focusSerial=null; const b=document.querySelector('.sSerial[data-i="'+i+'"]'); if(b){ b.focus(); b.select(); } }
+      else if(focusSerial!=null){ const n=document.querySelector('.sSerial[data-i="'+focusSerial+'"]'); focusSerial=null; if(n){ n.scrollIntoView({block:'nearest',behavior:'smooth'}); n.focus({preventScroll:true}); } }
     };
   });
 
@@ -3241,6 +3324,7 @@ function bindEvents(){
     };
   });
 
+  if(activeLot&&!window._escBound){ window._escBound=true; document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&activeLot&&expandedSample!=null){ expandedSample=null; render(); } }); }
   // Black Dot expand/collapse toggle
   document.querySelectorAll('.bdExpandBtn').forEach(btn=>{
     btn.onclick=()=>{
