@@ -900,7 +900,8 @@ function recordRework(d){
   } finally { lock.releaseLock(); }
 }
 
-/* Lot offered with fewer units than planned. The lot keeps only the offered units (13 samples, or all if fewer);
+/* Offered quantity of a lot (1 to 90), changeable any time before the lot is inspected.
+   Fewer units: the lot keeps only the offered units (13 samples, or all if fewer);
    the units not offered go back to the batch: every untouched open lot is recalculated into lots of 90 plus
    one remainder lot, and those lots are renumbered into the free lot numbers. Lots already inspected keep
    their numbers and data. */
@@ -916,30 +917,33 @@ function setOfferedQty(d){
     if(lotRow < 0) return {ok:false, error:"Lot not found. Refresh and try again."};
     var batch = String(v[lotRow][0]);
     var qty = parseInt(d.qty, 10), size = Number(v[lotRow][2]) || FIXED_LOT;
-    if(!(qty >= 1) || qty >= size) return {ok:false, error:"Offered quantity must be between 1 and " + (size - 1) + " (the lot has " + size + " units)."};
+    if(!(qty >= 1) || qty > FIXED_LOT) return {ok:false, error:"Offered quantity must be between 1 and " + FIXED_LOT + "."};
+    if(qty === size) return {ok:false, error:"The lot already has " + size + " units."};
 
     // which lots of this batch are untouched (never inspected, never reworked)
     var inspected = {};
     var m = getOrCreateSheet("Master",[]).getDataRange().getValues();
     for(var i = 1; i < m.length; i++) if(String(m[i][2]) === batch) inspected[String(m[i][3])] = true;
-    // lots whose offered quantity was already set keep their size and number
+    // other lots whose offered quantity was set keep their size and number when the batch is recalculated
+    var offered = {};
     var hs = getSpreadsheet().getSheetByName("LotHistory");
-    if(hs){ var hv = hs.getDataRange().getValues(); for(var j = 1; j < hv.length; j++) if(String(hv[j][1]) === batch && String(hv[j][4]) === "Offered") inspected[String(hv[j][2])] = true; }
+    if(hs){ var hv = hs.getDataRange().getValues(); for(var j = 1; j < hv.length; j++) if(String(hv[j][1]) === batch && String(hv[j][4]) === "Offered") offered[String(hv[j][2])] = true; }
     var untouched = function(r){
       return String(r[5]) === "Open" && String(r[8]||"") === "" && (Number(r[COL_ROUND-1]) || 1) === 1 &&
              String(r[COL_REOFFER-1]||"") === "" && !inspected[String(r[1])];
     };
-    if(!untouched(v[lotRow])) return {ok:false, error:"The offered quantity can only be set once, before the lot is inspected."};
+    if(!untouched(v[lotRow])) return {ok:false, error:"The offered quantity can only be changed before the lot is inspected."};
 
     var rows = [];   // sheet row numbers (1-based) of this batch
     for(var r = 1; r < v.length; r++) if(String(v[r][0]) === batch) rows.push(r);
     var fixedNums = {}, pool = [], poolQty = size - qty;
     rows.forEach(function(r){
       if(r === lotRow) { fixedNums[lotNum_(v[r][1])] = true; return; }
-      if(untouched(v[r])) { pool.push(r); poolQty += Number(v[r][2]) || 0; }
+      if(untouched(v[r]) && !offered[String(v[r][1])]) { pool.push(r); poolQty += Number(v[r][2]) || 0; }
       else fixedNums[lotNum_(v[r][1])] = true;
     });
 
+    if(poolQty < 0) return {ok:false, error:"Not enough units in the open lots of this batch to offer " + qty + " (only " + (qty + poolQty) + " available)."};
     // recalculate the untouched units into lots of 90 + remainder
     var sizes = [];
     for(var left = poolQty; left > 0; left -= FIXED_LOT) sizes.push(Math.min(FIXED_LOT, left));
@@ -969,10 +973,10 @@ function setOfferedQty(d){
     var v2 = bsh.getDataRange().getValues();
     for(var y = 1; y < v2.length; y++) if(String(v2[y][0]) === batch) bsh.getRange(y + 1, 11).setValue(total);
 
-    logLot_(batch, String(v[lotRow][1]), 1, "Offered", qty + " of " + size + " units offered (" + Math.min(FIXED_SAMPLE, qty) + " samples). " +
-            (size - qty) + " units moved back; open lots recalculated: " + sizes.length + " lot" + (sizes.length === 1 ? "" : "s") +
+    logLot_(batch, String(v[lotRow][1]), 1, "Offered", qty + " units offered, was " + size + " (" + Math.min(FIXED_SAMPLE, qty) + " samples). " +
+            (qty < size ? (size - qty) + " units moved back to" : (qty - size) + " units taken from") + " the open lots; recalculated: " + sizes.length + " lot" + (sizes.length === 1 ? "" : "s") +
             (sizes.length ? " (" + nums.map(function(x, i){ return "Lot " + x + ": " + sizes[i]; }).join(", ") + ")" : "") + ". Batch now has " + total + " lots.", d.inspector);
-    return {ok:true, qty:qty, samples:Math.min(FIXED_SAMPLE, qty), moved:size - qty, lots:nums.map(function(x, i){ return {lotNumber:lotName(x), size:sizes[i]}; }), totalLots:total};
+    return {ok:true, qty:qty, was:size, samples:Math.min(FIXED_SAMPLE, qty), moved:size - qty, lots:nums.map(function(x, i){ return {lotNumber:lotName(x), size:sizes[i]}; }), totalLots:total};
   } finally { lock.releaseLock(); }
 }
 

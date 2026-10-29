@@ -1504,15 +1504,15 @@ function buildLotDetail(lot,isAdmin){
       <div>Released<b>${lot.fgPassQty?esc(lot.fgPassQty)+' units':'—'}</b></div>
     </div>
     <div id="editArea${ri}" class="hidden" style="padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--line)"></div>`;
-  // offered quantity: set once, before the first inspection
-  const lc=lotUnits[key], offeredEv=lc&&lc.history?lc.history.find(e=>e.event==='Offered'):null;
-  const fresh=lot.status==='Open'&&!lot.result&&round===1&&!draft;
-  if(offeredEv) h+=`<div class="offer-note"><b>Offered quantity:</b> ${esc(offeredEv.details)}</div>`;
-  else if(fresh&&can('sampling')&&lc&&!lc.loading&&!(lc.units||[]).length) h+=`<div class="offer-box">
-      <div><b>Units offered</b><div class="text-muted" style="font-size:13px">If fewer than ${esc(lot.lotSize)} units are offered, enter the quantity. Sampling is done on the offered units only (${'13'} samples, or all if fewer). The units not offered go back to the batch and its open lots are recalculated and renumbered.</div></div>
-      <div class="offer-ctl"><input id="offQty${ri}" class="field mono" type="number" min="1" max="${esc(lot.lotSize-1)}" value="${esc(lot.lotSize)}" aria-label="Units offered for ${esc(lot.lotNumber)}">
-      <button class="btn btn-ghost btn-sm offQtyBtn" data-ri="${ri}">Set offered quantity</button></div>
+  // offered quantity: editable on every lot until it is inspected
+  const lc=lotUnits[key], offeredEvs=lc&&lc.history?lc.history.filter(e=>e.event==='Offered'):[];
+  const notInspected=lot.status==='Open'&&!lot.result&&round===1&&!draft&&lc&&!lc.loading&&!lc.error&&!(lc.units||[]).length;
+  if(notInspected&&can('sampling')) h+=`<div class="offer-box">
+      <div><b>Units offered</b><div class="text-muted" style="font-size:13px">Now ${esc(lot.lotSize)} units. Change it any time before inspection (1 to 90). Sampling is 13 samples, or all units if fewer. Fewer units go back to the open lots of the batch; more units are taken from them. Those lots are recalculated and renumbered.</div></div>
+      <div class="offer-ctl"><input id="offQty${ri}" class="field mono" type="number" min="1" max="90" value="${esc(lot.lotSize)}" aria-label="Units offered for ${esc(lot.lotNumber)}">
+      <button class="btn btn-ghost btn-sm offQtyBtn" data-ri="${ri}">Update</button></div>
       <div class="text-muted offer-prev" id="offPrev${ri}"></div></div>`;
+  if(offeredEvs.length) h+=`<div class="offer-note"><b>Offered quantity changes:</b>${offeredEvs.map(e=>`<div>${esc(fmtDate(e.time))}, ${esc(e.by)}: ${esc(e.details)}</div>`).join('')}</div>`;
   if(lot.status==='Hold') h+=`<div class="hold-note"><b>This lot is on hold.</b> A defective sample was found. Record the rework done on the lot: how many units were reworked, and each serial number against its inspection check point. The lot is then reoffered with 13 units picked for re-inspection, always including the defective ones.</div>`;
   if(lot.status==='Reoffered'){
     const rs=lot.reofferSerials||[], fresh=Math.max((lot.sampleSize||13)-rs.length,0);
@@ -2647,12 +2647,13 @@ function bindEvents(){
   // Offered quantity
   document.querySelectorAll('.offQtyBtn').forEach(b=>{
     const ri=b.getAttribute('data-ri'), lot=batches[parseInt(ri)], inp=document.getElementById('offQty'+ri), prev=document.getElementById('offPrev'+ri);
-    const show=()=>{ const q=parseInt(inp.value); prev.textContent=(q>=1&&q<lot.lotSize)?`${lot.lotNumber} becomes ${q} units with ${Math.min(13,q)} samples. ${lot.lotSize-q} units go back to the open lots of ${lot.batchName}, which are recalculated into lots of 90 and renumbered.`:''; };
+    const show=()=>{ const q=parseInt(inp.value); prev.textContent=(q>=1&&q<=90&&q!==lot.lotSize)?`${lot.lotNumber} becomes ${q} units with ${Math.min(13,q)} samples. ${q<lot.lotSize?`${lot.lotSize-q} units go back to`:`${q-lot.lotSize} units are taken from`} the open lots of ${lot.batchName}, which are recalculated into lots of 90 and renumbered.`:''; };
     inp.oninput=show;
     b.onclick=async()=>{
       const q=parseInt(inp.value);
-      if(!(q>=1&&q<lot.lotSize)){ toast(`Enter a quantity between 1 and ${lot.lotSize-1}`,'err'); return; }
-      if(!confirm(`${lot.lotNumber}: ${q} of ${lot.lotSize} units offered?\n\nSampling: ${Math.min(13,q)} samples. ${lot.lotSize-q} units go back to the open lots of this batch, which are recalculated and renumbered. This can be set only once.`)) return;
+      if(!(q>=1&&q<=90)){ toast('Enter a quantity between 1 and 90','err'); return; }
+      if(q===lot.lotSize){ toast(`${lot.lotNumber} already has ${q} units`,'err'); return; }
+      if(!confirm(`${lot.lotNumber}: change offered quantity from ${lot.lotSize} to ${q}?\n\nSampling: ${Math.min(13,q)} samples. ${q<lot.lotSize?`${lot.lotSize-q} units go back to`:`${q-lot.lotSize} units are taken from`} the open lots of this batch, which are recalculated and renumbered.`)) return;
       b.disabled=true;
       const r=await api('setOfferedQty',{batchName:lot.batchName,lotNumber:lot.lotNumber,qty:q});
       b.disabled=false;
