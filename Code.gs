@@ -3548,7 +3548,11 @@ function usageMap_(mh) {
 }
 /** Every part with its editable fields and the model BOMs that use it. */
 function listParts() {
-  const ctx = readMaster_(), f = partFields_(ctx), use = usageMap_(ctx.mh), rows = [];
+  let ctx = readMaster_();
+  // the Image column broke (#REF!) when the tabs moved into this spreadsheet: rewrite it once
+  const ic = ctx.mh.findIndex(h => norm_(h) === 'IMAGE');
+  if (ic >= 0 && ctx.mVals.some(r => String(r[ic]).indexOf('#REF') === 0)) { repairImages(); ctx = readMaster_(); }
+  const f = partFields_(ctx), use = usageMap_(ctx.mh), rows = [];
   ctx.mVals.forEach(r => {
     const p = String(r[COL_PART_NO - 1]).trim();
     if (p) rows.push({ partNo: p, v: f.map(x => txt_(r[x.i])), used: use[norm_(p)] || [] });
