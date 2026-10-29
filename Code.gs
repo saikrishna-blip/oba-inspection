@@ -8,9 +8,11 @@ var SS_ID        = "1WC6WGmwiqqytYobfoM9P4dP1RIptj5Rj17LSYtP_8tI";
 var FIXED_LOT    = 90;
 var FIXED_SAMPLE = 13;
 
-// BOM reference spreadsheet (Lumio_Part_Reference_DB): BOM tabs per model,
-// BOM_CONTROL, BOM_VERIFY_LOG, LOT_BOM_DETAIL
-var BOM_SS_ID    = "11BFVHMfnDGymLNYfBNLp9CRKIAE0X5fLX8qX-R8DeYk";
+// All data lives in ONE spreadsheet (SS_ID): inspection tabs and the BOM tabs (model BOMs, PART_MASTER,
+// BOM_CONTROL, ECN_HISTORY, BOM_VERIFY_LOG, LOT_BOM_DETAIL). The old Lumio_Part_Reference_DB is only read
+// until migrateBomIntoPortal() has copied its tabs in, and stays as a backup afterwards.
+var LEGACY_BOM_SS_ID = "11BFVHMfnDGymLNYfBNLp9CRKIAE0X5fLX8qX-R8DeYk";
+var BOM_TABS_SYSTEM  = ["PART_MASTER","BOM_CONTROL","ECN_HISTORY","BOM_VERIFY_LOG","LOT_BOM_DETAIL","LOT_BOM_VIEW","BOM_COMPARE","MODEL_COMPARE"];
 var TZ           = "Asia/Kolkata";
 
 // Part DB web app (BOM management tools, bound to the BOM sheet). Admins open it through the portal.
@@ -23,7 +25,10 @@ var SESSION_HOURS = 12;
 var MODULES        = ["bomverify","fai","sampling","reports","createbatch","models","data","bommgmt"];
 var DEFAULT_ACCESS = ["bomverify","fai","sampling"];
 // Actions any signed-in user may call (reading, own password)
-var ALWAYS_ACTIONS = ["logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai"];
+// Actions that only read; every other successful action clears the cache
+var READ_ACTIONS = ["login","logout","whoami","bootstrap","getBatches","getModels","modelInsights","getBomList","getBom","getBomVerification",
+                    "getLotUnits","checkSerial","getFaiSpec","getFai","listUsers","scanDuplicates","searchRecords"];
+var ALWAYS_ACTIONS = ["bootstrap","modelInsights","logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai"];
 // recordRework (rework data + reoffer) belongs to the sampling module
 // Actions unlocked by a module; everything not listed here or above is admin only
 var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify",
@@ -54,8 +59,10 @@ var LOT_STATUSES   = ["Open","Hold","Reoffered","Closed"];
 var CHECKPOINTS    = ["Aesthetic","General","Functional","Screen","Black dot"];
 var UNIT_STATUSES  = ["Reworked OK","Scrapped"];
 
+var SS_CACHE_ = null;
 function getSpreadsheet(){
-  return SpreadsheetApp.openById(SS_ID);
+  if(!SS_CACHE_) SS_CACHE_ = SpreadsheetApp.openById(SS_ID);
+  return SS_CACHE_;
 }
 
 function getOrCreateSheet(name, headers){
@@ -134,6 +141,12 @@ function doPost(e){
     }
     if(action === "whoami"){
       result = whoami(data._session);
+    }
+    if(action === "bootstrap"){
+      result = bootstrap(data);
+    }
+    if(action === "modelInsights"){
+      result = modelInsights();
     }
     if(action === "resetPassword"){
       result = resetPassword(data);
@@ -229,6 +242,8 @@ function doPost(e){
       result = setBatchStage(data);
     }
 
+    // any change clears the cached lists so the next read is fresh
+    if(READ_ACTIONS.indexOf(action) === -1 && result && result.ok) dropCache_();
     return ContentService
       .createTextOutput(JSON.stringify(result))
       .setMimeType(ContentService.MimeType.JSON);
@@ -347,6 +362,24 @@ function migratePasswords_(){
   } finally { lock.releaseLock(); }
 }
 
+/* ---------------- cache: batches, models and BOM list are read on every page load ---------------- */
+function cached_(key, secs, fresh, fn){
+  var cache = CacheService.getScriptCache();
+  if(!fresh){ var hit = cache.get(key); if(hit){ try { return JSON.parse(hit); } catch(e){} } }
+  var val = fn();
+  try { var j = JSON.stringify(val); if(val && val.ok && j.length < 95000) cache.put(key, j, secs); } catch(e){}
+  return val;
+}
+function dropCache_(){ CacheService.getScriptCache().removeAll(["c_batches","c_models","c_bomlist"]); }
+/* Everything the portal needs to start, in one request. fresh = skip the cache (Refresh button). */
+function bootstrap(d){
+  var fresh = !!d.fresh;
+  return {ok:true, me:whoami(d._session),
+          batches:cached_("c_batches", 600, fresh, getBatches),
+          models:cached_("c_models", 600, fresh, getModels),
+          bomList:cached_("c_bomlist", 300, fresh, getBomList)};
+}
+
 /* ---------------- request limits + input safety ---------------- */
 function rateOk_(key, max, windowSecs){
   var cache = CacheService.getScriptCache();
@@ -392,7 +425,7 @@ function moduleName_(m){
 function whoami(sess){
   var out = {ok:true, username:sess.username, name:sess.name, role:sess.role, access:sess.access || []};
   if(sess.role === "admin" || out.access.indexOf("bommgmt") > -1){
-    out.partdbUrl = PARTDB_URL; out.bomSheetUrl = "https://docs.google.com/spreadsheets/d/" + BOM_SS_ID + "/edit";
+    out.partdbUrl = PARTDB_URL; out.bomSheetUrl = "https://docs.google.com/spreadsheets/d/" + (bomMigrated_() ? SS_ID : LEGACY_BOM_SS_ID) + "/edit";
   }
   return out;
 }
@@ -725,11 +758,16 @@ function checkSerial(d){
   var sn = normSerial_(d.serial);
   if(!sn) return {ok:true, exists:false};
   var bn = String(d.batchName||""), ln = String(d.lotNumber||"");
-  var rows = getOrCreateSheet("Master",[]).getDataRange().getValues(), sameLot = false;
-  for(var i = 1; i < rows.length; i++){
-    if(normSerial_(rows[i][4]) !== sn) continue;
-    if(bn && String(rows[i][2]) === bn && String(rows[i][3]) === ln){ sameLot = true; continue; }
-    return {ok:true, exists:true, batch:rows[i][2], lot:rows[i][3]};
+  var master = getOrCreateSheet("Master",[]);
+  var last = master.getLastRow();
+  if(last < 2) return {ok:true, exists:false};
+  // search only the serial column for the exact value (much faster than reading the whole sheet)
+  var hits = master.getRange(2, 5, last - 1, 1).createTextFinder(sn).matchEntireCell(true).findAll();
+  var sameLot = false;
+  for(var i = 0; i < hits.length; i++){
+    var row = master.getRange(hits[i].getRow(), 3, 1, 2).getValues()[0];
+    if(bn && String(row[0]) === bn && String(row[1]) === ln){ sameLot = true; continue; }
+    return {ok:true, exists:true, batch:row[0], lot:row[1]};
   }
   return {ok:true, exists:false, sameLot:sameLot};
 }
@@ -1291,8 +1329,10 @@ function mostCommon_(counts){
   return best;
 }
 
+/* Models only (fast). Usage and suggestions come from modelInsights() on the Models page. */
+function getModels(){ return {ok:true, models:readModels_()}; }
 /* Models + what is already in Batches/Master (used to suggest models to add) */
-function getModels(){
+function modelInsights(){
   var models = readModels_();
   var known = {};
   models.forEach(function(m){ known[m.name.toLowerCase()] = true; });
@@ -1632,7 +1672,7 @@ function searchRecords(d){
 
 /****************************************************
  * BATCH FLOW: 1 BOM verification  ->  2 FAI (later)  ->  3 Sampling
- * BOM data lives in the BOM reference spreadsheet (BOM_SS_ID).
+ * BOM data lives in this spreadsheet (after migrateBomIntoPortal), see bomSS_().
  * Each verification is written to BOM_VERIFY_LOG + LOT_BOM_DETAIL there,
  * in the same format as earlier verifications.
  ****************************************************/
@@ -1645,7 +1685,32 @@ function ensureStageHeaders_(sheet){
   if(h2[0] === "") sheet.getRange(1, COL_ROUND).setValue("Round");
   if(h2[1] === "") sheet.getRange(1, COL_REOFFER).setValue("ReofferSerials");
 }
-function bomSS_(){ return SpreadsheetApp.openById(BOM_SS_ID); }
+var BOM_SS_CACHE_ = null;
+function bomMigrated_(){ return !!getSpreadsheet().getSheetByName("BOM_CONTROL"); }
+function bomSS_(){
+  if(!BOM_SS_CACHE_) BOM_SS_CACHE_ = bomMigrated_() ? getSpreadsheet() : SpreadsheetApp.openById(LEGACY_BOM_SS_ID);
+  return BOM_SS_CACHE_;
+}
+/* One-off: copies every tab of the old Lumio_Part_Reference_DB into this spreadsheet (same names).
+   Tabs that already exist here are left alone, so it is safe to run again. The old file is not changed.
+   Run it from the Apps Script editor (select migrateBomIntoPortal, Run). */
+function migrateBomIntoPortal(){
+  var src = SpreadsheetApp.openById(LEGACY_BOM_SS_ID), dst = getSpreadsheet(), done = [], skipped = [];
+  var tabs = src.getSheets();
+  tabs.sort(function(a, b){ return (a.getName() === "BOM_CONTROL") - (b.getName() === "BOM_CONTROL"); });
+  tabs.forEach(function(sh){
+    var name = sh.getName();
+    if(dst.getSheetByName(name)){ skipped.push(name); return; }
+    var c = sh.copyTo(dst);
+    c.setName(name);
+    done.push(name + " (" + Math.max(sh.getLastRow() - 1, 0) + " rows)");
+  });
+  // BOM_CONTROL is copied last: the portal switches to this spreadsheet only once every other tab is here
+  CacheService.getScriptCache().removeAll(["c_batches","c_models","c_bomlist"]);
+  var msg = "Copied: " + (done.join(", ") || "nothing") + ". Already here: " + (skipped.join(", ") || "none") + ".";
+  console.log(msg);
+  return msg;
+}
 function headerIndex_(row){
   var m = {};
   row.forEach(function(h, i){ m[String(h).trim().toLowerCase()] = i; });

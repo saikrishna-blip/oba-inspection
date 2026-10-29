@@ -802,12 +802,15 @@ function modelOptions(selected){
 }
 async function loadModels(){
   const r=await api('getModels');
-  if(r.ok){
-    models=(r.models||[]).map(normModel).filter(m=>m.name);
-    modelUsage=r.usage||{};
-    modelSuggestions=r.suggestions||[];
-  }
+  if(r.ok) models=(r.models||[]).map(normModel).filter(m=>m.name);
   else toast(r.error||'Could not load models','err');
+  if(page==='models') loadModelInsights();
+}
+let insightsLoading=false;
+async function loadModelInsights(){
+  if(insightsLoading) return; insightsLoading=true;
+  const r=await api('modelInsights'); insightsLoading=false;
+  if(r.ok){ modelUsage=r.usage||{}; modelSuggestions=r.suggestions||[]; if(page==='models'&&!activeLot&&!activeBom&&!activeRework&&!activeFai) render(); }
 }
 async function loadBomList(){
   const r=await api('getBomList');
@@ -822,7 +825,21 @@ async function loadMe(){
     if(!pageAllowed(page)){ page='home'; bomTool=null; history.replaceState(null,'','#/'); }
   }
 }
-async function loadAll(){ await Promise.all([loadMe(),loadBatches(),loadModels(),loadBomList()]); }
+/* Everything needed to start, in one request (the server keeps a short cache; fresh skips it) */
+async function loadAll(fresh){
+  const r=await api('bootstrap',fresh?{fresh:true}:{});
+  if(!r.ok){ if(!r.auth) toast(r.error||'Could not load data','err'); return; }
+  if(r.me&&r.me.ok&&user){
+    user={username:r.me.username,role:r.me.role,name:r.me.name,access:r.me.access||[]};
+    if(session){ session.partdbUrl=r.me.partdbUrl||''; session.bomSheetUrl=r.me.bomSheetUrl||''; }
+    saveSession();
+    if(!pageAllowed(page)){ page='home'; bomTool=null; history.replaceState(null,'','#/'); }
+  }
+  if(r.batches&&r.batches.ok) batches=r.batches.batches||[];
+  if(r.models&&r.models.ok) models=(r.models.models||[]).map(normModel).filter(m=>m.name);
+  bomModels=r.bomList&&r.bomList.ok?(r.bomList.models||[]):[];
+  if(page==='models') loadModelInsights();
+}
 function bomFor(modelName){ const m=getModel(modelName); return m&&m.lumioModel?bomModels.find(b=>b.model===m.lumioModel)||null:null; }
 function batchBom(batchName){ const l=batches.find(b=>b.batchName===batchName); return l?(l.bomStatus||''):''; }
 function samplingLocked(batchName){ const s=batchBom(batchName); return s==='Pending'||s==='Failed'; }
@@ -1050,6 +1067,7 @@ function go(route,after){
   const h='#/'+(route||'');
   if(location.hash!==h) history.pushState(null,'',h);
   routeFromHash(); render(); window.scrollTo(0,0);
+  if(page==='models'&&user&&!Object.keys(modelUsage).length&&!modelSuggestions.length) loadModelInsights();
   if(after) after();
 }
 window.addEventListener('popstate',()=>{ if(!user) return; routeFromHash(); render(); window.scrollTo(0,0); });
@@ -2368,7 +2386,7 @@ function bindEvents(){
 
   // Refresh
   ['btnRefresh','btnRefreshMenu'].forEach(id=>{ const br=document.getElementById(id);
-    if(br) br.onclick=async()=>{ lotUnits={}; await loadAll(); render(); toast('Refreshed'); }; });
+    if(br) br.onclick=async()=>{ lotUnits={}; await loadAll(true); render(); toast('Refreshed'); }; });
 
   // Create Batch
   const bcb=document.getElementById('btnCreateBatch');

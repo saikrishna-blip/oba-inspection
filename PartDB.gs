@@ -33,6 +33,20 @@ const MAKE_PUBLIC     = true; // set false if your domain blocks link sharing
 const PORTAL_SS_ID    = '1WC6WGmwiqqytYobfoM9P4dP1RIptj5Rj17LSYtP_8tI';
 // ======================================================
 
+/**
+ * Where the BOM data lives. Since the data was merged, it is the portal spreadsheet
+ * (it has BOM_CONTROL); before that, the spreadsheet this script is bound to.
+ */
+let DATA_SS_CACHE_ = null;
+function dataSS_() {
+  if (!DATA_SS_CACHE_) {
+    let p = null;
+    try { p = SpreadsheetApp.openById(PORTAL_SS_ID); } catch (e) {}
+    DATA_SS_CACHE_ = (p && p.getSheetByName('BOM_CONTROL')) ? p : SpreadsheetApp.getActiveSpreadsheet();
+  }
+  return DATA_SS_CACHE_;
+}
+
 /** Adds the custom menu when the spreadsheet opens. */
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -90,7 +104,7 @@ function onEdit(e) {
  * part numbers they belonged to.
  */
 function dedupePartMaster_() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  const sheet = dataSS_().getSheetByName(SHEET_NAME);
   if (!sheet) return { removed: 0, parts: [] };
   const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
@@ -190,7 +204,7 @@ function thumbUrl_(fileId) {
 
 /** Main routine: writes =IMAGE() formulas for every matched part number. */
 function linkPartImages() {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const ss    = dataSS_();
   const sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) throw new Error('Sheet "' + SHEET_NAME + '" not found.');
 
@@ -232,7 +246,7 @@ function linkPartImages() {
 
 /** Lists part numbers with no matching image file, in a side panel. */
 function reportMissingImages() {
-  const sheet   = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
+  const sheet   = dataSS_().getSheetByName(SHEET_NAME);
   const lastRow = sheet.getLastRow();
   const numRows = lastRow - HEADER_ROW;
   const partNos = sheet.getRange(HEADER_ROW + 1, COL_PART_NO, numRows, 1).getValues();
@@ -253,7 +267,7 @@ function reportMissingImages() {
 
 /** Wipes the image and URL columns (use before a full re-link). */
 function clearImageColumn() {
-  const sheet   = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
+  const sheet   = dataSS_().getSheetByName(SHEET_NAME);
   const numRows = sheet.getLastRow() - HEADER_ROW;
   if (numRows <= 0) return;
   sheet.getRange(HEADER_ROW + 1, COL_IMAGE,     numRows, 1).clearContent();
@@ -322,9 +336,16 @@ function isSystemSheet_(name) {
     .indexOf(name) >= 0;
 }
 
-/** Model sheets = every sheet that is not PART_MASTER or a system sheet. */
+/** Model sheets = every sheet that is not a system sheet and has a Part_No heading in row 1
+ *  (the spreadsheet also holds the portal's own tabs: Batches, Master, Users, ...). */
 function getModelSheets_() {
-  return SpreadsheetApp.getActiveSpreadsheet().getSheets().filter(s => !isSystemSheet_(s.getName()));
+  return dataSS_().getSheets().filter(s => {
+    const n = s.getName();
+    if (isSystemSheet_(n) || n === TWO_SHEET) return false;
+    if (s.getLastColumn() < 1) return false;
+    const h = s.getRange(HEADER_ROW, 1, 1, Math.min(s.getLastColumn(), 40)).getValues()[0];
+    return h.some(x => String(x).toLowerCase().replace(/[^a-z0-9]/g, '') === 'partno');
+  });
 }
 
 function headersOf_(sheet) {
@@ -342,7 +363,7 @@ function partColIn_(sheet, masterHeaders) {
 
 /** Creates a system sheet (plain-text columns, header row) if missing. */
 function sysSheet_(name, headers) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = dataSS_();
   let sh = ss.getSheetByName(name);
   if (sh) return sh;
   const prev = ss.getActiveSheet();
@@ -393,7 +414,7 @@ function migratedSheet_(name, wantHeaders) {
 // ---------------------------- BOM control (lock) ----------------------------
 /** { MODEL_UPPER : {row, model, status, rev, by, on, ecn} } - read only. */
 function controlMap_() {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONTROL_SHEET);
+  const sh = dataSS_().getSheetByName(CONTROL_SHEET);
   const map = {};
   if (!sh || sh.getLastRow() < 2) return map;
   sh.getRange(2, 1, sh.getLastRow() - 1, CONTROL_HDR.length).getValues().forEach((r, i) => {
@@ -431,7 +452,7 @@ function showControlDialog() {
 
 function getControlData() {
   const ctrl = controlMap_();
-  const mh = headersOf_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME));
+  const mh = headersOf_(dataSS_().getSheetByName(SHEET_NAME));
   return getModelSheets_().map(s => {
     const c = ctrl[norm_(s.getName())];
     return {
@@ -444,7 +465,7 @@ function getControlData() {
 
 function lockBom(model) {
   return withLock_(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = dataSS_();
     const sh = ss.getSheetByName(model);
     if (!sh || isSystemSheet_(model)) throw new Error('Model sheet not found: ' + model);
     const mh = headersOf_(ss.getSheetByName(SHEET_NAME));
@@ -466,7 +487,7 @@ function lockBom(model) {
 
 function unlockBom(model, reason) {
   return withLock_(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = dataSS_();
     const sh = ss.getSheetByName(model);
     if (!sh) throw new Error('Model sheet not found: ' + model);
     if (!String(reason || '').trim()) throw new Error('Enter a reason for unlocking.');
@@ -492,7 +513,7 @@ function findCol_(headers, re) {
 }
 
 function readMaster_() {
-  const master = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  const master = dataSS_().getSheetByName(SHEET_NAME);
   const mh = headersOf_(master);
   const last = master.getLastRow();
   let mVals = [], mForm = [];
@@ -786,7 +807,7 @@ function getTodayStr() {
  */
 function runEcnChange(payload) {
   return withLock_(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = dataSS_();
     const model = String(payload.model || '').trim();
     const reason = String(payload.reason || '').trim();
     const effectiveDate = String(payload.effectiveDate || '').trim();
@@ -1067,7 +1088,7 @@ function deleteEcn(ecnNo) {
 
     const model = txt_(vals[idxs[0]][2]);
     const ecnRev = Number(vals[idxs[0]][3]) || 0;
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(model);
+    const sheet = dataSS_().getSheetByName(model);
     if (!sheet || isSystemSheet_(model)) throw new Error('Model sheet not found: ' + model);
 
     const hasPartRows = idxs.some(i => String(vals[i][4]).trim());
@@ -1285,7 +1306,7 @@ function getBomRevisionCsv(model, rev) {
  */
 function restoreBomVersion(model, rev, reason) {
   return withLock_(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = dataSS_();
     const sheet = ss.getSheetByName(model);
     if (!sheet || isSystemSheet_(model)) throw new Error('Model sheet not found: ' + model);
     const r = String(reason || '').trim() || ('Restored to Rev ' + rev);
@@ -1476,7 +1497,7 @@ function showAssignSidebar() {
 
 /** Called by the sidebar: what part is selected and where is it used? */
 function getSelectedPart() {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const ss    = dataSS_();
   const sheet = ss.getActiveSheet();
   if (sheet.getName() !== SHEET_NAME)
     return { ok: false, msg: 'Go to ' + SHEET_NAME + ' and click a part row.' };
@@ -1500,7 +1521,7 @@ function getSelectedPart() {
 /** payload = { partNo, add:[{model,qps}], remove:[model], ecn:{no,desc} } */
 function assignPart(payload) {
   return withLock_(() => {
-    const ss  = SpreadsheetApp.getActiveSpreadsheet();
+    const ss  = dataSS_();
     const ctx = readMaster_();
     if (!(norm_(payload.partNo) in ctx.idx))
       throw new Error('Part ' + payload.partNo + ' not found in ' + SHEET_NAME);
@@ -1559,7 +1580,7 @@ function getBomData() {
 
 /** { parts:{ PART_UPPER: qps }, locked, rev } for one model sheet. */
 function getModelParts(name) {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const ss    = dataSS_();
   const sheet = ss.getSheetByName(name);
   const out   = {};
   const c     = getControl_(name);
@@ -1582,7 +1603,7 @@ function getModelParts(name) {
 /** payload = { model, newModel, items:[{partNo,qps}], remove:[partNo], ecn:{no,desc} } */
 function saveBom(payload) {
   return withLock_(() => {
-    const ss  = SpreadsheetApp.getActiveSpreadsheet();
+    const ss  = dataSS_();
     const ctx = readMaster_();
 
     let sheet, created = false;
@@ -1633,7 +1654,7 @@ function getVerifyModels() {
 
 /** Current BOM of a model: [{partNo, desc, img, qps}] + lock info. */
 function getVerifyBom(model) {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const ss    = dataSS_();
   const sheet = ss.getSheetByName(model);
   if (!sheet || isSystemSheet_(model)) throw new Error('Model sheet not found: ' + model);
   const ctx = readMaster_();
@@ -1667,7 +1688,7 @@ const LOT_HDR = ['Ver_ID', 'Model', 'Lot_No', 'BOM_Rev', 'Part_No', 'Description
  */
 function saveVerification(p) {
   return withLock_(() => {
-    const ss    = SpreadsheetApp.getActiveSpreadsheet();
+    const ss    = dataSS_();
     const model = String(p.model || '').trim();
     const lot   = String(p.lot || '').trim();
     if (!model || !ss.getSheetByName(model)) throw new Error('Choose a model.');
@@ -1767,7 +1788,7 @@ function exportLotBom(verId) {
   const info = findVerification_(verId);
   if (!info) throw new Error('Verification not found: ' + verId);
   const rows = getLotDetailRows_(verId);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = dataSS_();
   let sh = ss.getSheetByName(LOTVIEW_SHEET);
   if (!sh) sh = ss.insertSheet(LOTVIEW_SHEET);
   sh.clear();
@@ -1860,7 +1881,7 @@ const COMPARE_SHOW_IMAGE = true;   // true = add part thumbnail column (makes ro
 
 /** Rebuilds the BOM_COMPARE sheet from every model sheet. */
 function buildComparison() {
-  const ss     = SpreadsheetApp.getActiveSpreadsheet();
+  const ss     = dataSS_();
   const models = getModelSheets_();
   if (!models.length) throw new Error('No model sheets found.');
   const ctx = readMaster_();
@@ -2026,7 +2047,7 @@ function compareTwoModels(a, b) {
 /** Writes the comparison to the MODEL_COMPARE sheet. */
 function exportTwoCompare(a, b) {
   const r  = compareTwoModels(a, b);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = dataSS_();
   let sh = ss.getSheetByName(TWO_SHEET);
   if (!sh) sh = ss.insertSheet(TWO_SHEET);
   sh.clear();
@@ -5113,19 +5134,19 @@ function getPartUsage(partNo) {
 /** Rebuilds BOM_COMPARE and returns it for the web screen. */
 function webCompareAll() {
   buildComparison();
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(COMPARE_SHEET);
+  const sh = dataSS_().getSheetByName(COMPARE_SHEET);
   const v = sh.getDataRange().getValues();
   const summary = String(v[0][0] || '');
   const header = (v[2] || []).map(String);
   const keep = header.map((h, i) => h === 'Image' ? -1 : i).filter(i => i >= 0);
   const rows = v.slice(3).filter(r => String(r[0]).trim()).map(r => keep.map(i => txt_(r[i])));
-  return { summary: summary, header: keep.map(i => header[i]), rows: rows, sheetUrl: SpreadsheetApp.getActiveSpreadsheet().getUrl() + '#gid=' + sh.getSheetId() };
+  return { summary: summary, header: keep.map(i => header[i]), rows: rows, sheetUrl: dataSS_().getUrl() + '#gid=' + sh.getSheetId() };
 }
 
 function webLinkImages() { return linkPartImages(); }
 
 function webMissingImages() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
+  const sheet = dataSS_().getSheetByName(SHEET_NAME);
   const numRows = sheet.getLastRow() - HEADER_ROW;
   if (numRows <= 0) return { total: 0, missing: [] };
   const partNos = sheet.getRange(HEADER_ROW + 1, COL_PART_NO, numRows, 1).getValues();
@@ -5137,7 +5158,7 @@ function webMissingImages() {
 function webDedupe() { return withLock_(() => dedupePartMaster_()); }
 
 function webClearImages() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
+  const sheet = dataSS_().getSheetByName(SHEET_NAME);
   const numRows = Math.max(sheet.getLastRow() - HEADER_ROW, 0);
   clearImageColumn();
   return { cleared: numRows };
