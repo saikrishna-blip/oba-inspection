@@ -344,6 +344,43 @@ select.field{cursor:pointer;appearance:none;background-image:linear-gradient(45d
 .rw-probs{margin-top:12px;padding:10px 14px;border-radius:10px;background:var(--color-warn-bg);border:1px solid var(--color-warn-border);font-size:13.5px}
 @media (max-width:760px){ .rw-paste{grid-template-columns:1fr} }
 
+/* ── FAI ─────────────────────────────────────────────── */
+.fai-head{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0 12px}
+.fai-ro{min-height:42px;display:flex;align-items:center;font-weight:600;padding:0 2px}
+.fai-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}
+.fai-wrap{overflow-x:auto}
+.fai-table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:980px}
+.fai-table th,.fai-table td{border-bottom:1px solid var(--line);padding:8px 10px;vertical-align:middle;text-align:left}
+.fai-table thead th{background:var(--sunk);font-size:12.5px;color:var(--ink-2);position:sticky;top:0;z-index:1}
+.fai-table .fi{min-width:220px;max-width:320px}
+.fai-table .fi .text-muted{font-size:12px;line-height:1.35;margin-top:2px}
+.fai-table .fs{font-size:12.5px;color:var(--ink-2);min-width:120px}
+.fai-table .fc{min-width:120px;text-align:center}
+.fai-table .fc .field{padding:7px 8px;font-size:13px;width:100%;min-width:0}
+.fai-table .fr{min-width:160px}
+.fai-table .fr .field{padding:7px 8px;font-size:13px}
+.fai-table tr.fsec th{background:var(--paper);font-family:var(--font-display);font-size:19px;font-weight:400;padding-top:14px}
+.fai-table tr.fsec th .btn{float:right;font-family:var(--font-body,inherit)}
+.fai-table tr.fna td{color:var(--ink-3)}
+.fai-table tfoot th{background:var(--sunk)}
+.fxy{display:flex;gap:4px;margin-bottom:4px}
+.fbtn{min-width:64px;min-height:34px;border-radius:8px;border:1px solid var(--line-strong,var(--line));background:var(--panel);color:var(--ink-3);font:inherit;font-weight:700;font-size:12.5px;cursor:pointer}
+.fbtn.sm{min-width:44px;min-height:26px;font-size:11.5px}
+.fpf{display:flex;gap:4px;justify-content:center;margin-top:4px}
+.fbtn.on-p{background:var(--pass-bg);color:var(--pass);border-color:var(--pass-line)}
+.fbtn.on-f{background:var(--color-danger-solid);color:#fff;border-color:var(--color-danger-solid)}
+.fbtn:disabled{cursor:default}
+.fj{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:700}
+.fj-p{background:var(--pass-bg);color:var(--pass)}.fj-f{background:var(--color-danger-solid);color:#fff}.fj-na{background:var(--sunk);color:var(--ink-3)}.fj-e{background:var(--sunk);color:var(--ink-3)}
+.fai-final{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin:6px 0 14px}
+.fs-table .field{padding:7px 8px;font-size:13px;min-width:110px}
+.fs-table textarea.field,.card textarea.field{min-width:200px;font-family:inherit;resize:vertical}
+.fs-lim{display:flex;gap:6px;flex-wrap:wrap;align-items:center;max-width:420px}
+.fs-lim .field{width:84px;min-width:0}
+.fs-lim span{font-size:12px;color:var(--ink-3)}
+.fs-chk{font-size:12px;display:flex;gap:4px;align-items:center}
+.fs-table tr.fna td{background:var(--sunk)}
+
 /* ── Offered quantity ─────────────────────────────────── */
 .offer-box{margin:12px 18px;padding:12px 16px;border:1px dashed var(--line-strong,var(--line));border-radius:12px;background:var(--paper);display:grid;grid-template-columns:1fr auto;gap:10px 16px;align-items:center;font-size:14px}
 .offer-ctl{display:flex;gap:8px;align-items:center}
@@ -618,6 +655,8 @@ let bomModels = [];         // models in the BOM sheet (BOM_CONTROL)
 let activeBom = null;       // BOM verification in progress
 let activeRework = null;    // rework entry for a lot on hold
 let bulkFillOpen = false;   // sampling: bulk fill panel open
+let activeFai = null;       // FAI report being filled or edited
+let faiSpecEd = null;       // FAI specification editor state
 let bomResult = null;       // {batch, loading, data} verification result being viewed
 let session = null;         // {token, expiresAt, partdbUrl, bomSheetUrl}
 let page = 'home';          // home | batches | create | models | data | users | reports | bom (see PAGE_INFO)
@@ -709,7 +748,7 @@ function restoreSession(){
   }catch(e){}
   return false;
 }
-function resetApp(){ introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; activeRework=null; samples=[]; expandedSample=null; saveSession(); }
+function resetApp(){ introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; activeRework=null; activeFai=null; faiSpecEd=null; samples=[]; expandedSample=null; saveSession(); }
 let expiredShown=false;
 async function api(action,data={}){
   data.action=action;
@@ -928,6 +967,7 @@ function buildPage(){
   if(activeLot)     return buildInspection();
   if(activeBom)     return buildBomVerify();
   if(activeRework)  return buildRework();
+  if(activeFai)     return buildFai();
   if(page==='bom' && can('bommgmt')) return buildBomMgmt();
   return buildDashboard();
 }
@@ -975,6 +1015,7 @@ function buildLogin(){
 // ─── APP SHELL: HEADER, MENUS, PAGES ─────────────────────
 const MODULES=[
   {k:'bomverify',  t:'BOM verification',          d:'Verify a batch against its BOM'},
+  {k:'fai',        t:'FAI inspection',            d:'First article inspection, 5 samples per lot'},
   {k:'sampling',   t:'Sampling inspection',       d:'Inspect lots, 13 samples each'},
   {k:'reports',    t:'Reports',                   d:'CSV report and summary'},
   {k:'createbatch',t:'Create batches',            d:'Make new batches and lots'},
@@ -982,9 +1023,9 @@ const MODULES=[
   {k:'data',       t:'Data records',              d:'Duplicate check and record lookup'},
   {k:'bommgmt',    t:'BOM management',            d:'All Part DB tools: assign, compare, lock, ECN, images'}
 ];
-const PAGE_MODULE={create:'createbatch',models:'models',data:'data',reports:'reports',bom:'bommgmt'};
+const PAGE_MODULE={create:'createbatch',models:'models',faispec:'models',data:'data',reports:'reports',bom:'bommgmt'};
 function isAdminUser(){ return !!user&&user.role==='admin'; }
-function can(k){ if(isAdminUser()) return true; if(!user) return false; const a=Array.isArray(user.access)?user.access:['bomverify','sampling']; return a.includes(k); }
+function can(k){ if(isAdminUser()) return true; if(!user) return false; const a=Array.isArray(user.access)?user.access:['bomverify','fai','sampling']; return a.includes(k); }
 function pageAllowed(p){ if(p==='users') return isAdminUser(); const m=PAGE_MODULE[p]; return !m||can(m); }
 const PAGE_INFO={
   home:{t:'Overview'},
@@ -993,6 +1034,7 @@ const PAGE_INFO={
   models:{t:'Models and black dot spec',d:'Each model has its own serial code and black dot limits. Inspections use these values straight away.'},
   data:{t:'Data records',d:'Each serial number is recorded once. Check for older duplicates or look up any record.'},
   users:{t:'Users and access',d:'Choose which modules each person can use, set passwords, and add or remove people. Admins can use everything.'},
+  faispec:{t:'FAI specification',d:'Check items and limits of the FAI report for each model. Inspections are judged against these values; changes apply to new and edited reports.'},
   account:{t:'Change your password',d:'Use at least 8 characters. Other devices signed in to your account are signed out.'},
   reports:{t:'Reports',d:'Download every inspection record, or open the batch summary.'}
 };
@@ -1028,7 +1070,7 @@ function navHtml(){
       BOM_TOOLS.map(g=>`<div class="dd-label">${esc(g.group)}</div>`+g.items.map(x=>ddItem('bom/'+x.k,x.t,bomTool===x.k)).join('')).join('');
     h+=ddHtml('BOM',page==='bom',bomMenu,'dd-wide');
   }
-  const adm=[['create','Create a batch'],['models','Models and black dot spec'],['data','Data records'],['users','Users and access'],['reports','Reports']].filter(([r])=>pageAllowed(r));
+  const adm=[['create','Create a batch'],['models','Models and black dot spec'],['faispec','FAI specification'],['data','Data records'],['users','Users and access'],['reports','Reports']].filter(([r])=>pageAllowed(r));
   if(adm.length) h+=ddHtml(isAdmin?'Admin':'Manage',adm.some(([r])=>r===page),adm.map(([r,l])=>ddItem(r,l,page===r)).join(''));
   return `<nav class="topnav" aria-label="Sections">${h}</nav>`;
 }
@@ -1072,6 +1114,7 @@ function buildDashboard(){
   if(page==='data'&&can('data')) return shell(pageHead('data')+`<div class="rv" style="--i:1">${buildDataPanel()}</div>`);
   if(isAdmin&&page==='users') return shell(pageHead('users')+buildUsersCard());
   if(page==='account') return shell(pageHead('account')+buildAccountCard());
+  if(page==='faispec'&&can('models')) return shell(pageHead('faispec')+buildFaiSpecPage());
   if(page==='reports'&&can('reports')) return shell(pageHead('reports')+buildReportsCard());
   return shell(buildOverview(isAdmin));
 }
@@ -1347,11 +1390,14 @@ function buildFlow(g,isAdmin){
   if(isAdmin&&(s==='Pending'||s==='Failed')) act+=`<button class="btn btn-ghost btn-sm bomStageBtn" data-batch="${esc(g.name)}" data-st="Waived">Waive</button>`;
   if(isAdmin&&(s===''||s==='Waived')) act+=`<button class="btn btn-ghost btn-sm bomStageBtn" data-batch="${esc(g.name)}" data-st="Pending">Require BOM check</button>`;
   const locked=s==='Pending'||s==='Failed';
+  const faiDone=g.lots.filter(l=>l.faiStatus).length, faiFail=g.lots.filter(l=>l.faiStatus==='Fail').length;
+  const faiTxt=`${faiDone} of ${g.lots.length} lots done${faiFail?`, ${faiFail} failed`:''}. 5 samples per lot.`;
+  const faiCls=faiFail?'s-fail':faiDone&&faiDone===g.lots.length?'s-pass':faiDone?'s-wait':'s-na';
   const sampTxt=locked?'Locked until BOM verification passes':`${g.completed} of ${g.totalLots} lots inspected`;
   const sampCls=locked?'s-lock':(g.completed===g.totalLots&&g.totalLots?(g.failLots?'s-fail':'s-pass'):'s-wait');
   let h=`<div class="flow" aria-label="Batch inspection flow">
     <div class="step ${cls}"><div class="step-n">1</div><div><div class="step-t">BOM verification</div><div class="step-s">${txt}</div>${act?`<div class="step-a">${act}</div>`:''}</div></div>
-    <div class="step s-soon"><div class="step-n">2</div><div><div class="step-t">FAI inspection</div><div class="step-s">Coming soon. Not required yet.</div></div></div>
+    <div class="step ${faiCls}"><div class="step-n">2</div><div><div class="step-t">FAI inspection</div><div class="step-s">${faiTxt}</div></div></div>
     <div class="step ${sampCls}"><div class="step-n">3</div><div><div class="step-t">Sampling inspection</div><div class="step-s">${sampTxt}</div></div></div>
   </div>`;
   if(bomResult&&bomResult.batch===g.name) h+=buildBomResult();
@@ -1489,6 +1535,7 @@ function buildLotDetail(lot,isAdmin){
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${canInspect&&samplingLocked(lot.batchName)?`<span class="text-muted">Sampling starts after BOM verification passes</span>`:''}
         ${canInspect&&!samplingLocked(lot.batchName)?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume inspection':lot.status==='Reoffered'?`Inspect reoffer (round ${round})`:'Start inspection'}</button>`:''}
+        ${can('fai')?`<button class="btn ${lot.faiStatus?'btn-ghost':'btn-primary'} btn-sm faiBtn" data-ri="${ri}">${lot.faiStatus?'Edit FAI':'Start FAI'}</button>`:lot.faiStatus?`<button class="btn btn-ghost btn-sm faiBtn" data-ri="${ri}">View FAI</button>`:''}
         ${lot.status==='Hold'&&can('sampling')?`<button class="btn btn-primary btn-sm reworkBtn" data-ri="${ri}">Record rework and reoffer</button>`:''}
         ${isAdmin&&lot.result==='FAIL'?`<button class="btn btn-ghost btn-sm holdLotBtn" data-ri="${ri}">Move to hold for rework</button>`:''}
         ${isAdmin?`<button class="btn btn-ghost btn-sm editBtn" data-ri="${ri}">Edit lot</button><button class="btn btn-ghost btn-sm delLotBtn" data-ri="${ri}" style="color:var(--fail)">Delete lot</button>`:''}
@@ -1501,6 +1548,7 @@ function buildLotDetail(lot,isAdmin){
       <div>Model<b>${esc(modelLabel(lot.model))}</b></div>
       <div>Production<b>${mmyyDisp(lot.prodMonthCode)}${lot.prodMonthCode2?' / '+mmyyDisp(lot.prodMonthCode2):''}</b></div>
       <div>Inspection round<b>${round}${round>1?' (reoffer)':''}</b></div>
+      <div>FAI<b class="${lot.faiStatus==='Pass'?'text-pass':lot.faiStatus==='Fail'?'text-fail':''}">${lot.faiStatus?esc(lot.faiStatus):'Not done'}</b></div>
       <div>Released<b>${lot.fgPassQty?esc(lot.fgPassQty)+' units':'—'}</b></div>
     </div>
     <div id="editArea${ri}" class="hidden" style="padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--line)"></div>`;
@@ -1819,6 +1867,187 @@ function matchStatus(v){
   if(/^scrap|^reject/.test(x)) return 'Scrapped';
   if(/^rework|^ok|^pass|^done/.test(x)) return 'Reworked OK';
   return null;
+}
+
+// ─── FAI INSPECTION ──────────────────────────────────────
+const FAI_N=5;
+function faiJudge(it,val){
+  if(it.na) return 'N/A';
+  const has=x=>x!==''&&x!=null;
+  if(it.type==='check') return val==='Pass'||val==='Fail'?val:'';
+  if(it.type==='text'){ const t=String(val&&val.v!=null?val.v:'').trim(); if(!t) return ''; if(it.expected) return t.toLowerCase()===String(it.expected).trim().toLowerCase()?'Pass':'Fail'; return val&&(val.j==='Pass'||val.j==='Fail')?val.j:''; }
+  if(it.type==='number'){ const raw=val&&val.v!=null?String(val.v).trim():''; if(raw==='') return ''; const x=Number(raw); if(!isFinite(x)) return 'Fail';
+    if(has(it.nom)&&has(it.tol)) return Math.abs(x-Number(it.nom))<=Number(it.tol)+1e-9?'Pass':'Fail';
+    if(has(it.min)||has(it.max)) return (!has(it.min)||x>=Number(it.min))&&(!has(it.max)||x<=Number(it.max))?'Pass':'Fail';
+    return val&&(val.j==='Pass'||val.j==='Fail')?val.j:''; }
+  if(it.type==='xy'){ const xs=val&&val.x!=null?String(val.x).trim():'', ys=val&&val.y!=null?String(val.y).trim():''; if(xs===''||ys==='') return ''; const X=Number(xs),Y=Number(ys); if(!isFinite(X)||!isFinite(Y)) return 'Fail';
+    if(has(it.x)&&has(it.y)&&has(it.tol)) return Math.abs(X-Number(it.x))<=Number(it.tol)+1e-9&&Math.abs(Y-Number(it.y))<=Number(it.tol)+1e-9?'Pass':'Fail';
+    return val&&(val.j==='Pass'||val.j==='Fail')?val.j:''; }
+  return '';
+}
+function faiAuto(it){ const has=x=>x!==''&&x!=null; return it.type==='text'?!!it.expected:it.type==='number'?((has(it.nom)&&has(it.tol))||has(it.min)||has(it.max)):it.type==='xy'?(has(it.x)&&has(it.y)&&has(it.tol)):false; }
+function faiSpecText(it){
+  const has=x=>x!==''&&x!=null, u=it.unit?' '+it.unit:'';
+  if(it.na) return 'Not involved';
+  if(it.type==='text') return it.expected?`= ${it.expected}`:'Record value';
+  if(it.type==='number'){ if(has(it.nom)&&has(it.tol)) return `${it.nom} ± ${it.tol}${u}`; if(has(it.min)&&has(it.max)) return `${it.min} to ${it.max}${u}`; if(has(it.min)) return `≥ ${it.min}${u}`; if(has(it.max)) return `≤ ${it.max}${u}`; return 'No limit set'+(u?` (${u.trim()})`:''); }
+  if(it.type==='xy') return has(it.x)&&has(it.y)&&has(it.tol)?`x ${it.x}, y ${it.y} ± ${it.tol}`:'No limit set';
+  return 'Pass / Fail';
+}
+function faiDraftKey(lot){ return 'oba_fai_'+(user?user.username:'anon')+'_'+lot.batchName+'_'+lot.lotNumber; }
+function saveFaiDraft(){ if(!activeFai||activeFai.readOnly) return; try{ localStorage.setItem(faiDraftKey(activeFai.lot),JSON.stringify({rep:activeFai.rep,savedAt:new Date().toISOString(),base:activeFai.meta?activeFai.meta.revision:0})); }catch(e){} }
+async function openFai(lot){
+  const [sp,fr]=await Promise.all([api('getFaiSpec',{model:lot.model}),api('getFai',{batchName:lot.batchName,lotNumber:lot.lotNumber})]);
+  if(!sp.ok||!fr.ok){ toast((sp.error||fr.error)||'Could not load FAI','err'); return; }
+  const n=Math.min(FAI_N,Number(lot.lotSize)||FAI_N);
+  const readOnly=!can('fai');
+  let rep, meta=null;
+  if(fr.found){ meta=fr.report; rep=JSON.parse(JSON.stringify(fr.report.data||{})); }
+  else rep={header:{customer:sp.spec.customer||'Lumio',inspectionDate:new Date().toISOString().slice(0,10)},samples:[],remarks:{},others:'',defects:'',result:''};
+  rep.header=rep.header||{}; rep.remarks=rep.remarks||{};
+  rep.samples=Array.from({length:n},(_,i)=>(rep.samples||[])[i]||{serial:'',results:{}});
+  if(!readOnly){
+    let d=null; try{ d=JSON.parse(localStorage.getItem(faiDraftKey(lot))||'null'); }catch(e){}
+    if(d&&d.rep&&(d.base||0)===(meta?meta.revision:0)&&confirm(`An unsaved FAI draft for ${lot.lotNumber} exists (${new Date(d.savedAt).toLocaleString()}). Resume it? Cancel starts from the ${meta?'saved report':'blank form'}.`)) rep=d.rep;
+  }
+  activeFai={lot,spec:sp.spec,specSaved:sp.saved,rep,meta,readOnly,saving:false,n};
+  render(); window.scrollTo(0,0);
+}
+function faiTally(){
+  const a=activeFai, items=a.spec.items;
+  let pending=0; const bad=new Set();
+  a.rep.samples.forEach((smp,si)=>items.forEach(it=>{ const j=faiJudge(it,smp.results[it.id]); if(j==='') pending++; if(j==='Fail') bad.add(si); }));
+  const noSerial=a.rep.samples.filter(x=>!String(x.serial||'').trim()).length;
+  return {pending,defective:bad.size,noSerial};
+}
+function buildFai(){
+  const a=activeFai, lot=a.lot, ro=a.readOnly, items=a.spec.items, R=a.rep, t=faiTally();
+  const dis=ro?'disabled':'';
+  const chip=j=>`<span class="fj ${j==='Pass'?'fj-p':j==='Fail'?'fj-f':j==='N/A'?'fj-na':'fj-e'}">${j||'—'}</span>`;
+  const sections=[]; items.forEach(it=>{ if(!sections.includes(it.section)) sections.push(it.section); });
+  const cell=(it,si)=>{
+    const v=R.samples[si].results[it.id], j=faiJudge(it,v);
+    if(it.na) return `<td class="fc">${chip('N/A')}</td>`;
+    if(it.type==='check') return `<td class="fc"><button class="fbtn ${j==='Pass'?'on-p':j==='Fail'?'on-f':''} faiChk" data-id="${esc(it.id)}" data-s="${si}" ${dis} aria-label="${esc(it.name)}, sample ${si+1}: ${j||'not checked'}">${j==='Pass'?'Pass':j==='Fail'?'Fail':'—'}</button></td>`;
+    const man=faiAuto(it)?'':ro?chip(j):`<div class="fpf"><button class="fbtn sm ${j==='Pass'?'on-p':''} faiJ" data-id="${esc(it.id)}" data-s="${si}" data-v="Pass" aria-label="Pass">Pass</button><button class="fbtn sm ${j==='Fail'?'on-f':''} faiJ" data-id="${esc(it.id)}" data-s="${si}" data-v="Fail" aria-label="Fail">Fail</button></div>`;
+    if(it.type==='xy') return `<td class="fc"><div class="fxy"><input class="field mono faiV" data-id="${esc(it.id)}" data-s="${si}" data-k="x" value="${esc(v&&v.x||'')}" placeholder="x" inputmode="decimal" ${dis}><input class="field mono faiV" data-id="${esc(it.id)}" data-s="${si}" data-k="y" value="${esc(v&&v.y||'')}" placeholder="y" inputmode="decimal" ${dis}></div>${faiAuto(it)?chip(j):man}</td>`;
+    return `<td class="fc"><input class="field mono faiV" data-id="${esc(it.id)}" data-s="${si}" data-k="v" value="${esc(v&&v.v||'')}" ${it.type==='number'?'inputmode="decimal"':''} placeholder="${it.type==='number'?esc(it.unit||'value'):'value'}" ${dis}>${faiAuto(it)?chip(j):man}</td>`;
+  };
+  const rows=sections.map(sec=>`<tr class="fsec"><th colspan="${a.n+3}">${esc(sec)}${ro?'':`<button class="btn btn-ghost btn-sm faiSecPass" data-sec="${esc(sec)}">All checks in section pass</button>`}</th></tr>`+
+    items.filter(it=>it.section===sec).map(it=>`<tr class="${it.na?'fna':''}">
+      <td class="fi"><b>${esc(it.name)}</b>${it.calcPending?' <span class="badge badge-open">Calculation inputs coming</span>':''}${it.content?`<div class="text-muted">${esc(it.content)}</div>`:''}</td>
+      <td class="fs mono">${esc(faiSpecText(it))}</td>
+      ${R.samples.map((_,si)=>cell(it,si)).join('')}
+      <td class="fr"><input class="field faiRem" data-id="${esc(it.id)}" value="${esc(R.remarks[it.id]||'')}" placeholder="Remark" maxlength="300" ${dis}></td></tr>`).join('')).join('');
+  const sug=t.defective?'Fail':'Pass';
+  const H=R.header;
+  return `<div class="page">
+  <header class="hdr">
+    <div class="hdr-left"><div class="logo"><img src="${LOGO_SRC}" alt="Lumio"></div>
+      <div><div class="hdr-title">FAI inspection</div><div class="hdr-sub">${esc(lot.lotNumber)}</div></div></div>
+    <div class="hdr-right"><span class="text-muted">${esc(user.name)}</span>${themeToggleHtml()}<button id="btnFaiBack" class="btn btn-ghost btn-sm">← Back to batches</button></div>
+  </header>
+  <div class="main">
+    <section class="bench fade" style="grid-template-columns:1fr">
+      <div>
+        <div class="bench-title">${esc(lot.lotNumber)} ${a.meta?`<span class="badge ${a.meta.result==='Pass'?'badge-pass':a.meta.result==='Fail'?'badge-fail':'badge-hold'}" style="vertical-align:middle">${esc(a.meta.result)}, revision ${esc(a.meta.revision)}</span>`:''}</div>
+        <div class="bench-sub">Projection unit finished product inspection (FAI), ${a.n} samples. Model ${esc(modelLabel(lot.model))}, lot of ${esc(lot.lotSize)} units.
+          ${a.specSaved?'':`<br><b>No FAI specification saved for this model yet</b>: measured values are judged by hand.${can('models')?' Set limits under Manage, FAI specification.':''}`}
+          ${a.meta?`<br>Saved by ${esc(a.meta.createdBy)} ${esc(fmtDate(a.meta.createdAt))}${a.meta.revision>1?`, last edited by ${esc(a.meta.updatedBy)} ${esc(fmtDate(a.meta.updatedAt))}`:''}.`:''}</div>
+        <div class="verdict">
+          <div><b>${a.n-t.noSerial}/${a.n}</b>Serials</div>
+          <div><b class="${t.pending?'v-warn':''}">${t.pending}</b>Checks to fill</div>
+          <div><b class="${t.defective?'v-bad':''}">${t.defective}</b>Defective samples</div>
+          <div><b class="${t.defective?'v-bad':'v-ok'}">${t.pending?'Open':sug}</b>Suggested</div>
+        </div>
+      </div>
+    </section>
+    <div class="card">
+      <div class="card-sub">Report details</div>
+      <div class="fai-head">
+        <div class="fg"><label class="lbl" for="fhSO">Sales order</label><input id="fhSO" class="field faiH" data-k="salesOrder" value="${esc(H.salesOrder||'')}" placeholder="N/A" ${dis}></div>
+        <div class="fg"><label class="lbl" for="fhCu">Customer</label><input id="fhCu" class="field faiH" data-k="customer" value="${esc(H.customer||'')}" ${dis}></div>
+        <div class="fg"><span class="lbl">Model</span><div class="fai-ro">${esc(modelLabel(lot.model))}</div></div>
+        <div class="fg"><span class="lbl">Order quantity</span><div class="fai-ro">${esc(lot.lotSize)}</div></div>
+        <div class="fg"><span class="lbl">Sampling quantity</span><div class="fai-ro">${a.n}</div></div>
+        <div class="fg"><span class="lbl">Defective quantity</span><div class="fai-ro ${t.defective?'text-fail':''}">${t.defective}</div></div>
+        <div class="fg"><span class="lbl">Inspector</span><div class="fai-ro">${esc(a.meta?a.meta.inspector:user.name)}</div></div>
+        <div class="fg"><label class="lbl" for="fhRv">Review</label><input id="fhRv" class="field faiH" data-k="reviewer" value="${esc(H.reviewer||'')}" ${dis}></div>
+        <div class="fg"><label class="lbl" for="fhDt">Inspection date</label><input id="fhDt" type="date" class="field faiH" data-k="inspectionDate" value="${esc(H.inspectionDate||'')}" ${dis}></div>
+        <div class="fg"><label class="lbl" for="fhF">First serial of lot</label><input id="fhF" class="field mono faiH" data-k="firstSerial" value="${esc(H.firstSerial||'')}" ${dis}></div>
+        <div class="fg"><label class="lbl" for="fhL">Last serial of lot</label><input id="fhL" class="field mono faiH" data-k="lastSerial" value="${esc(H.lastSerial||'')}" ${dis}></div>
+      </div>
+      <div class="text-muted" style="font-size:12.5px">According to General Inspection Level II of GB2828.1-2012, normal single sampling plan. CR = 0, MA = 1.0, MI = 1.5.</div>
+    </div>
+    <div class="card" style="padding:0">
+      ${ro?'':`<div class="fai-tools"><button id="btnFaiAllPass" class="btn btn-ghost btn-sm">Mark every check as Pass</button><span class="text-muted" style="font-size:12.5px">Then change only what failed. Click a check to switch Pass / Fail.</span></div>`}
+      <div class="fai-wrap"><table class="fai-table">
+        <thead><tr><th class="fi">Inspection item</th><th class="fs">Specification</th>${R.samples.map((x,si)=>`<th class="fc">Sample ${si+1}</th>`).join('')}<th class="fr">Remarks (data)</th></tr>
+        <tr class="fsn"><th class="fi">Serial number</th><th class="fs"></th>${R.samples.map((x,si)=>`<th class="fc"><input class="field mono faiSn" data-s="${si}" value="${esc(x.serial||'')}" placeholder="Serial ${si+1}" ${dis}></th>`).join('')}<th class="fr"></th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><th class="fi">Sample result</th><th class="fs"></th>${R.samples.map((smp,si)=>{ const js=items.map(it=>faiJudge(it,smp.results[it.id])); const r=js.includes('Fail')?'Fail':js.includes('')?'':'Pass'; return `<th class="fc">${chip(r)}</th>`; }).join('')}<th class="fr"></th></tr></tfoot>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="form-2">
+        <div class="fg"><label class="lbl" for="faiOthers">Others (if any)</label><textarea id="faiOthers" class="field" rows="2" maxlength="1000" placeholder="No issue" ${dis}>${esc(R.others||'')}</textarea></div>
+        <div class="fg"><label class="lbl" for="faiDefects">Defect phenomena (if any)</label><textarea id="faiDefects" class="field" rows="2" maxlength="1000" placeholder="No issue" ${dis}>${esc(R.defects||'')}</textarea></div>
+      </div>
+      <div class="fai-final">
+        <div class="fg"><span class="lbl">Final determination</span><div class="seg" role="group" aria-label="Final determination">${['Pass','Fail','Special procurement'].map(x=>`<button class="seg-btn faiRes ${R.result===x?'on':''}" data-r="${x}" ${dis} aria-pressed="${R.result===x}">${x}</button>`).join('')}</div>
+          <div class="text-muted" style="font-size:12.5px;margin-top:4px">Suggested: <b>${t.pending?'finish all checks':sug}</b>. Special procurement needs customer approval.</div></div>
+        ${R.result==='Special procurement'?`<div class="fg"><label class="lbl" for="fhAp">Customer approval reference</label><input id="fhAp" class="field faiH" data-k="approval" value="${esc(H.approval||'')}" placeholder="e.g. approval mail, date" ${dis}></div>`:''}
+      </div>
+      ${ro?'<div class="text-muted">You can view this report. Editing needs the FAI inspection module.</div>':`<button id="btnFaiSave" class="btn btn-primary" ${a.saving?'disabled':''}>${a.saving?'Saving…':a.meta?`Save changes (revision ${a.meta.revision+1})`:'Save FAI report'}</button>
+      <span class="text-muted" style="font-size:12.5px;margin-left:8px">Saved to the FAI and FAI_Detail sheets. You can reopen and edit it at any time; each save adds a revision.</span>`}
+    </div>
+  </div>
+  <footer class="pg-footer">LUMIO Quality Management - Projector</footer>
+  </div>`;
+}
+
+// ─── FAI SPECIFICATION EDITOR ───────────────────────────
+const FAI_TYPE_LBL={check:'Pass / Fail',text:'Text value',number:'Number',xy:'x, y coordinates'};
+async function loadFaiSpecEd(model){
+  faiSpecEd={model,loading:true}; render();
+  const r=await api('getFaiSpec',{model});
+  faiSpecEd=r.ok?{model,spec:r.spec,saved:r.saved,updatedBy:r.updatedBy,updatedAt:r.updatedAt,dirty:false}:{model,error:r.error||'Could not load'};
+  render();
+}
+function buildFaiSpecPage(){
+  const e=faiSpecEd;
+  if(!models.length) return `<div class="card">Add a model first under Models and black dot spec.</div>`;
+  const sel=`<div class="fg" style="max-width:360px"><label class="lbl" for="fsModel">Model</label><select id="fsModel" class="field"><option value="">Choose a model…</option>${models.map(m=>`<option value="${esc(m.name)}" ${e&&e.model===m.name?'selected':''}>${esc(m.lumioModel?m.lumioModel+' ('+m.name+')':m.name)}</option>`).join('')}</select></div>`;
+  if(!e) return `<div class="card rv" style="--i:1">${sel}</div>`;
+  if(e.loading) return `<div class="card">${sel}<div class="text-muted">Loading…</div></div>`;
+  if(e.error) return `<div class="card">${sel}<div class="err">${esc(e.error)}</div></div>`;
+  const sp=e.spec, secs=[...new Set(sp.items.map(it=>it.section))];
+  const num=(i,k,ph)=>`<input class="field mono fsF" data-i="${i}" data-k="${k}" value="${esc(sp.items[i][k]==null?'':sp.items[i][k])}" placeholder="${ph}" inputmode="decimal">`;
+  const lim=(it,i)=>it.type==='text'?`<input class="field fsF" data-i="${i}" data-k="expected" value="${esc(it.expected||'')}" placeholder="Expected value (blank = judge by hand)">`
+    :it.type==='number'?`<div class="fs-lim">${num(i,'nom','Nominal')}${num(i,'tol','± Tol')}<span>or</span>${num(i,'min','Min')}${num(i,'max','Max')}<input class="field fsF" data-i="${i}" data-k="unit" value="${esc(it.unit||'')}" placeholder="Unit"><label class="fs-chk"><input type="checkbox" class="fsF" data-i="${i}" data-k="calcPending" ${it.calcPending?'checked':''}> Calculation inputs coming</label></div>`
+    :it.type==='xy'?`<div class="fs-lim">${num(i,'x','x')}${num(i,'y','y')}${num(i,'tol','± Tol')}</div>`:'<span class="text-muted">Pass / Fail per sample</span>';
+  return `<div class="card rv" style="--i:1">
+    <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">${sel}
+      <div class="fg"><label class="lbl" for="fsCust">Customer on report</label><input id="fsCust" class="field" value="${esc(sp.customer||'')}"></div></div>
+    <div class="text-muted" style="font-size:13px;margin-bottom:10px">${e.saved?`Saved by ${esc(e.updatedBy)}, ${esc(fmtDate(e.updatedAt))}.`:'Not saved yet: this is the standard template from the report format.'} Numbers: give a nominal with tolerance, or a min and/or max. Blank limits mean the inspector judges by hand.</div>
+    <datalist id="fsSecs">${secs.map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+    <div class="fai-wrap"><table class="res-table fs-table"><thead><tr><th>#</th><th>Section</th><th>Item</th><th>Inspection content</th><th>Type</th><th>Limits</th><th>N/A</th><th></th></tr></thead><tbody>
+      ${sp.items.map((it,i)=>`<tr class="${it.na?'fna':''}"><td>${i+1}</td>
+        <td><input class="field fsF" data-i="${i}" data-k="section" value="${esc(it.section)}" list="fsSecs"></td>
+        <td><input class="field fsF" data-i="${i}" data-k="name" value="${esc(it.name)}"></td>
+        <td><textarea class="field fsF" data-i="${i}" data-k="content" rows="2">${esc(it.content||'')}</textarea></td>
+        <td><select class="field fsF" data-i="${i}" data-k="type">${Object.keys(FAI_TYPE_LBL).map(k=>`<option value="${k}" ${it.type===k?'selected':''}>${FAI_TYPE_LBL[k]}</option>`).join('')}</select></td>
+        <td>${lim(it,i)}</td>
+        <td><input type="checkbox" class="fsF" data-i="${i}" data-k="na" ${it.na?'checked':''} aria-label="Not involved"></td>
+        <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm fsMv" data-i="${i}" data-d="-1" aria-label="Move up">↑</button><button class="btn btn-ghost btn-sm fsMv" data-i="${i}" data-d="1" aria-label="Move down">↓</button><button class="btn btn-ghost btn-sm fsDel" data-i="${i}" aria-label="Remove item" style="color:var(--fail)">✕</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button id="btnFsAdd" class="btn btn-ghost">Add item</button>
+      <button id="btnFsDefault" class="btn btn-ghost">Reset to standard template</button>
+      <span style="flex:1"></span>
+      <button id="btnFsSave" class="btn btn-primary">${e.dirty?'Save specification':'Save specification'}</button>
+    </div>
+  </div>`;
 }
 
 // ─── REWORK (lot on hold) ─────────────────────────────────
@@ -2664,6 +2893,63 @@ function bindEvents(){
       render();
     };
   });
+
+  // FAI
+  document.querySelectorAll('.faiBtn').forEach(b=>{ b.onclick=()=>{ const lot=batches[parseInt(b.getAttribute('data-ri'))]; if(lot) openFai(lot); }; });
+  if(activeFai){
+    const a=activeFai, rr=()=>{ saveFaiDraft(); render(); };
+    const res=(si,id)=>a.rep.samples[si].results;
+    const back=document.getElementById('btnFaiBack'); if(back) back.onclick=()=>{ saveFaiDraft(); activeFai=null; render(); };
+    document.querySelectorAll('.faiChk').forEach(b=>{ b.onclick=()=>{ const r=res(+b.dataset.s), id=b.dataset.id; r[id]=r[id]==='Pass'?'Fail':'Pass'; rr(); }; });
+    document.querySelectorAll('.faiJ').forEach(b=>{ b.onclick=()=>{ const r=res(+b.dataset.s), id=b.dataset.id; r[id]=r[id]||{}; r[id].j=b.dataset.v; rr(); }; });
+    document.querySelectorAll('.faiV').forEach(el=>{ el.onchange=()=>{ const r=res(+el.dataset.s), id=el.dataset.id; r[id]=r[id]||{}; r[id][el.dataset.k]=el.value.trim(); rr(); }; });
+    document.querySelectorAll('.faiSn').forEach(el=>{ el.onchange=()=>{ a.rep.samples[+el.dataset.s].serial=el.value.trim().toUpperCase(); rr(); }; });
+    document.querySelectorAll('.faiRem').forEach(el=>{ el.oninput=()=>{ a.rep.remarks[el.dataset.id]=el.value; saveFaiDraft(); }; });
+    document.querySelectorAll('.faiH').forEach(el=>{ el.onchange=()=>{ a.rep.header[el.dataset.k]=el.value; rr(); }; });
+    const o1=document.getElementById('faiOthers'); if(o1) o1.oninput=()=>{ a.rep.others=o1.value; saveFaiDraft(); };
+    const o2=document.getElementById('faiDefects'); if(o2) o2.oninput=()=>{ a.rep.defects=o2.value; saveFaiDraft(); };
+    document.querySelectorAll('.faiRes').forEach(b=>{ b.onclick=()=>{ a.rep.result=b.dataset.r; rr(); }; });
+    const setPass=filter=>{ a.spec.items.filter(it=>it.type==='check'&&!it.na&&filter(it)).forEach(it=>a.rep.samples.forEach(smp=>{ smp.results[it.id]='Pass'; })); rr(); };
+    const ap=document.getElementById('btnFaiAllPass'); if(ap) ap.onclick=()=>setPass(()=>true);
+    document.querySelectorAll('.faiSecPass').forEach(b=>{ b.onclick=()=>setPass(it=>it.section===b.dataset.sec); });
+    const sv=document.getElementById('btnFaiSave'); if(sv) sv.onclick=async()=>{
+      const t=faiTally();
+      if(t.noSerial){ toast(`Enter the serial number of all ${a.n} samples`,'err'); return; }
+      if(t.pending){ toast(`${t.pending} check${t.pending===1?' is':'s are'} not filled yet`,'err'); return; }
+      if(!a.rep.result){ toast('Choose the final determination','err'); return; }
+      if(a.rep.result==='Pass'&&t.defective){ toast(`${t.defective} sample${t.defective===1?'':'s'} failed; the result cannot be Pass`,'err'); return; }
+      a.saving=true; render();
+      const r=await api('saveFai',{batchName:a.lot.batchName,lotNumber:a.lot.lotNumber,report:a.rep});
+      a.saving=false;
+      if(r.ok){
+        try{ localStorage.removeItem(faiDraftKey(a.lot)); }catch(e){}
+        toast(`FAI ${r.result} saved (${r.id}, revision ${r.revision})`, r.result==='Pass'?'ok':'err');
+        const lot=a.lot; activeFai=null; lotUnits={};
+        await loadBatches(); view.batch=lot.batchName; selLot=lot.batchName+'||'+lot.lotNumber;
+        const nl=batches.find(l=>l.batchName===lot.batchName&&l.lotNumber===lot.lotNumber); if(nl) loadLotUnits(nl);
+        go('batches',()=>document.querySelector('.lot-detail')?.scrollIntoView({block:'center'}));
+      } else { render(); toast(r.error||'Save failed','err'); }
+    };
+  }
+  // FAI specification editor
+  if(page==='faispec'){
+    const fm=document.getElementById('fsModel'); if(fm) fm.onchange=()=>{ if(faiSpecEd&&faiSpecEd.dirty&&!confirm('Discard unsaved changes?')){ fm.value=faiSpecEd.model; return; } if(fm.value) loadFaiSpecEd(fm.value); else { faiSpecEd=null; render(); } };
+    const e=faiSpecEd;
+    if(e&&e.spec){
+      const sp=e.spec, dirty=()=>{ e.dirty=true; };
+      const cu=document.getElementById('fsCust'); if(cu) cu.oninput=()=>{ sp.customer=cu.value; dirty(); };
+      document.querySelectorAll('.fsF').forEach(el=>{ el.onchange=()=>{ const it=sp.items[+el.dataset.i], k=el.dataset.k;
+        it[k]=el.type==='checkbox'?el.checked:el.value; dirty(); if(k==='type'||k==='na'||k==='section') render(); }; });
+      document.querySelectorAll('.fsDel').forEach(b=>{ b.onclick=()=>{ const it=sp.items[+b.dataset.i]; if(!confirm(`Remove "${it.name}"?`)) return; sp.items.splice(+b.dataset.i,1); dirty(); render(); }; });
+      document.querySelectorAll('.fsMv').forEach(b=>{ b.onclick=()=>{ const i=+b.dataset.i, j=i+(+b.dataset.d); if(j<0||j>=sp.items.length) return; const t=sp.items[i]; sp.items[i]=sp.items[j]; sp.items[j]=t; dirty(); render(); }; });
+      const add=document.getElementById('btnFsAdd'); if(add) add.onclick=()=>{ sp.items.push({id:'item'+Date.now().toString(36),section:sp.items.length?sp.items[sp.items.length-1].section:'Others',name:'New item',content:'',type:'check',na:false}); dirty(); render(); };
+      const df=document.getElementById('btnFsDefault'); if(df) df.onclick=async()=>{ if(!confirm('Replace the items with the standard template? Save afterwards to keep it.')) return; const r=await api('getFaiSpec',{model:''}); if(r.ok){ e.spec=r.spec; e.dirty=true; render(); } };
+      const sv=document.getElementById('btnFsSave'); if(sv) sv.onclick=async()=>{
+        sv.disabled=true; const r=await api('saveFaiSpec',{model:e.model,spec:sp}); sv.disabled=false;
+        if(r.ok){ toast(`FAI specification saved for ${e.model}`); loadFaiSpecEd(e.model); } else toast(r.error||'Save failed','err');
+      };
+    }
+  }
 
   // Hold / rework / reoffer
   document.querySelectorAll('.reworkBtn,.heroHold').forEach(b=>{ b.onclick=()=>{ const lot=batches[parseInt(b.getAttribute('data-ri'))]; if(lot) openRework(lot); }; });

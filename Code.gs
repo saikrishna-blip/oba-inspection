@@ -20,14 +20,15 @@ var PARTDB_URL   = "https://script.google.com/macros/s/AKfycbyPiE-gcrUZH7cEA6KKB
 var SESSION_HOURS = 12;
 // Modules an admin can give each user (Users sheet, column E "Access", comma separated).
 // Admins always have every module. An empty cell means the original inspector set.
-var MODULES        = ["bomverify","sampling","reports","createbatch","models","data","bommgmt"];
-var DEFAULT_ACCESS = ["bomverify","sampling"];
+var MODULES        = ["bomverify","fai","sampling","reports","createbatch","models","data","bommgmt"];
+var DEFAULT_ACCESS = ["bomverify","fai","sampling"];
 // Actions any signed-in user may call (reading, own password)
-var ALWAYS_ACTIONS = ["logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword"];
+var ALWAYS_ACTIONS = ["logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai"];
 // recordRework (rework data + reoffer) belongs to the sampling module
 // Actions unlocked by a module; everything not listed here or above is admin only
 var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify",
                       checkSerial:"sampling", submitLot:"sampling", recordRework:"sampling", setOfferedQty:"sampling",
+                      saveFai:"fai", saveFaiSpec:"models",
                       createBatch:"createbatch",
                       saveModel:"models", deleteModel:"models",
                       scanDuplicates:"data", searchRecords:"data", removeDuplicates:"data", approveSerial:"data"};
@@ -112,7 +113,7 @@ function doPost(e){
         return json_({ok:false, error: ACTION_MODULE[action] ? "You do not have access to this. Ask an admin to give you the " + moduleName_(ACTION_MODULE[action]) + " module." : "Only an admin can do this."});
       data._session = sess;
       // record who did it from the session, not from what the browser sent
-      if(action === "submitLot" || action === "recordRework" || action === "holdLot" || action === "setOfferedQty") data.inspector = sess.name;
+      if(action === "submitLot" || action === "recordRework" || action === "holdLot" || action === "setOfferedQty" || action === "saveFai" || action === "saveFaiSpec") data.inspector = sess.name;
       if(action === "submitBomVerification") data.by = sess.name;
       if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser","setUserAccess"].indexOf(action) > -1){
         data.createdBy = sess.username; data.updatedBy = sess.username; data.by = sess.username;
@@ -175,6 +176,18 @@ function doPost(e){
     }
     if(action === "recordRework"){
       result = recordRework(data);
+    }
+    if(action === "getFaiSpec"){
+      result = getFaiSpec(data);
+    }
+    if(action === "saveFaiSpec"){
+      result = saveFaiSpec(data);
+    }
+    if(action === "getFai"){
+      result = getFai(data);
+    }
+    if(action === "saveFai"){
+      result = saveFai(data);
     }
     if(action === "setOfferedQty"){
       result = setOfferedQty(data);
@@ -372,7 +385,7 @@ function allowed_(sess, action){
   return !!m && (sess.access || []).indexOf(m) > -1;
 }
 function moduleName_(m){
-  return {bomverify:"BOM verification", sampling:"Sampling inspection", reports:"Reports", createbatch:"Create batches",
+  return {bomverify:"BOM verification", fai:"FAI inspection", sampling:"Sampling inspection", reports:"Reports", createbatch:"Create batches",
           models:"Models and black dot spec", data:"Data records", bommgmt:"BOM management"}[m] || m;
 }
 /* Who is signed in, and what they may use (the portal calls this on every refresh). */
@@ -977,6 +990,237 @@ function setOfferedQty(d){
             (qty < size ? (size - qty) + " units moved back to" : (qty - size) + " units taken from") + " the open lots; recalculated: " + sizes.length + " lot" + (sizes.length === 1 ? "" : "s") +
             (sizes.length ? " (" + nums.map(function(x, i){ return "Lot " + x + ": " + sizes[i]; }).join(", ") + ")" : "") + ". Batch now has " + total + " lots.", d.inspector);
     return {ok:true, qty:qty, was:size, samples:Math.min(FIXED_SAMPLE, qty), moved:size - qty, lots:nums.map(function(x, i){ return {lotNumber:lotName(x), size:sizes[i]}; }), totalLots:total};
+  } finally { lock.releaseLock(); }
+}
+
+/****************************************************
+ * FAI (first article inspection): 5 samples per lot, in the format of the
+ * "Projection Unit Finished Product Outgoing Inspection Report".
+ *  FAISpec   : Model | SpecJSON | UpdatedBy | UpdatedAt      (check items + limits per model)
+ *  FAI       : ReportID | Batch | Lot | Model | Result | Defective | Inspector | Reviewer | InspectionDate |
+ *              Revision | CreatedBy | CreatedAt | UpdatedBy | UpdatedAt | DataJSON
+ *  FAI_Detail: ReportID | Batch | Lot | Sample | Serial | Section | Item | Value | Judgment   (one row per sample and item)
+ *  Batches column R (FAIStatus) holds each lot's FAI result.
+ ****************************************************/
+var FAI_SAMPLES = 5;
+var FAI_RESULTS = ["Pass","Fail","Special procurement"];
+var FAI_TYPES   = ["check","text","number","xy"];
+function faiItem_(id, section, name, content, type, extra){
+  var o = {id:id, section:section, name:name, content:content||"", type:type||"check", na:false};
+  for(var k in (extra||{})) o[k] = extra[k];
+  return o;
+}
+function defaultFaiSpec_(){
+  return {customer:"Lumio", samples:FAI_SAMPLES, items:[
+    faiItem_("pack","Appearance","Packaging inspection","Printing content, dimensions, colours etc. of the packaging materials comply with the SIP or specification."),
+    faiItem_("appear","Appearance","Appearance inspection","Product colour, surface spots, scratches, silk screen, lens etc. meet the SIP or specification."),
+    faiItem_("struct","Appearance","Structure inspection","Each component is compact; clearances and step differences comply with the SIP."),
+    faiItem_("accModel","Appearance","Accessory inspection: model, quantity, size","Model, quantity, dimensions etc. of accessories comply with the SIP or specification."),
+    faiItem_("accPack","Appearance","Accessory inspection: packaging, appearance","Packaging and appearance of accessories comply with the SIP or specification."),
+    faiItem_("model","Functional test","Product model","Model shown matches the order.","text",{expected:""}),
+    faiItem_("sw","Functional test","Software version","Software version matches the release.","text",{expected:""}),
+    faiItem_("led","Functional test","Indicator light check"),
+    faiItem_("res","Functional test","Resolution"),
+    faiItem_("av","Functional test","Video (AV)","", "check",{na:true}),
+    faiItem_("usb","Functional test","USB"),
+    faiItem_("chan","Functional test","Channel test","", "check",{na:true}),
+    faiItem_("headset","Functional test","Headset test"),
+    faiItem_("spdif","Functional test","Optical fibre (SPDIF)","", "check",{na:true}),
+    faiItem_("af","Functional test","Auto focus test"),
+    faiItem_("mf","Functional test","Manual focus test"),
+    faiItem_("ak","Functional test","Auto keystone test"),
+    faiItem_("mk","Functional test","Manual keystone test"),
+    faiItem_("wifi","Functional test","Wi-Fi test"),
+    faiItem_("bt","Functional test","Bluetooth"),
+    faiItem_("hdmi","Functional test","HDMI"),
+    faiItem_("reset","Functional test","Restore factory settings"),
+    faiItem_("remote","Functional test","Remote control test"),
+    faiItem_("power","Functional test","Power cord / adapter"),
+    faiItem_("otherAcc","Functional test","Other accessories"),
+    faiItem_("pure","Picture inspection","Pure colour pattern (R/G/B/Y/W/B)"),
+    faiItem_("zoom","Picture inspection","Picture zoom (max, min)"),
+    faiItem_("bright","Optical testing","Brightness","Calculation inputs to be added; enter the final value for now.","number",{unit:"lm", min:"", max:"", calcPending:true}),
+    faiItem_("contrast","Optical testing","Contrast ratio","Calculation inputs to be added; enter the final value for now.","number",{unit:":1", min:"", max:"", calcPending:true}),
+    faiItem_("color","Optical testing","Colour coordinates","x and y of white.","xy",{x:"", y:"", tol:""}),
+    faiItem_("dimL","Finished product dimensions","L (length)","","number",{unit:"mm", nom:"", tol:"", min:"", max:""}),
+    faiItem_("dimW","Finished product dimensions","W (width)","","number",{unit:"mm", nom:"", tol:"", min:"", max:""}),
+    faiItem_("dimH","Finished product dimensions","H (height)","","number",{unit:"mm", nom:"", tol:"", min:"", max:""}),
+    faiItem_("prodLabel","Packaging","Product label"),
+    faiItem_("packLabel","Packaging","Packaging label"),
+    faiItem_("packAppear","Packaging","Packaging appearance"),
+    faiItem_("packMethod","Packaging","Packaging method")
+  ]};
+}
+function faiSpecSheet_(){ return getOrCreateSheet("FAISpec", ["Model","SpecJSON","UpdatedBy","UpdatedAt"]); }
+function getFaiSpec(d){
+  var model = String(d.model||"").trim();
+  var v = faiSpecSheet_().getDataRange().getValues();
+  for(var i = 1; i < v.length; i++){
+    if(String(v[i][0]).trim() === model && model){
+      try { return {ok:true, model:model, spec:JSON.parse(String(v[i][1])), saved:true, updatedBy:String(v[i][2]||""),
+                    updatedAt: v[i][3] instanceof Date ? v[i][3].toISOString() : String(v[i][3]||"")}; } catch(e){}
+    }
+  }
+  return {ok:true, model:model, spec:defaultFaiSpec_(), saved:false};
+}
+function cleanStr_(v, n){ return String(v == null ? "" : v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").substring(0, n || 200); }
+function cleanNum_(v){ if(v === "" || v == null) return ""; var x = Number(v); return isFinite(x) ? x : ""; }
+function cleanFaiSpec_(sp){
+  sp = sp || {};
+  var items = Array.isArray(sp.items) ? sp.items : [];
+  if(!items.length || items.length > 150) throw new Error("A specification needs between 1 and 150 check items");
+  var ids = {};
+  var out = {customer:cleanStr_(sp.customer||"Lumio", 80), samples:FAI_SAMPLES, items:items.map(function(it, i){
+    var id = cleanStr_(it.id || ("item" + i), 40).replace(/[^A-Za-z0-9_-]/g, "") || ("item" + i);
+    while(ids[id]) id = id + "_"; ids[id] = true;
+    var type = FAI_TYPES.indexOf(it.type) > -1 ? it.type : "check";
+    var o = {id:id, section:cleanStr_(it.section, 60) || "Other", name:cleanStr_(it.name, 120), content:cleanStr_(it.content, 400), type:type, na:!!it.na};
+    if(!o.name) throw new Error("Item " + (i + 1) + " needs a name");
+    if(type === "text") o.expected = cleanStr_(it.expected, 120);
+    if(type === "number"){ o.unit = cleanStr_(it.unit, 12); ["min","max","nom","tol"].forEach(function(k){ o[k] = cleanNum_(it[k]); }); o.calcPending = !!it.calcPending; }
+    if(type === "xy"){ ["x","y","tol"].forEach(function(k){ o[k] = cleanNum_(it[k]); }); }
+    return o;
+  })};
+  return out;
+}
+function saveFaiSpec(d){
+  var model = String(d.model||"").trim();
+  if(!findModel_(model)) return {ok:false, error:"Model not found"};
+  var spec;
+  try { spec = cleanFaiSpec_(d.spec); } catch(e){ return {ok:false, error:e.message}; }
+  var json = JSON.stringify(spec);
+  if(json.length > 45000) return {ok:false, error:"The specification is too large"};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var sh = faiSpecSheet_(), v = sh.getDataRange().getValues(), row = -1;
+    for(var i = 1; i < v.length; i++) if(String(v[i][0]).trim() === model){ row = i + 1; break; }
+    var data = [[model, json, safe_(d.inspector, 80), new Date()]];
+    if(row < 0) sh.appendRow(data[0]); else sh.getRange(row, 1, 1, 4).setValues(data);
+    return {ok:true};
+  } finally { lock.releaseLock(); }
+}
+function faiSheet_(){ return getOrCreateSheet("FAI", ["ReportID","Batch","Lot","Model","Result","Defective","Inspector","Reviewer","InspectionDate","Revision","CreatedBy","CreatedAt","UpdatedBy","UpdatedAt","DataJSON"]); }
+function getFai(d){
+  var bn = String(d.batchName||""), ln = String(d.lotNumber||"");
+  var sh = getSpreadsheet().getSheetByName("FAI");
+  if(!sh) return {ok:true, found:false};
+  var v = sh.getDataRange().getValues();
+  for(var i = v.length - 1; i >= 1; i--){
+    if(String(v[i][1]) !== bn || String(v[i][2]) !== ln) continue;
+    var data = {}; try { data = JSON.parse(String(v[i][14]||"{}")); } catch(e){}
+    var t = function(x){ return x instanceof Date ? x.toISOString() : String(x||""); };
+    return {ok:true, found:true, report:{id:String(v[i][0]), result:String(v[i][4]), defective:Number(v[i][5])||0, inspector:String(v[i][6]),
+            reviewer:String(v[i][7]), revision:Number(v[i][9])||1, createdBy:String(v[i][10]), createdAt:t(v[i][11]),
+            updatedBy:String(v[i][12]), updatedAt:t(v[i][13]), data:data}};
+  }
+  return {ok:true, found:false};
+}
+/* Saves or updates the FAI report of one lot. The judgment of every measured item is worked out here again
+   from the lot model's specification, so the stored result does not depend on the browser. */
+function faiJudge_(it, val){
+  if(it.na) return "N/A";
+  if(it.type === "check") return val === "Pass" || val === "Fail" ? val : "";
+  if(it.type === "text"){
+    var t = String(val && val.v != null ? val.v : "").trim();
+    if(!t) return "";
+    if(it.expected) return t.toLowerCase() === String(it.expected).trim().toLowerCase() ? "Pass" : "Fail";
+    return val && (val.j === "Pass" || val.j === "Fail") ? val.j : "";
+  }
+  if(it.type === "number"){
+    var raw = val && val.v != null ? String(val.v).trim() : "";
+    if(raw === "") return "";
+    var x = Number(raw); if(!isFinite(x)) return "Fail";
+    var hasNom = it.nom !== "" && it.tol !== "" && it.nom != null && it.tol != null;
+    var hasMin = it.min !== "" && it.min != null, hasMax = it.max !== "" && it.max != null;
+    if(hasNom) return Math.abs(x - Number(it.nom)) <= Number(it.tol) + 1e-9 ? "Pass" : "Fail";
+    if(hasMin || hasMax) return (!hasMin || x >= Number(it.min)) && (!hasMax || x <= Number(it.max)) ? "Pass" : "Fail";
+    return val && (val.j === "Pass" || val.j === "Fail") ? val.j : "";
+  }
+  if(it.type === "xy"){
+    var xs = val && val.x != null ? String(val.x).trim() : "", ys = val && val.y != null ? String(val.y).trim() : "";
+    if(xs === "" || ys === "") return "";
+    var X = Number(xs), Y = Number(ys); if(!isFinite(X) || !isFinite(Y)) return "Fail";
+    if(it.x !== "" && it.y !== "" && it.tol !== "" && it.x != null && it.y != null && it.tol != null)
+      return Math.abs(X - Number(it.x)) <= Number(it.tol) + 1e-9 && Math.abs(Y - Number(it.y)) <= Number(it.tol) + 1e-9 ? "Pass" : "Fail";
+    return val && (val.j === "Pass" || val.j === "Fail") ? val.j : "";
+  }
+  return "";
+}
+function saveFai(d){
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try{
+    var bsh = getOrCreateSheet("Batches",[]);
+    ensureStageHeaders_(bsh);
+    var bv = bsh.getDataRange().getValues();
+    var lotRow = lotRowOf_(bv, d.batchName, d.lotNumber);
+    if(lotRow < 0) return {ok:false, error:"Lot not found. Refresh and try again."};
+    var batch = String(bv[lotRow][0]), lot = String(bv[lotRow][1]), model = String(bv[lotRow][11]||"");
+    var rep = d.report || {};
+    var spec = getFaiSpec({model:model}).spec;
+    var nS = Math.min(FAI_SAMPLES, Number(bv[lotRow][2]) || FAI_SAMPLES);
+    var samples = Array.isArray(rep.samples) ? rep.samples.slice(0, nS) : [];
+    if(samples.length !== nS) return {ok:false, error:"FAI needs " + nS + " samples"};
+    var seen = {};
+    for(var s = 0; s < nS; s++){
+      var sn = normSerial_(samples[s] && samples[s].serial);
+      if(!/^[A-Z0-9]{1,40}$/.test(sn)) return {ok:false, error:"Sample " + (s+1) + ": enter the serial number"};
+      if(seen[sn]) return {ok:false, error:"Serial " + sn + " is used for two samples"};
+      seen[sn] = true; samples[s].serial = sn;
+    }
+    // judge every item for every sample against the specification
+    var detail = [], defective = 0, missing = [];
+    var clean = {header:{}, samples:[], remarks:{}, others:cleanStr_(rep.others, 1000), defects:cleanStr_(rep.defects, 1000)};
+    var H = rep.header || {};
+    ["salesOrder","customer","reviewer","inspectionDate","firstSerial","lastSerial","approval"].forEach(function(k){ clean.header[k] = cleanStr_(H[k], 120); });
+    if(clean.header.inspectionDate && !/^\d{4}-\d{2}-\d{2}$/.test(clean.header.inspectionDate)) return {ok:false, error:"Inspection date is not valid"};
+    for(var k2 in (rep.remarks || {})) if(spec.items.some(function(it){ return it.id === k2; })) clean.remarks[k2] = cleanStr_(rep.remarks[k2], 300);
+    for(var j = 0; j < nS; j++){
+      var res = (samples[j] && samples[j].results) || {}, cs = {serial:samples[j].serial, results:{}}, bad = false;
+      spec.items.forEach(function(it){
+        var val = res[it.id], jd = faiJudge_(it, val);
+        var keep = it.type === "check" ? jd : it.type === "xy" ? {x:cleanStr_(val && val.x, 20), y:cleanStr_(val && val.y, 20), j:jd} : {v:cleanStr_(val && val.v, 60), j:jd};
+        cs.results[it.id] = keep;
+        if(jd === "") missing.push(it.name + " (sample " + (j+1) + ")");
+        if(jd === "Fail") bad = true;
+        var shown = it.type === "check" ? "" : it.type === "xy" ? ("x " + keep.x + ", y " + keep.y) : keep.v;
+        detail.push(["", safe_(batch, 80), safe_(lot, 100), j + 1, "'" + samples[j].serial, safe_(it.section, 60), safe_(it.name, 120), safe_(shown, 80), jd]);
+      });
+      if(bad) defective++;
+      clean.samples.push(cs);
+    }
+    if(missing.length) return {ok:false, error:"Not filled yet: " + missing.slice(0, 6).join(", ") + (missing.length > 6 ? " and " + (missing.length - 6) + " more" : "")};
+    var result = String(rep.result||"");
+    if(FAI_RESULTS.indexOf(result) === -1) return {ok:false, error:"Choose the final determination"};
+    if(result === "Pass" && defective) return {ok:false, error:defective + " sample(s) failed; the final determination cannot be Pass."};
+    if(result === "Special procurement" && (!clean.header.approval || !clean.defects)) return {ok:false, error:"Special procurement needs the defect description and the customer approval reference"};
+    clean.result = result; clean.defective = defective;
+    var json = JSON.stringify(clean);
+    if(json.length > 45000) return {ok:false, error:"The report is too large"};
+
+    var sh = faiSheet_(), v = sh.getDataRange().getValues(), row = -1;
+    for(var i = 1; i < v.length; i++) if(String(v[i][1]) === batch && String(v[i][2]) === lot){ row = i + 1; }
+    var now = new Date(), id, rev;
+    if(row < 0){
+      id = "FAI-" + Utilities.formatDate(now, TZ, "yyyyMMdd-HHmmss") + "-" + (lotNum_(lot) || 0);
+      rev = 1;
+      sh.appendRow([id, safe_(batch, 80), safe_(lot, 100), safe_(model, 80), result, defective, safe_(d.inspector, 80), safe_(clean.header.reviewer, 80),
+                    clean.header.inspectionDate, rev, safe_(d.inspector, 80), now, safe_(d.inspector, 80), now, json]);
+    } else {
+      id = String(v[row-1][0]); rev = (Number(v[row-1][9]) || 1) + 1;
+      sh.getRange(row, 5, 1, 11).setValues([[result, defective, String(v[row-1][6]), safe_(clean.header.reviewer, 80), clean.header.inspectionDate, rev,
+                                              String(v[row-1][10]), v[row-1][11], safe_(d.inspector, 80), now, json]]);
+    }
+    // detail rows: replace this report's rows
+    var ds = getOrCreateSheet("FAI_Detail", ["ReportID","Batch","Lot","Sample","SerialNumber","Section","Item","Value","Judgment"]);
+    var dv = ds.getDataRange().getValues();
+    for(var r = dv.length - 1; r >= 1; r--) if(String(dv[r][0]) === id) ds.deleteRow(r + 1);
+    detail.forEach(function(x){ x[0] = id; });
+    if(detail.length) ds.getRange(ds.getLastRow() + 1, 1, detail.length, detail[0].length).setValues(detail);
+
+    bsh.getRange(lotRow + 1, COL_FAI_STATUS).setValue(result);
+    logLot_(batch, lot, Number(bv[lotRow][COL_ROUND-1]) || 1, rev === 1 ? "FAI" : "FAI edited",
+            id + " revision " + rev + ": " + result + ", " + defective + " of " + nS + " samples defective", d.inspector);
+    return {ok:true, id:id, revision:rev, result:result, defective:defective};
   } finally { lock.releaseLock(); }
 }
 
