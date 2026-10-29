@@ -22,7 +22,7 @@ var PARTDB_URL   = "https://script.google.com/macros/s/AKfycbyPiE-gcrUZH7cEA6KKB
 var SESSION_HOURS = 12;
 // Modules an admin can give each user (Users sheet, column E "Access", comma separated).
 // Admins always have every module. An empty cell means the original inspector set.
-var MODULES        = ["bomverify","fai","sampling","reports","createbatch","models","data","bommgmt"];
+var MODULES        = ["bomverify","fai","sampling","reports","createbatch","models","data","bommgmt","complaints"];
 var DEFAULT_ACCESS = ["bomverify","fai","sampling"];
 // Actions any signed-in user may call (reading, own password)
 // Actions that only read; every other successful action clears the cache
@@ -123,7 +123,7 @@ function doPost(e){
       // record who did it from the session, not from what the browser sent
       if(action === "submitLot" || action === "recordRework" || action === "holdLot" || action === "setOfferedQty" || action === "saveFai" || action === "saveFaiSpec") data.inspector = sess.name;
       if(action === "submitBomVerification") data.by = sess.name;
-      if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser","setUserAccess"].indexOf(action) > -1){
+      if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser","setUserAccess","setComplaintUrl"].indexOf(action) > -1){
         data.createdBy = sess.username; data.updatedBy = sess.username; data.by = sess.username;
       }
     }
@@ -244,6 +244,9 @@ function doPost(e){
     }
     if(action === "bom"){
       result = bomCall(data);
+    }
+    if(action === "setComplaintUrl"){
+      result = setComplaintUrl(data);
     }
 
     // any change clears the cached lists so the next read is fresh
@@ -423,7 +426,7 @@ function allowed_(sess, action){
 }
 function moduleName_(m){
   return {bomverify:"BOM verification", fai:"FAI inspection", sampling:"Sampling inspection", reports:"Reports", createbatch:"Create batches",
-          models:"Models and black dot spec", data:"Data records", bommgmt:"BOM management"}[m] || m;
+          models:"Models and black dot spec", data:"Data records", bommgmt:"BOM management", complaints:"Customer complaints"}[m] || m;
 }
 /* Who is signed in, and what they may use (the portal calls this on every refresh). */
 function whoami(sess){
@@ -431,7 +434,31 @@ function whoami(sess){
   if(sess.role === "admin" || out.access.indexOf("bommgmt") > -1){
     out.partdbUrl = PARTDB_URL; out.bomSheetUrl = "https://docs.google.com/spreadsheets/d/" + (bomMigrated_() ? SS_ID : LEGACY_BOM_SS_ID) + "/edit";
   }
+  if(sess.role === "admin" || out.access.indexOf("complaints") > -1) out.complaintUrl = getSetting_("ComplaintApiUrl");
   return out;
+}
+
+/* ---------------- settings (sheet "Settings": Key | Value) ---------------- */
+var COMPLAINT_URL_RE_ = /^https:\/\/script\.google\.com\/(a\/macros\/[a-z0-9.-]+\/|macros\/)s\/[A-Za-z0-9_-]{20,}\/exec$/;
+function settingsSheet_(){ return getOrCreateSheet("Settings", ["Key","Value","UpdatedBy","UpdatedAt"]); }
+function getSetting_(key){
+  var c = CacheService.getScriptCache(), hit = c.get("c_set_" + key);
+  if(hit !== null) return hit;
+  var v = settingsSheet_().getDataRange().getValues(), out = "";
+  for(var i = 1; i < v.length; i++) if(String(v[i][0]) === key){ out = String(v[i][1] || ""); break; }
+  c.put("c_set_" + key, out, 600);
+  return out;
+}
+/* Admin: the web app address of the Customer Complaint tracker script (its "Portal API" deployment). */
+function setComplaintUrl(d){
+  var url = String(d.url || "").trim();
+  if(url && !COMPLAINT_URL_RE_.test(url)) return {ok:false, error:"Paste the web app URL of the complaint script (https://script.google.com/macros/s/…/exec)."};
+  var sh = settingsSheet_(), v = sh.getDataRange().getValues(), row = -1;
+  for(var i = 1; i < v.length; i++) if(String(v[i][0]) === "ComplaintApiUrl"){ row = i + 1; break; }
+  var vals = [["ComplaintApiUrl", url, safe_(d.by || "", 80), new Date()]];
+  if(row > 0) sh.getRange(row, 1, 1, 4).setValues(vals); else sh.appendRow(vals[0]);
+  CacheService.getScriptCache().remove("c_set_ComplaintApiUrl");
+  return {ok:true, url:url};
 }
 
 /* ---------------- sessions ----------------

@@ -658,6 +658,41 @@ tr.bx-sel td{background:var(--open-bg)}
   body.bx-printing .main{padding:0!important;width:100%!important;max-width:none!important}
   body.bx-printing .bx-rep{border:none;border-radius:0;padding:0;break-after:page}
 }
+
+/* ── Customer complaints ─────────────────────────────── */
+.cx-nav{flex-wrap:wrap}
+.cx-sel{width:auto;min-width:150px}
+.cx-tbl tr.cx-row{cursor:pointer}
+.cx-tbl tr.cx-row:hover td,.cx-tbl tr.cx-row:focus td{background:var(--open-bg)}
+.cx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.cx-sec{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin:20px 0 10px;border-top:1px solid var(--line);padding-top:14px}
+.cx-bug{display:flex;gap:8px;align-items:flex-end}
+.cx-media{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;font-weight:400}
+.cx-split{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;align-items:start}
+.cx-panel{position:sticky;top:90px;max-height:calc(100vh - 110px);overflow:auto}
+.cx-desc{white-space:pre-wrap;font-size:13.5px;background:var(--paper);border-radius:8px;padding:10px;margin-bottom:10px;max-height:240px;overflow:auto}
+.cx-files img{max-width:100%;border-radius:8px;display:block;margin:6px 0}
+.cx-files>div{margin-bottom:8px;font-size:13px}
+.cx-cmt{border-top:1px solid var(--line);padding:8px 0;font-size:13px;white-space:pre-wrap}
+.cx-afr td,.cx-afr th{white-space:nowrap}
+.cx-afr tbody th{text-align:left;background:var(--sunk);font-size:12.5px}
+td.cx-ok{background:#fff9c4!important;color:#5b4b00}
+td.cx-mid{background:#fbd5b5!important;color:#7a3300}
+td.cx-bad{background:#f8b4b4!important;color:#7f1010;font-weight:700}
+.cx-legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:12.5px}
+.cx-legend span{padding:4px 10px;border-radius:6px}
+.cx-legend .cx-ok{background:#fff9c4;color:#5b4b00}.cx-legend .cx-mid{background:#fbd5b5;color:#7a3300}.cx-legend .cx-bad{background:#f8b4b4;color:#7f1010}
+.cx-entry input.field{min-height:36px;padding:6px 8px;font-size:14px}
+.cx-entry input.num{text-align:right}
+.cx-check{display:flex;gap:6px;align-items:center;font-size:13.5px}
+.cx-auto{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.cx-inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.cx-inline .field{flex:1;min-width:200px}
+.cx-left{justify-content:flex-start}
+.cx-res{white-space:pre-wrap;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px;font-size:13px;max-height:420px;overflow:auto}
+.cx-model{break-inside:avoid}
+@media (max-width:1100px){ .cx-split{grid-template-columns:1fr} .cx-panel{position:static;max-height:none} }
+@media print{ body.bx-printing .cx-model,body.bx-printing .card{box-shadow:none;break-inside:avoid} }
 @media print{
   .hdr-right,.btn{display:none!important}
   body{background:#fff!important}
@@ -797,7 +832,7 @@ function restoreSession(){
   }catch(e){}
   return false;
 }
-function resetApp(){ introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; activeRework=null; activeFai=null; faiSpecEd=null; samples=[]; expandedSample=null; bxReset(); saveSession(); }
+function resetApp(){ introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; activeRework=null; activeFai=null; faiSpecEd=null; samples=[]; expandedSample=null; bxReset(); cxReset(); saveSession(); }
 let expiredShown=false;
 async function api(action,data={}){
   data.action=action;
@@ -869,7 +904,7 @@ async function loadMe(){
   const r=await api('whoami');
   if(r.ok&&user){
     user={username:r.username,role:r.role,name:r.name,access:r.access||[]};
-    if(session){ session.partdbUrl=r.partdbUrl||''; session.bomSheetUrl=r.bomSheetUrl||''; }
+    if(session){ session.partdbUrl=r.partdbUrl||''; session.bomSheetUrl=r.bomSheetUrl||''; session.complaintUrl=r.complaintUrl||''; }
     saveSession();
     if(!pageAllowed(page)){ page='home'; bomTool=null; history.replaceState(null,'','#/'); }
   }
@@ -880,7 +915,7 @@ async function loadAll(fresh){
   if(!r.ok){ if(!r.auth) toast(r.error||'Could not load data','err'); return; }
   if(r.me&&r.me.ok&&user){
     user={username:r.me.username,role:r.me.role,name:r.me.name,access:r.me.access||[]};
-    if(session){ session.partdbUrl=r.me.partdbUrl||''; session.bomSheetUrl=r.me.bomSheetUrl||''; }
+    if(session){ session.partdbUrl=r.me.partdbUrl||''; session.bomSheetUrl=r.me.bomSheetUrl||''; session.complaintUrl=r.me.complaintUrl||''; }
     saveSession();
     if(!pageAllowed(page)){ page='home'; bomTool=null; history.replaceState(null,'','#/'); }
   }
@@ -1035,6 +1070,7 @@ function buildPage(){
   if(activeRework)  return buildRework();
   if(activeFai)     return buildFai();
   if(page==='bom' && can('bommgmt')) return buildBomMgmt();
+  if(page==='complaints' && can('complaints')) return buildComplaints();
   return buildDashboard();
 }
 
@@ -1087,9 +1123,10 @@ const MODULES=[
   {k:'createbatch',t:'Create batches',            d:'Make new batches and lots'},
   {k:'models',     t:'Models and black dot spec', d:'Add or change models and limits'},
   {k:'data',       t:'Data records',              d:'Duplicate check and record lookup'},
-  {k:'bommgmt',    t:'BOM management',            d:'All Part DB tools: assign, compare, lock, ECN, images'}
+  {k:'bommgmt',    t:'BOM management',            d:'Parts, ECN, compare BOMs, BOMs and lots'},
+  {k:'complaints', t:'Customer complaints',       d:'Complaint tracker, AFR dashboard, data checks and tools'}
 ];
-const PAGE_MODULE={create:'createbatch',models:'models',faispec:'models',data:'data',reports:'reports',bom:'bommgmt'};
+const PAGE_MODULE={create:'createbatch',models:'models',faispec:'models',data:'data',reports:'reports',bom:'bommgmt',complaints:'complaints'};
 function isAdminUser(){ return !!user&&user.role==='admin'; }
 function can(k){ if(isAdminUser()) return true; if(!user) return false; const a=Array.isArray(user.access)?user.access:['bomverify','fai','sampling']; return a.includes(k); }
 function pageAllowed(p){ if(p==='users') return isAdminUser(); const m=PAGE_MODULE[p]; return !m||can(m); }
@@ -1107,7 +1144,7 @@ const PAGE_INFO={
 function routeFromHash(){
   const parts=(location.hash||'').replace(/^#\/?/,'').split('/').filter(Boolean).map(decodeURIComponent);
   let p=parts[0]||'home';
-  if(!PAGE_INFO[p]&&p!=='bom') p='home';
+  if(!PAGE_INFO[p]&&p!=='bom'&&p!=='complaints') p='home';
   if(!pageAllowed(p)) p='home';
   page=p;
   bomTool=(p==='bom'&&parts[1]&&BOM_TOOLS.flatMap(g=>g.items).some(x=>x.k===parts[1]))?parts[1]:null;
@@ -1136,6 +1173,10 @@ function navHtml(){
     const bomMenu=ddItem('bom','BOM home',page==='bom'&&!bomTool)+'<div class="dd-sep"></div>'+
       BOM_TOOLS[0].items.map(x=>ddItem('bom/'+x.k,x.t,bomTool===x.k)).join('');
     h+=ddHtml('BOM',page==='bom',bomMenu);
+  }
+  if(can('complaints')){
+    const ck=(location.hash.split('/')[2]||'list');
+    h+=ddHtml('Complaints',page==='complaints',CX_TOOLS.map(x=>ddItem('complaints/'+x.k,x.t,page==='complaints'&&ck===x.k)).join(''));
   }
   const adm=[['create','Create a batch'],['models','Models and black dot spec'],['faispec','FAI specification'],['data','Data records'],['users','Users and access'],['reports','Reports']].filter(([r])=>pageAllowed(r));
   if(adm.length) h+=ddHtml(isAdmin?'Admin':'Manage',adm.some(([r])=>r===page),adm.map(([r,l])=>ddItem(r,l,page===r)).join(''));
@@ -1800,6 +1841,422 @@ document.addEventListener('change',ev=>{ const t=ev.target; if(page!=='bom') ret
 document.addEventListener('input',ev=>{ const t=ev.target; if(page!=='bom') return;
   if(t.matches('[data-bxf]')) bx.f[t.getAttribute('data-bxf')]=t.value;
   if(t.id==='bxFilter'){ const q=t.value.trim().toLowerCase(); document.querySelectorAll('.bxRow').forEach(r=>{ r.style.display=!q||r.getAttribute('data-s').includes(q)?'':'none'; }); } });
+
+// ─── CUSTOMER COMPLAINTS ──────────────────────────────────
+// Screens for the Customer Complaint tracker. Data stays in that sheet; the complaint script
+// (OpenProject, emails, automatic jobs) answers these calls after checking the portal login.
+const CX_TOOLS=[
+  {k:'list',   t:'Complaints',      d:'New tickets, open and closed complaints. Add, edit and close complaints.'},
+  {k:'dash',   t:'Dashboard and AFR', d:'DOA and AFR month wise and lot wise, OQC and OBA results per lot.'},
+  {k:'entry',  t:'Enter data',      d:'Production, sales, OQC and OBA figures used by the AFR tables.'},
+  {k:'checks', t:'Data checks',     d:'Serial number, production month and date checks, with email.'},
+  {k:'tools',  t:'Tools',           d:'Category sync, ticket import, lot fill, model sheets, OpenProject backfill and automatic jobs.'}
+];
+const CX_FIELDS=[
+  ['slNo','Sl No',1],['model','Model'],['batch','Batch'],['serial','Serial Number'],['invoiceDate','Invoice Date'],['complaintDate','Complaint Date'],
+  ['days','Days of usage',1],['doaRepair','DOA / Repair',1],['month','Complaint Month',1],['voc','Voice of the Customer'],['media','Image / Video'],
+  ['defect','Defect Name'],['warranty','Warranty Status',1],['prodMonth','Month of production',1],['lot','Lot Details',1],['rootCause','Root Cause'],
+  ['containment','Containment Actions'],['preventive','Preventive Action'],['resolution','Refurbished / replacement'],['refurbDetails','Refurbishment Details'],
+  ['newSerial','New Serial Number'],['location','Location Status'],['remarks','Remarks'],['bugId','Bug ID'],['openProject','Open Project',1],['category','Category'],['extra','Note']];
+const CX_REQ=['model','batch','serial','invoiceDate','complaintDate','defect'];
+let cx={tool:'list',data:null,status:null,loading:{},busy:'',f:{},ui:{tab:'open',q:'',model:'',cat:'',kind:''},form:null,res:{},afr:null,entry:null,checks:null,ticket:null};
+function cxReset(){ cx={tool:'list',data:null,status:null,loading:{},busy:'',f:{},ui:{tab:'open',q:'',model:'',cat:'',kind:''},form:null,res:{},afr:null,entry:null,checks:null,ticket:null}; }
+async function capi(action,args){
+  const url=session&&session.complaintUrl;
+  if(!url) return {ok:false,error:'The complaint tracker is not connected. Log out and log in again.'};
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,token:session.token,args:args||{}})});
+    const t=await r.text();
+    if(t.trim().startsWith('<')) return {ok:false,error:'The complaint tracker did not answer. Ask an admin to check its deployment.'};
+    const res=JSON.parse(t);
+    if(res&&res.auth&&user){ resetApp(); render(); toast('Your session has expired. Please log in again.','err'); }
+    return res;
+  }catch(e){ return {ok:false,error:'Network error: '+e.message}; }
+}
+// one shared loader: key -> cx[key], call -> capi
+async function cxLoad(key,action,args,force){
+  if(cx.loading[key]||(cx[key]&&!force)) return;
+  cx.loading[key]=true; if(force) render();
+  const r=await capi(action,args);
+  cx.loading[key]=false;
+  cx[key]=r.ok?(r.data!==undefined?r.data:r):{error:r.error||'Could not load.'};
+  if(page==='complaints') render();
+}
+function cxWait(x,what){ return x&&x.error?`<div class="card err" role="alert">${esc(x.error)}</div>`:`<div class="card text-muted">Loading ${esc(what||'')}…</div>`; }
+function cxStatusOf(r){ const c=String(r.category||'').trim(); return !c||/^tbd$/i.test(c)?'open':'closed'; }
+function cxF(k,def){ return cx.f[k]!==undefined?cx.f[k]:(def==null?'':def); }
+function cxDl(name,cols,rows,pre){ saveBlob(makeXlsx(cols,rows,'Sheet1',pre),name); }
+function cxPct(v){ return v==null||v===''?'-':(Math.round(Number(v)*100)/100).toFixed(2)+'%'; }
+function cxBand(v,lim){ if(v==null||!lim) return ''; const x=Number(v)/100; return x<lim[0]?'cx-ok':x<=lim[1]?'cx-mid':'cx-bad'; }
+function cxBandAfr(v,lim){ if(v==null||!lim) return ''; const x=Number(v)/100; return x<=lim[0]?'cx-ok':x<=lim[1]?'cx-mid':'cx-bad'; }
+
+// ---------- list + form ----------
+function cxList(){
+  if(!cx.data) { cxLoad('data','getData'); return cxWait(cx.data,'complaints'); }
+  if(cx.data.error) return cxWait(cx.data);
+  if(cx.form) return cxForm();
+  const d=cx.data, u=cx.ui, recs=d.records||[], pend=d.pending||[];
+  const open=recs.filter(r=>cxStatusOf(r)==='open'), closed=recs.filter(r=>cxStatusOf(r)==='closed');
+  const tab=u.tab;
+  let rows=tab==='new'?[]:(tab==='open'?open:tab==='closed'?closed:recs);
+  const q=u.q.trim().toLowerCase();
+  rows=rows.filter(r=>(!u.model||r.model===u.model)&&(!u.cat||String(r.category).trim().toLowerCase()===u.cat.toLowerCase())&&(!u.kind||r.doaRepair===u.kind)&&
+    (!q||[r.slNo,r.serial,r.bugId,r.defect,r.voc,r.batch,r.lot,r.location,r.remarks].join(' ').toLowerCase().includes(q)));
+  rows=rows.slice().sort((a,b)=>(Number(b.slNo)||0)-(Number(a.slNo)||0));
+  const seg=(k,l,n)=>`<button class="seg-btn ${tab===k?'on':''}" data-cx="tab" data-v="${k}">${l}<span>${n}</span></button>`;
+  const sel=(k,l,opts)=>`<select class="field cx-sel" data-cxc="${k}" aria-label="${l}"><option value="">${l}: all</option>${opts.map(o=>`<option ${u[k]===o?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+  const cats=[...new Set(recs.map(r=>String(r.category||'').trim()).filter(Boolean))].sort();
+  const models=[...new Set(recs.map(r=>r.model).filter(Boolean))].sort();
+  let body;
+  if(tab==='new'){
+    body=pend.length?`<div class="bx-tw"><table class="res-table"><thead><tr><th>Sheet row</th><th>Bug ID</th><th></th></tr></thead><tbody>${pend.map(p=>`<tr><td class="mono">${esc(p._row)}</td><td class="mono">#${esc(p.bugId)}</td>
+      <td class="bx-act"><button class="btn btn-ghost btn-sm" data-cx="ticket" data-b="${esc(p.bugId)}">Ticket</button><button class="btn btn-primary btn-sm" data-cx="startPending" data-r="${esc(p._row)}">Fill in complaint</button></td></tr>`).join('')}</tbody></table></div>`
+      :'<div class="card text-muted">No new tickets waiting. New OpenProject tickets appear here after a ticket import.</div>';
+  } else {
+    body=`<div class="bx-tw"><table class="res-table cx-tbl"><thead><tr><th>Sl</th><th>Model</th><th>Serial</th><th>Complaint</th><th>DOA / Repair</th><th>Defect</th><th>Lot</th><th>Category</th><th>Location</th><th>Bug</th></tr></thead><tbody>
+      ${rows.slice(0,400).map(r=>`<tr class="cx-row" data-cx="edit" data-r="${esc(r._row)}" tabindex="0"><td class="mono">${esc(r.slNo)}</td><td>${esc(r.model)}</td><td class="mono">${esc(r.serial)}</td><td>${esc(r.complaintDate)}</td>
+        <td><span class="badge ${r.doaRepair==='DOA'?'badge-fail':'badge-closed'}">${esc(r.doaRepair||'-')}</span></td><td>${esc(r.defect)}</td><td>${esc(r.lot)}</td>
+        <td>${cxStatusOf(r)==='open'?'<span class="badge badge-open">Open</span>':esc(r.category)}</td><td>${esc(r.location)}</td><td class="mono">${r.bugId?'#'+esc(r.bugId):''}</td></tr>`).join('')||'<tr><td colspan="10" class="text-muted">No complaints match.</td></tr>'}
+      </tbody></table></div>${rows.length>400?`<p class="text-muted">Showing 400 of ${rows.length}. Narrow the filters or download the list.</p>`:''}`;
+  }
+  return `<div class="bx-bar"><div class="seg">${seg('new','New tickets',pend.length)}${seg('open','Open',open.length)}${seg('closed','Closed',closed.length)}${seg('all','All',recs.length)}</div>
+      <span style="flex:1"></span><button class="btn btn-ghost btn-sm" data-cx="reload">Refresh</button><button class="btn btn-ghost btn-sm" data-cx="dlList">Download</button>
+      <button class="btn btn-primary btn-sm" data-cx="newForm">New complaint</button></div>
+    ${tab==='new'?'':`<div class="bx-bar"><input class="field bx-search" data-cxi="q" value="${esc(u.q)}" placeholder="Search serial, Bug ID, defect, lot…" aria-label="Search complaints" style="max-width:340px">
+      ${sel('model','Model',models)}${sel('cat','Category',cats)}${sel('kind','DOA / Repair',['DOA','Repair'])}</div>`}
+    ${body}`;
+}
+function cxBlank(){ const o={}; CX_FIELDS.forEach(([k])=>o[k]=''); return o; }
+function cxOpenForm(rec,mode){
+  const v=cxBlank();
+  if(rec){ CX_FIELDS.forEach(([k])=>{ v[k]=rec[k]==null?'':String(rec[k]); }); v.invoiceDate=rec.invoiceDate_iso||''; v.complaintDate=rec.complaintDate_iso||''; }
+  cx.form={mode,row:rec?rec._row:null,v,orig:rec||null}; cx.ticket=null; render(); window.scrollTo(0,0);
+}
+function cxOpts(k){ return (cx.data&&cx.data.options&&cx.data.options[k])||[]; }
+function cxForm(){
+  const F=cx.form, v=F.v, dup=v.serial&&(cx.data.records||[]).find(r=>r._row!==F.row&&String(r.serial).replace(/\s+/g,'')===v.serial.replace(/\s+/g,''));
+  const inp=(k,l,o)=>{
+    o=o||{}; const ro=CX_FIELDS.find(x=>x[0]===k)[2];
+    const val=v[k]||'';
+    if(ro) return `<label class="bx-lbl">${esc(l)}<input class="field" value="${esc(val||'(calculated)')}" readonly tabindex="-1"></label>`;
+    const req=CX_REQ.includes(k)?' *':'';
+    if(o.date) return `<label class="bx-lbl">${esc(l)}${req}<input class="field" type="date" data-cxv="${k}" value="${esc(val)}"></label>`;
+    if(o.area) return `<label class="bx-lbl" style="grid-column:1/-1">${esc(l)}<textarea class="field" rows="2" data-cxv="${k}" maxlength="2000">${esc(val)}</textarea></label>`;
+    const opts=cxOpts(k);
+    if(o.select) return `<label class="bx-lbl">${esc(l)}${req}<select class="field" data-cxv="${k}"><option value=""></option>${opts.concat(val&&!opts.includes(val)?[val]:[]).map(x=>`<option ${x===val?'selected':''}>${esc(x)}</option>`).join('')}</select></label>`;
+    return `<label class="bx-lbl">${esc(l)}${req}<input class="field ${o.mono?'mono':''}" data-cxv="${k}" value="${esc(val)}" ${opts.length?`list="cxl_${k}"`:''} maxlength="500">${opts.length?`<datalist id="cxl_${k}">${opts.map(x=>`<option value="${esc(x)}">`).join('')}</datalist>`:''}</label>`;
+  };
+  const links=String(v.media||'').split(/[\s,]+/).filter(x=>/^https:\/\//.test(x));
+  const t=cx.ticket;
+  const panel=t?(t.loading?'<div class="card text-muted">Loading ticket…</div>':t.error?`<div class="card err">${esc(t.error)}</div>`:cxTicketHtml(t.data)):'';
+  return `<div class="bx-bar"><button class="btn btn-ghost btn-sm" data-cx="closeForm">← Back to the list</button><span style="flex:1"></span>
+      ${v.bugId?`<button class="btn btn-ghost btn-sm" data-cx="ticket" data-b="${esc(v.bugId)}">${t?'Reload ticket':'Ticket panel'}</button>`:''}</div>
+    <div class="${t?'cx-split':''}"><div>
+    <div class="card"><div class="bx-ecn-h"><h2 class="bx-h3">${F.mode==='new'?'New complaint':'Complaint '+(v.slNo?'Sl '+esc(v.slNo):'')}${F.orig&&cxStatusOf(F.orig)==='closed'?` <span class="badge badge-closed">${esc(F.orig.category)}</span>`:F.orig?' <span class="badge badge-open">Open</span>':''}</h2>
+      <div class="cx-bug"><label class="bx-lbl">Bug ID (OpenProject)<input class="field mono" data-cxv="bugId" value="${esc(v.bugId)}" inputmode="numeric" maxlength="12"></label>
+        <button class="btn btn-ghost btn-sm" data-cx="fetchBug" ${v.bugId?'':'disabled'}>Fetch from ticket</button></div></div>
+      ${dup?`<div class="info-banner" style="margin:10px 0">This serial number is already on Sl ${esc(dup.slNo)} (${esc(dup.complaintDate)}, ${esc(dup.category||'open')}). <button class="btn btn-ghost btn-sm" data-cx="edit" data-r="${esc(dup._row)}">Edit that record instead</button></div>`:''}
+      <h3 class="cx-sec">Unit</h3><div class="cx-grid">${inp('model','Model',{select:1})}${inp('batch','Batch')}${inp('serial','Serial Number',{mono:1})}${inp('invoiceDate','Invoice Date',{date:1})}${inp('complaintDate','Complaint Date',{date:1})}
+        ${inp('days','Days of usage')}${inp('doaRepair','DOA / Repair')}${inp('month','Complaint Month')}${inp('warranty','Warranty Status')}${inp('prodMonth','Month of production')}${inp('lot','Lot')}</div>
+      <h3 class="cx-sec">Complaint</h3><div class="cx-grid">${inp('voc','Voice of the Customer')}${inp('defect','Defect Name')}${inp('category','Category',{select:1})}
+        <div class="bx-lbl" style="grid-column:1/-1">Image / Video links
+          <textarea class="field" rows="2" data-cxv="media" maxlength="3000" placeholder="One link per line">${esc(v.media)}</textarea>
+          <div class="cx-media">${links.map(l=>`<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(l.replace(/^https:\/\/(www\.)?/,'').slice(0,40))}…</a>`).join('')}
+            <label class="btn btn-ghost btn-sm" for="cxFile">${cx.busy==='upload'?'Uploading…':'Upload photo or video'}</label><input id="cxFile" type="file" accept="image/*,video/*,application/pdf" class="sr-only"></div></div></div>
+      <h3 class="cx-sec">Analysis</h3><div class="cx-grid">${inp('rootCause','Root Cause',{area:1})}${inp('containment','Containment Actions',{area:1})}${inp('preventive','Preventive Action',{area:1})}</div>
+      <h3 class="cx-sec">Resolution</h3><div class="cx-grid">${inp('resolution','Refurbished / replacement')}${inp('refurbDetails','Refurbishment Details')}${inp('newSerial','New Serial Number',{mono:1})}${inp('location','Location Status')}${inp('remarks','Remarks',{area:1})}${inp('extra','Note')}</div>
+      <div class="bx-foot"><button class="btn btn-primary" data-cx="save" ${cx.busy?'disabled':''}>${cx.busy==='save'?'Saving…':'Save complaint'}</button>
+        ${F.mode!=='new'&&cxStatusOf(F.v)==='open'?`<button class="btn btn-ghost" data-cx="saveNext" ${cx.busy?'disabled':''}>Save and next open</button>`:''}
+        ${F.orig&&cxStatusOf(F.orig)==='closed'?`<button class="btn btn-ghost" data-cx="reopen" ${cx.busy?'disabled':''}>Reopen (TBD)</button>`:''}
+        <span class="text-muted">* required. Category empty or TBD keeps the complaint open. Calculated columns fill in after saving.</span></div>
+    </div></div>${panel?`<aside class="cx-panel">${panel}</aside>`:''}</div>`;
+}
+function cxTicketHtml(t){
+  const d=s=>s?new Date(s).toLocaleString():'';
+  return `<div class="card"><div class="bx-ecn-h"><h2 class="bx-h3">Ticket #${esc(t.id)}</h2><button class="btn btn-ghost btn-sm" data-cx="closeTicket">Close</button></div>
+    <p><b>${esc(t.subject)}</b></p><p class="text-muted">${esc(t.status)} · ${esc(t.type)} · ${esc(t.priority)}${t.assignee?' · '+esc(t.assignee):''}<br>Created ${esc(d(t.createdAt))} by ${esc(t.author)}</p>
+    ${t.description?`<div class="cx-desc">${esc(t.description)}</div>`:''}
+    <table class="bx-kv">${(t.fields||[]).map(f=>`<tr><th>${esc(f.label)}</th><td>${esc(f.value)}</td></tr>`).join('')}</table>
+    ${(t.files||[]).length?`<h3 class="bx-h3">Attachments</h3><div class="cx-files">${t.files.map(f=>`<div>${cx.res['att'+f.id]&&cx.res['att'+f.id].src?`<img src="${cx.res['att'+f.id].src}" alt="${esc(f.name)}">`:''}
+      <span>${esc(f.name)} <span class="text-muted">(${Math.round(f.size/1024)} KB)</span></span>${/^image\//.test(f.type)&&!(cx.res['att'+f.id]&&cx.res['att'+f.id].src)?` <button class="btn btn-ghost btn-sm" data-cx="att" data-a="${esc(f.id)}">${cx.res['att'+f.id]&&cx.res['att'+f.id].loading?'Loading…':'Show'}</button>`:''}${cx.res['att'+f.id]&&cx.res['att'+f.id].error?`<span class="err">${esc(cx.res['att'+f.id].error)}</span>`:''}</div>`).join('')}</div>`:''}
+    ${(t.comments||[]).length?`<h3 class="bx-h3">Activity</h3>${t.comments.map(c=>`<div class="cx-cmt"><div class="text-muted">${esc(c.user)} · ${esc(d(c.at))}</div>${c.comment?`<div>${esc(c.comment)}</div>`:''}${c.details.map(x=>`<div class="text-muted">${esc(x)}</div>`).join('')}
+      ${c.comment?`<button class="btn btn-ghost btn-sm" data-cx="toVoc" data-t="${esc(c.comment.slice(0,500))}">→ Voice of the Customer</button>`:''}</div>`).join('')}`:''}</div>`;
+}
+function cxModelFor(text,serial){
+  const map=(cx.data&&cx.data.modelMap)||[], s=String(serial||'').replace(/\D/g,'');
+  let best=null; map.forEach(m=>{ if(s.indexOf(m.prefix)===0&&(!best||m.prefix.length>best.prefix.length)) best=m; });
+  if(best) return best.sdmc;
+  const t=String(text||'').toLowerCase(); let hit='';
+  map.forEach(m=>{ if(m.lumio&&t.includes(m.lumio.toLowerCase())) hit=m.sdmc; if(!hit&&m.sdmc&&t.includes(m.sdmc.toLowerCase())) hit=m.sdmc; });
+  return hit;
+}
+function cxIso(s){
+  s=String(s||'').trim(); let m;
+  if((m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s))) return m[1]+'-'+m[2]+'-'+m[3];
+  if((m=/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/.exec(s))) return m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2);
+  const d=new Date(s); return isNaN(d)?'':d.toISOString().slice(0,10);
+}
+async function cxSave(next){
+  const F=cx.form, v=Object.assign({},F.v);
+  const miss=CX_REQ.filter(k=>!String(v[k]||'').trim());
+  if(miss.length){ toast('Fill in: '+miss.map(k=>CX_FIELDS.find(x=>x[0]===k)[1]).join(', '),'err'); return; }
+  if(v.bugId&&!/^\d+$/.test(String(v.bugId).replace(/^#/,''))){ toast('Bug ID must be a number.','err'); return; }
+  const rec={}; CX_FIELDS.filter(x=>!x[2]).forEach(([k])=>rec[k]=String(v[k]||'').trim()); if(F.row) rec._row=F.row;
+  cx.busy='save'; render();
+  const r=await capi('saveRecord',{record:rec,mode:F.mode==='new'?'new':'edit'});
+  cx.busy='';
+  if(!r.ok){ toast(r.error||'Could not save.','err'); render(); return; }
+  const sy=r.sync&&r.sync.results?r.sync.results.filter(x=>x.added).map(x=>x.label).join(', '):'';
+  toast(`Saved as Sl ${r.slNo}${sy?', copied to '+sy:''}.`);
+  const prevRow=r.row; cx.data=null; await cxLoad('data','getData');
+  if(next){
+    const open=(cx.data.records||[]).filter(x=>cxStatusOf(x)==='open'&&x._row!==prevRow).sort((a,b)=>a._row-b._row);
+    const n=open.find(x=>x._row>prevRow)||open[0];
+    if(n){ cxOpenForm(n,'edit'); return; }
+  }
+  const saved=(cx.data.records||[]).find(x=>x._row===prevRow);
+  if(saved) cxOpenForm(saved,'edit'); else { cx.form=null; render(); }
+}
+
+// ---------- dashboard ----------
+function cxTable(labels,head,rows,extra){
+  return `<div class="bx-tw"><table class="res-table cx-afr"><thead><tr><th></th>${labels.map(l=>`<th class="num">${esc(l)}</th>`).join('')}${extra?'<th class="num">Total</th>':''}</tr></thead><tbody>
+    ${rows.map(r=>`<tr><th>${esc(r.l)}</th>${r.v.map((x,i)=>`<td class="num mono ${r.c?r.c(x,i):''}">${r.f?r.f(x):esc(x==null?'-':x)}</td>`).join('')}${extra?`<td class="num mono ${r.c?r.c(r.t):''}"><b>${r.f?r.f(r.t):esc(r.t==null?'-':r.t)}</b></td>`:''}</tr>`).join('')}</tbody></table></div>`;
+}
+function cxBlockRows(b,lim){
+  const R=b.rows,C=b.cum;
+  return [{l:'Sold units',v:R.sold,t:C.sold},{l:'DOA',v:R.doa,t:C.doa},{l:'Repair',v:R.repair,t:C.repair},{l:'Total defects',v:R.defects,t:C.defects},
+    {l:'DOA %',v:R.doaP,t:C.doaP,f:cxPct,c:x=>cxBand(x,lim.doa)},{l:'Repair AFR %',v:R.afr,t:C.afr,f:cxPct,c:x=>cxBandAfr(x,lim.afr)}];
+}
+function cxDash(){
+  if(!cx.status) cxLoad('status','getStatus');
+  if(!cx.afr) { cxLoad('afr','getAfr'); return cxWait(cx.afr,'AFR tables'); }
+  if(cx.afr.error) return cxWait(cx.afr);
+  const a=cx.afr, lim=(cx.status&&cx.status.limits)||{doa:[.005,.01],afr:[.02,.03],oqcTarget:95,obaTarget:7};
+  const legend=`<div class="cx-legend"><span class="cx-ok">DOA below ${lim.doa[0]*100}% · AFR up to ${lim.afr[0]*100}%</span><span class="cx-mid">DOA ${lim.doa[0]*100}–${lim.doa[1]*100}% · AFR ${lim.afr[0]*100}–${lim.afr[1]*100}%</span><span class="cx-bad">DOA above ${lim.doa[1]*100}% · AFR above ${lim.afr[1]*100}%</span></div>`;
+  return `<div class="bx-bar bx-noprint"><span class="text-muted">Month wise by ${a.basis==='complaint'?'complaint':'invoice (sale)'} month. ${a.cases} DOA / Repair cases from Raw Data (Category = Complaint).</span><span style="flex:1"></span>
+      <button class="btn btn-ghost btn-sm" data-cx="reloadAfr">Refresh</button><button class="btn btn-primary btn-sm" data-cx="print">Print / PDF</button></div>
+    ${legend}
+    ${(a.warnings||[]).length?`<div class="info-banner"><b>Check:</b><br>${a.warnings.map(esc).join('<br>')}</div>`:''}
+    ${a.combined&&a.combined.labels.length?`<div class="card"><h2 class="bx-h3">All models, month wise</h2>${cxTable(a.combined.labels,null,cxBlockRows(a.combined,lim),1)}</div>`:''}
+    ${a.models.map(m=>`<section class="card cx-model"><div class="bx-ecn-h"><h2 class="bx-ecn-no">${esc(m.name)}</h2>
+        <span class="badge ${m.recon.ok?'badge-pass':'badge-fail'}">${m.recon.ok?'Figures balance':'Figures do not balance'}</span></div>
+      <p class="text-muted">Sold ${esc(m.recon.sales)} of ${esc(m.recon.output)} produced (stock ${esc(m.recon.stock)}). Raw Data: ${esc(m.recon.rawDoa)} DOA, ${esc(m.recon.rawRepair)} Repair.</p>
+      ${m.month.labels.length?`<h3 class="bx-h3">Month wise</h3>${cxTable(m.month.labels,null,cxBlockRows(m.month,lim),1)}`:''}
+      ${m.lot.labels.length?`<h3 class="bx-h3">Lot wise</h3>${cxTable(m.lot.labels.map((l,i)=>l+' ('+m.lot.months[i]+')'),null,[{l:'Output',v:m.lot.output,t:m.lot.output.reduce((x,y)=>x+y,0)}].concat(cxBlockRows(m.lot,lim)),1)}`:''}
+      ${m.oqc&&m.oqc.labels.length?`<h3 class="bx-h3">OQC pass rate (target ${esc(m.oqc.target)}% or more)</h3>${cxTable(m.oqc.labels,null,[{l:'Output',v:m.oqc.output,t:m.oqc.cum.output},{l:'Defective',v:m.oqc.defect.map((x,i)=>m.oqc.entered[i]?x:null),t:m.oqc.cum.defect},
+        {l:'Pass rate',v:m.oqc.pass,t:m.oqc.cum.pass,f:cxPct,c:x=>x==null?'':Number(x)>=m.oqc.target?'cx-ok':'cx-bad'}],1)}`:''}
+      ${m.oba&&m.oba.labels.length?`<h3 class="bx-h3">OBA defect rate (target below ${esc(m.oba.target)}%)</h3>${cxTable(m.oba.labels,null,[{l:'Samples',v:m.oba.samples.map((x,i)=>m.oba.entered[i]?x:null),t:m.oba.cum.samples},{l:'Defective',v:m.oba.defect.map((x,i)=>m.oba.entered[i]?x:null),t:m.oba.cum.defect},
+        {l:'Defect rate',v:m.oba.rate,t:m.oba.cum.rate,f:cxPct,c:x=>x==null?'':Number(x)<m.oba.target?'cx-ok':'cx-bad'}],1)}`:''}
+    </section>`).join('')||'<div class="card text-muted">No production, sales or complaint data yet. Add figures under Enter data.</div>'}`;
+}
+
+// ---------- data entry ----------
+function cxEntry(){
+  if(!cx.entry){ cxLoad('entry','getEntryData'); return cxWait(cx.entry,'figures'); }
+  if(cx.entry.error) return cxWait(cx.entry);
+  const E=cx.entry, models=E.models||[];
+  if(!cx.ui.em||!models.includes(cx.ui.em)) cx.ui.em=models[0]||'';
+  const m=cx.ui.em, t=cx.ui.et||'prod';
+  const tab=(k,l)=>`<button class="seg-btn ${t===k?'on':''}" data-cx="etab" data-v="${k}">${l}</button>`;
+  const same=x=>String(x.model).toLowerCase()===String(m).toLowerCase();
+  if(!cx.ui.erows||cx.ui.erowsKey!==m+'|'+t){
+    const mon=k=>k||'';
+    const prod=E.production.filter(same);
+    cx.ui.erows=t==='prod'?prod.map(p=>({lot:p.lot,month:mon(p.month),month2:mon(p.month2),qty:p.qty,output:p.output})):
+      t==='sales'?E.sales.filter(same).map(s=>({month:mon(s.month),sold:s.sold})):
+      t==='oqc'?prod.map(p=>{ const e=E.oqc.find(x=>same(x)&&cxLotKey(x.lot)===cxLotKey(p.lot)); return {lot:p.lot,output:p.output,def:e?e.def:''}; }):
+      prod.map(p=>{ const e=E.oba.find(x=>same(x)&&cxLotKey(x.lot)===cxLotKey(p.lot)); return {lot:p.lot,output:p.output,samples:e?e.samples:'',def:e?e.def:''}; });
+    cx.ui.erowsKey=m+'|'+t;
+  }
+  const rows=cx.ui.erows, cell=(i,k,type,ro)=>`<td><input class="field ${type==='number'?'num':''}" ${type?`type="${type}"`:''} data-cxe="${i}" data-k="${k}" value="${esc(rows[i][k]??'')}" ${ro?'readonly tabindex="-1"':''} ${type==='number'?'min="0" step="1"':''}></td>`;
+  let tbl;
+  if(t==='prod') tbl=`<thead><tr><th>Lot</th><th>Month of production</th><th>Second month (if any)</th><th>Lot quantity</th><th>Output</th><th></th></tr></thead><tbody>${rows.map((r,i)=>`<tr>${cell(i,'lot')}${cell(i,'month','month')}${cell(i,'month2','month')}${cell(i,'qty','number')}${cell(i,'output','number')}<td><button class="btn btn-ghost btn-sm" data-cx="erDel" data-i="${i}" aria-label="Remove row">✕</button></td></tr>`).join('')}</tbody>`;
+  else if(t==='sales') tbl=`<thead><tr><th>Sale month</th><th>Sold units</th><th></th></tr></thead><tbody>${rows.map((r,i)=>`<tr>${cell(i,'month','month')}${cell(i,'sold','number')}<td><button class="btn btn-ghost btn-sm" data-cx="erDel" data-i="${i}" aria-label="Remove row">✕</button></td></tr>`).join('')}</tbody>`;
+  else if(t==='oqc') tbl=`<thead><tr><th>Lot</th><th>Output (from production)</th><th>Defective quantity</th></tr></thead><tbody>${rows.map((r,i)=>`<tr>${cell(i,'lot','',1)}${cell(i,'output','number',1)}${cell(i,'def','number')}</tr>`).join('')}</tbody>`;
+  else tbl=`<thead><tr><th>Lot</th><th>Output</th><th>Samples inspected</th><th>Defective quantity</th></tr></thead><tbody>${rows.map((r,i)=>`<tr>${cell(i,'lot','',1)}${cell(i,'output','number',1)}${cell(i,'samples','number')}${cell(i,'def','number')}</tr>`).join('')}</tbody>`;
+  return `<div class="bx-bar"><label class="bx-lbl">Model <select class="field bx-sel" data-cxc="em">${models.map(x=>`<option ${x===m?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
+      <span style="flex:1"></span><div class="seg">${tab('prod','Production')}${tab('sales','Sales')}${tab('oqc','OQC')}${tab('oba','OBA')}</div></div>
+    <div class="card"><p class="text-muted">${t==='prod'?'One row per production lot. A lot made over two months can have a second month.':t==='sales'?'Units sold per month. Sold units are poured into the lots in order for the lot wise AFR.':t==='oqc'?`Defective quantity per lot. Pass rate target ${esc(E.oqcTarget)}% or more. Lots come from Production.`:`Samples inspected and defective quantity per lot. Defect rate target below ${esc(E.obaTarget)}%.`}</p>
+      <div class="bx-tw"><table class="res-table cx-entry">${tbl}</table></div>
+      ${(t==='oqc'||t==='oba')&&!rows.length?'<p class="text-muted">Add the production lots of this model first.</p>':''}
+      <div class="bx-foot">${t==='prod'||t==='sales'?`<button class="btn btn-ghost" data-cx="erAdd">${t==='prod'?'Add lot':'Add month'}</button>`:''}
+        <button class="btn btn-primary" data-cx="erSave" ${cx.busy?'disabled':''}>${cx.busy==='entry'?'Saving…':'Save '+({prod:'production',sales:'sales',oqc:'OQC',oba:'OBA'}[t])}</button></div></div>`;
+}
+function cxLotKey(s){ return String(s||'').toLowerCase().replace(/\([^)]*\)/g,'').replace(/[^a-z0-9]/g,''); }
+
+// ---------- data checks ----------
+function cxChecks(){
+  if(!cx.checks){ cxLoad('checks','getDataChecks',{}); return cxWait(cx.checks,'data checks'); }
+  if(cx.checks.error) return cxWait(cx.checks);
+  const c=cx.checks, o=c.opts||{scope:'open',dup:true};
+  const recs=cx.data&&cx.data.records||[];
+  return `<div class="bx-bar"><div class="seg"><button class="seg-btn ${o.scope==='open'?'on':''}" data-cx="ckScope" data-v="open">Open cases</button><button class="seg-btn ${o.scope==='all'?'on':''}" data-cx="ckScope" data-v="all">All cases</button></div>
+      <label class="cx-check"><input type="checkbox" data-cxc="ckDup" ${o.dup?'checked':''}> Flag the same serial on more than one row</label><span style="flex:1"></span>
+      <button class="btn btn-ghost btn-sm" data-cx="ckRun">Re-check</button><button class="btn btn-ghost btn-sm" data-cx="ckMark" ${cx.busy?'disabled':''}>Mark in sheet</button>
+      <button class="btn btn-primary btn-sm" data-cx="ckMail" ${cx.busy?'disabled':''}>Email me the list</button></div>
+    <p class="text-muted">${esc(c.rows)} ${o.scope==='open'?'open ':''}rows checked: serial must be 15 digits, the production month must match the serial, invoice and complaint dates must not be before the production month. Email goes to ${esc(c.to||'the owner')}. "Mark in sheet" colours the cells red with a note and writes the Data Check Log tab.</p>
+    ${c.total?`<div class="bx-tw"><table class="res-table"><thead><tr><th>Row</th><th>Bug</th><th>Model</th><th>Serial</th><th>Check</th><th>What is wrong</th><th></th></tr></thead><tbody>
+      ${c.issues.map(i=>{ const rec=recs.find(r=>r._row===i.row); return `<tr><td class="mono">${esc(i.row)}</td><td class="mono">${i.bug?'#'+esc(i.bug):''}</td><td>${esc(i.model)}</td><td class="mono">${esc(i.serial)}</td><td>${esc(i.rule)}</td><td>${esc(i.detail)}</td>
+        <td>${rec?`<button class="btn btn-ghost btn-sm" data-cx="edit" data-r="${esc(rec._row)}">Edit</button>`:''}</td></tr>`; }).join('')}</tbody></table></div>
+      ${c.total>c.issues.length?`<p class="text-muted">Showing ${c.issues.length} of ${c.total}.</p>`:''}`:'<div class="card"><b class="text-pass">All clear.</b> No problems found.</div>'}`;
+}
+
+// ---------- first-time connection ----------
+function cxSetup(){
+  if(!isAdminUser()) return '<div class="card">The complaint tracker is not connected to the portal yet. Ask an admin to connect it.</div>';
+  return `<div class="card"><h2 class="bx-h3">Connect the Customer Complaint tracker</h2>
+    <p class="text-muted">Paste the web app URL of the complaint script's "Portal API" deployment (Apps Script, project "Projector Dash Board", Deploy, Manage deployments). It is saved in the portal's Settings tab.</p>
+    <div class="cx-inline"><input class="field" type="url" data-cxf="curl" value="${esc(cxF('curl'))}" placeholder="https://script.google.com/macros/s/…/exec" aria-label="Complaint script web app URL">
+      <button class="btn btn-primary btn-sm" data-cx="setUrl">Connect</button></div></div>`;
+}
+
+// ---------- tools ----------
+function cxTools(){
+  if(!cx.status){ cxLoad('status','getStatus'); return cxWait(cx.status,'tools'); }
+  if(cx.status.error) return cxWait(cx.status);
+  const S=cx.status, adm=isAdminUser();
+  const btn=(a,l,o)=>{ o=o||{}; if(o.admin&&!adm) return ''; return `<button class="btn ${o.primary?'btn-primary':o.danger?'btn-danger':'btn-ghost'} btn-sm" data-cx="tool" data-a="${a}" ${o.confirm?`data-confirm="${esc(o.confirm)}"`:''} ${cx.busy?'disabled':''}>${cx.busy==='t_'+a?'Working…':esc(l)}</button>`; };
+  const auto=k=>{ const s=S.auto[k]; return `<div class="cx-auto"><span class="badge ${s.on?'badge-pass':'badge-closed'}">${s.on?'Automatic ON':'Automatic OFF'}</span> <span class="text-muted">${esc(s.label)}</span>
+    ${adm?`<button class="btn btn-ghost btn-sm" data-cx="auto" data-k="${k}" data-on="${s.on?0:1}" ${cx.busy?'disabled':''}>${s.on?'Turn off':'Turn on'}</button>`:''}</div>`; };
+  const res=k=>cx.res[k]?`<div class="cx-res ${cx.res[k].error?'err':''}">${esc(cx.res[k].error||cx.res[k].text||'')}${cx.res[k].list&&cx.res[k].list.length?`<table class="res-table" style="margin-top:8px"><thead><tr><th>Row</th><th>Bug</th><th>Model</th><th>Serial</th><th>Reason</th></tr></thead><tbody>${cx.res[k].list.slice(0,200).map(x=>`<tr><td>${esc(x.row)}</td><td>${esc(x.bug)}</td><td>${esc(x.model)}</td><td class="mono">${esc(x.serial)}</td><td>${esc(x.why)}</td></tr>`).join('')}</tbody></table>`:''}${cx.res[k].log&&cx.res[k].log.length?`<div class="bx-tw" style="margin-top:8px"><table class="res-table"><thead><tr><th>Row</th><th>Sl</th><th>Bug</th><th>Field</th><th>Old</th><th>New</th><th>Lumio model</th><th>Note</th></tr></thead><tbody>${cx.res[k].log.slice(0,200).map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:''}</div>`:'';
+  const card=(t,d,body,k)=>`<section class="card cx-tool"><h2 class="bx-h3">${t}</h2><p class="text-muted">${d}</p>${body}${res(k)}</section>`;
+  return `<p class="text-muted">The same tools as the 🛠 Complaint Form menu in the sheet. Preview never writes anything. <a href="${esc(S.sheetUrl)}" target="_blank" rel="noopener">Open the complaint sheet</a></p>
+  ${card('Category sync','Copies rows from Open Project to Raw Data (Category Complaint) and Unaccounted Complaints (NTF, OOW). Each saved complaint is synced straight away.',
+    `<div class="bx-act cx-left">${btn('syncPreview','Preview')}${btn('syncNow','Run now',{primary:1})}${btn('syncRepair','Repair #REF! cells')}</div>${auto('sync')}`,'sync')}
+  ${card('Ticket import','Adds new projector tickets from OpenProject as new rows with Category TBD. Tickets already in the sheet are never added twice.',
+    `<div class="bx-act cx-left">${btn('importPreview','Preview new tickets')}${btn('importNow','Import new tickets now',{primary:1})}${btn('cleanupPreview','Clean up: preview TV / empty rows')}${btn('cleanupApply','Remove TV / empty rows',{admin:1,danger:1,confirm:'Delete untouched TV, no-serial and empty rows from Open Project? Rows filled in by hand are never touched. Run the preview first.'})}${btn('importReset','Restart from the first ticket',{admin:1,confirm:'Read all tickets again from the first one on the next import?'})}</div>${auto('import')}`,'import')}
+  ${card('Lot from Production Data','Fills the Lot column from Production Data by model and production month, when exactly one lot was made that month.',
+    `<div class="bx-act cx-left">${btn('lotsPreview','Preview')}${btn('lotsNow','Fill lot now',{primary:1})}</div>`,'lots')}
+  ${card('Model sheets (LH1G / LH3G)','Adds a column for each new production lot. DOA and Repair are live formulas from Raw Data.',
+    `<div class="bx-act cx-left">${btn('modelPreview','Preview')}${btn('modelNow','Update from Production Details',{primary:1})}${btn('modelRebuild','Rebuild all formulas and colours',{admin:1,confirm:'Replace DOA, Repair, totals and % formulas in every lot column? Sold units are never touched.'})}</div>${auto('model')}`,'model')}
+  ${card('Data checks','Serial number and date checks. Scope: '+(S.checks.scope==='all'?'all cases':'open cases only')+'. Email goes to '+esc(S.checkEmails||'the owner')+'.',
+    `<div class="bx-act cx-left"><button class="btn btn-primary btn-sm navGo" data-go="complaints/checks">Open data checks</button></div>${auto('checks')}
+     ${adm?`<div class="cx-inline"><input class="field" data-cxf="emails" value="${esc(cxF('emails',S.checkEmails))}" placeholder="a@x.com, b@x.com" aria-label="Check email addresses"><button class="btn btn-ghost btn-sm" data-cx="setEmails">Save email addresses</button></div>`:''}`,'checks')}
+  ${card('OpenProject','Backfill fills Model, Serial, dates and Category of existing rows from the tickets, and the calculated columns where they are empty or TBD.',
+    `<div class="bx-act cx-left">${btn('backfillPreview','Backfill: preview')}${btn('backfillApply','Backfill: apply',{admin:1,primary:1,confirm:'Update Model, Serial, Invoice and Complaint dates from the tickets and fill empty calculated columns and categories? A change log tab is written.'})}</div>
+     <div class="cx-inline"><input class="field mono" data-cxf="testBug" value="${esc(cxF('testBug'))}" placeholder="Bug ID" inputmode="numeric" aria-label="Bug ID to test" style="max-width:140px"><button class="btn btn-ghost btn-sm" data-cx="testBug">Test a Bug ID</button>
+       <span class="text-muted">API key ${S.opKeySet?'is set':'<b class="text-fail">is not set</b>'}.</span></div>
+     ${adm?`<div class="cx-inline"><input class="field" type="password" data-cxf="opKey" value="" placeholder="New OpenProject API token" autocomplete="off" aria-label="OpenProject API token"><button class="btn btn-ghost btn-sm" data-cx="setKey">Save API key</button></div>`:''}`,'op')}`;
+}
+
+function buildComplaints(){
+  const parts=(location.hash||'').replace(/^#\/?/,'').split('/');
+  const k=CX_TOOLS.some(x=>x.k===parts[1])?parts[1]:'list';
+  if(cx.tool!==k){ cx.tool=k; }
+  const tool=CX_TOOLS.find(x=>x.k===k);
+  if(k!=='dash'&&!cx.data) cxLoad('data','getData');
+  const body=!(session&&session.complaintUrl)?cxSetup():{list:cxList,dash:cxDash,entry:cxEntry,checks:cxChecks,tools:cxTools}[k]();
+  return `<div class="page">${appHeader('Projector, customer complaints')}<div class="main">
+    <div class="pg-head bx-noprint"><div><h1 class="pg-title">${esc(tool.t)}</h1><p class="pg-sub">${esc(tool.d)}</p></div>
+      <nav class="seg cx-nav" aria-label="Complaint screens">${CX_TOOLS.map(x=>`<button class="seg-btn navGo ${x.k===k?'on':''}" data-go="complaints/${x.k}">${esc(x.t)}</button>`).join('')}</nav></div>
+    ${body}</div><footer class="pg-footer bx-noprint">LUMIO Quality Management - Projector</footer></div>`;
+}
+
+async function cxTool(a,el){
+  const conf=el.getAttribute('data-confirm'); if(conf&&!confirm(conf)) return;
+  const key={syncPreview:'sync',syncNow:'sync',syncRepair:'sync',importPreview:'import',importNow:'import',cleanupPreview:'import',cleanupApply:'import',importReset:'import',
+    lotsPreview:'lots',lotsNow:'lots',modelPreview:'model',modelNow:'model',modelRebuild:'model',backfillPreview:'op',backfillApply:'op'}[a]||a;
+  cx.busy='t_'+a; cx.res[key]={text:'Working… this can take a few minutes.'}; render();
+  const r=await capi(a,{});
+  cx.busy=''; cx.res[key]=r.ok?r:{error:r.error||r.text||'It did not run.'};
+  if(r.ok&&!/Preview/.test(a)){ cx.data=null; cx.afr=null; cx.checks=null; }
+  render();
+}
+async function cxAction(a,el){
+  const g=n=>el.getAttribute(n);
+  if(a==='tab'){ cx.ui.tab=g('data-v'); render(); return; }
+  if(a==='setUrl'){ const r=await api('setComplaintUrl',{url:String(cxF('curl')).trim()}); if(!r.ok){ toast(r.error||'Not saved.','err'); return; }
+    session.complaintUrl=r.url; saveSession(); cxReset(); toast('Connected.'); render(); return; }
+  if(a==='reload'){ cx.data=null; cxLoad('data','getData',null,true); return; }
+  if(a==='dlList'){
+    const recs=(cx.data&&cx.data.records)||[];
+    cxDl(`Complaints_${new Date().toISOString().slice(0,10)}.xlsx`,CX_FIELDS.map(([k,l])=>({h:l,w:k==='voc'||k==='remarks'?36:16,text:k==='serial'||k==='newSerial'})),recs.map(r=>CX_FIELDS.map(([k])=>r[k]||'')));
+    return;
+  }
+  if(a==='newForm'){ cxOpenForm(null,'new'); return; }
+  if(a==='edit'){ const r=(cx.data&&cx.data.records||[]).find(x=>String(x._row)===g('data-r')); if(r){ if(page!=='complaints'||cx.tool!=='list'){ go('complaints/list'); } cxOpenForm(r,'edit'); } return; }
+  if(a==='startPending'){ const p=(cx.data.pending||[]).find(x=>String(x._row)===g('data-r')); if(!p) return; const v={_row:p._row,bugId:p.bugId}; cxOpenForm(v,'edit'); cx.form.v.bugId=String(p.bugId); cx.form.orig=null; await cxAction('fetchBug',el); return; }
+  if(a==='closeForm'){ cx.form=null; cx.ticket=null; render(); return; }
+  if(a==='fetchBug'){
+    const id=String(cx.form.v.bugId||'').replace(/\D/g,''); if(!id){ toast('Enter the Bug ID.','err'); return; }
+    toast('Reading ticket #'+id+'…');
+    const r=await capi('fetchBugData',{bugId:id});
+    if(!r.ok){ toast(r.error||'Could not read the ticket.','err'); return; }
+    const v=cx.form.v, d=r.data||{}; let n=0;
+    const put=(k,val)=>{ if(val&&!String(v[k]||'').trim()){ v[k]=val; n++; } };
+    put('serial',String(d.serial||'').replace(/\s+/g,'')); put('invoiceDate',cxIso(d.invoiceDate)); put('complaintDate',cxIso(d.complaintDate));
+    put('model',cxModelFor(d.model,d.serial||v.serial)); if(d.category&&!String(v.category||'').trim()) { v.category=d.category; n++; }
+    toast(n?`Filled ${n} field${n===1?'':'s'} from ticket #${id}${r.complaintFromCreated?' (complaint date = ticket created date)':''}.`:'Nothing new on the ticket; your entries were kept.');
+    render(); return;
+  }
+  if(a==='ticket'){
+    const id=g('data-b'); if(!cx.form){ const rec=(cx.data.records||[]).find(x=>String(x.bugId)===String(id)); if(rec) cxOpenForm(rec,'edit'); else { cxOpenForm({bugId:id},'new'); cx.form.v.bugId=String(id); } }
+    cx.ticket={loading:true}; render();
+    const r=await capi('fetchTicketView',{bugId:id}); cx.ticket=r.ok?{data:r}:{error:r.error}; render(); return;
+  }
+  if(a==='closeTicket'){ cx.ticket=null; render(); return; }
+  if(a==='att'){ const id=g('data-a'); cx.res['att'+id]={loading:true}; render(); const r=await capi('fetchAttachment',{attId:id});
+    cx.res['att'+id]=r.ok&&/^image\/[a-z0-9.+-]+$/i.test(r.mime)?{src:'data:'+r.mime+';base64,'+r.data}:{error:r.error||'Not an image.'}; render(); return; }
+  if(a==='toVoc'){ const v=cx.form.v; v.voc=(v.voc?v.voc+'\n':'')+g('data-t'); render(); return; }
+  if(a==='save'){ cxSave(false); return; }
+  if(a==='saveNext'){ cxSave(true); return; }
+  if(a==='reopen'){ if(!confirm('Reopen this complaint? Its Category becomes TBD.')) return; cx.form.v.category='TBD'; cxSave(false); return; }
+  if(a==='reloadAfr'){ cx.afr=null; cxLoad('afr','getAfr',null,true); return; }
+  if(a==='print'){ document.body.classList.add('bx-printing'); window.print(); setTimeout(()=>document.body.classList.remove('bx-printing'),500); return; }
+  if(a==='etab'){ cx.ui.et=g('data-v'); cx.ui.erows=null; render(); return; }
+  if(a==='erAdd'){ cx.ui.erows.push((cx.ui.et||'prod')==='prod'?{lot:'',month:'',month2:'',qty:'',output:''}:{month:'',sold:''}); render(); return; }
+  if(a==='erDel'){ cx.ui.erows.splice(Number(g('data-i')),1); render(); return; }
+  if(a==='erSave'){
+    const t=cx.ui.et||'prod', act={prod:'saveProduction',sales:'saveSales',oqc:'saveOqc',oba:'saveOba'}[t];
+    cx.busy='entry'; render();
+    const r=await capi(act,{model:cx.ui.em,rows:cx.ui.erows});
+    cx.busy='';
+    if(r.ok){ toast(`Saved ${r.saved} row${r.saved===1?'':'s'}.`); cx.entry=null; cx.afr=null; cx.ui.erows=null; await cxLoad('entry','getEntryData'); } else toast(r.error||'Could not save.','err');
+    render(); return;
+  }
+  if(a==='ckScope'||a==='ckRun'){ const o=Object.assign({},(cx.checks&&cx.checks.opts)||{}); if(a==='ckScope') o.scope=g('data-v'); cx.checks=null; cxLoad('checks','getDataChecks',{opts:o},true); return; }
+  if(a==='ckMark'||a==='ckMail'){
+    cx.busy='ck'; render();
+    const r=await capi('runDataChecks',{mail:a==='ckMail',opts:(cx.checks&&cx.checks.opts)||{}});
+    cx.busy='';
+    toast(r.ok?(r.total?`${r.total} problem(s) marked in the sheet${r.mailed?', email sent to '+r.to:''}.`:'All clear, nothing to mark.'):(r.error||'It did not run.'),r.ok?'ok':'err'); render(); return;
+  }
+  if(a==='tool'){ cxTool(g('data-a'),el); return; }
+  if(a==='auto'){ cx.busy='auto'; render(); const r=await capi('setAuto',{kind:g('data-k'),on:g('data-on')==='1'}); cx.busy='';
+    if(r.ok){ cx.status.auto=r.auto; toast('Saved.'); } else toast(r.error||'Could not change it.','err'); render(); return; }
+  if(a==='setEmails'){ const r=await capi('setCheckEmails',{list:cxF('emails')}); toast(r.ok?r.text:(r.error||'Not saved.'),r.ok?'ok':'err'); if(r.ok){ cx.status=null; render(); } return; }
+  if(a==='setKey'){ const k=String(cx.f.opKey||'').trim(); if(!k){ toast('Paste the API token first.','err'); return; }
+    const r=await capi('setOpKey',{key:k}); cx.f.opKey=''; toast(r.ok?r.text:(r.error||'Not saved.'),r.ok?'ok':'err'); if(r.ok){ cx.status=null; } render(); return; }
+  if(a==='testBug'){ const id=String(cxF('testBug')).replace(/\D/g,''); if(!id){ toast('Enter a Bug ID.','err'); return; }
+    cx.res.op={text:'Reading ticket…'}; render(); const r=await capi('fetchBugData',{bugId:id});
+    cx.res.op=r.ok?{text:`Ticket #${r.id}\nModel: ${r.data.model||'-'}\nSerial: ${r.data.serial||'-'}\nInvoice date: ${r.data.invoiceDate||'-'}\nComplaint date: ${r.data.complaintDate||'-'}${r.complaintFromCreated?' (ticket created date)':''}\nCategory: ${r.data.category||'-'}\n\nAll ticket fields:\n${(r.fields||[]).map(f=>f.label+' = '+f.value).join('\n')}`}:{error:r.error}; render(); return; }
+}
+async function cxUpload(file){
+  if(!file) return;
+  if(file.size>8*1024*1024){ toast('Files up to 8 MB. For bigger videos, paste a Drive link instead.','err'); return; }
+  cx.busy='upload'; render();
+  const b64=await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]||''); fr.onerror=rej; fr.readAsDataURL(file); });
+  const r=await capi('uploadMedia',{file:{name:file.name,mime:file.type||'application/octet-stream',data:b64}});
+  cx.busy='';
+  if(r.ok&&r.data&&r.data.url){ const v=cx.form.v; v.media=(String(v.media||'').trim()?v.media.trim()+'\n':'')+r.data.url; toast('Uploaded. The link is in Image / Video.'); }
+  else toast(r.error||'Upload failed.','err');
+  render();
+}
+document.addEventListener('click',ev=>{ if(page!=='complaints') return; const t=ev.target.closest('[data-cx]'); if(t&&!t.disabled){ ev.preventDefault(); cxAction(t.getAttribute('data-cx'),t); } });
+document.addEventListener('keydown',ev=>{ if(page!=='complaints'||ev.key!=='Enter') return; const t=ev.target.closest('tr[data-cx]'); if(t){ ev.preventDefault(); cxAction('edit',t); } });
+document.addEventListener('input',ev=>{ if(page!=='complaints') return; const t=ev.target;
+  if(t.matches('[data-cxv]')&&cx.form) cx.form.v[t.getAttribute('data-cxv')]=t.value;
+  else if(t.matches('[data-cxf]')) cx.f[t.getAttribute('data-cxf')]=t.value;
+  else if(t.matches('[data-cxe]')){ const r=cx.ui.erows[Number(t.getAttribute('data-cxe'))]; if(r) r[t.getAttribute('data-k')]=t.value; }
+  else if(t.matches('[data-cxi="q"]')){ cx.ui.q=t.value; clearTimeout(cx.qt); cx.qt=setTimeout(()=>{ const pos=t.selectionStart; render(); const n=document.querySelector('[data-cxi="q"]'); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} } },250); } });
+document.addEventListener('change',ev=>{ if(page!=='complaints') return; const t=ev.target;
+  if(t.id==='cxFile'){ cxUpload(t.files&&t.files[0]); t.value=''; return; }
+  if(t.matches('[data-cxv]')&&cx.form){ cx.form.v[t.getAttribute('data-cxv')]=t.value; if(t.tagName==='SELECT'||t.getAttribute('data-cxv')==='serial'||t.getAttribute('data-cxv')==='bugId') render(); return; }
+  if(t.matches('[data-cxc]')){ const k=t.getAttribute('data-cxc');
+    if(k==='ckDup'){ const o=Object.assign({},(cx.checks&&cx.checks.opts)||{}); o.dup=t.checked; cx.checks=null; cxLoad('checks','getDataChecks',{opts:o},true); return; }
+    if(k==='em'){ cx.ui.em=t.value; cx.ui.erows=null; render(); return; }
+    cx.ui[k]=t.value; render(); } });
 
 // ─── BATCH FLOW STRIP ─────────────────────────────────────
 function buildFlow(g,isAdmin){
@@ -2755,7 +3212,7 @@ function bindEvents(){
       const r=await api('login',{username:u,password:p});
       if(r.ok){
         user={username:r.username,role:r.role,name:r.name,access:Array.isArray(r.access)?r.access:['bomverify','sampling']};
-        session={token:r.token,expiresAt:r.expiresAt,partdbUrl:r.partdbUrl||'',bomSheetUrl:r.bomSheetUrl||''};
+        session={token:r.token,expiresAt:r.expiresAt,partdbUrl:r.partdbUrl||'',bomSheetUrl:r.bomSheetUrl||'',complaintUrl:r.complaintUrl||''};
         routeFromHash(); introDone=false; saveSession();
         render(); // show dashboard immediately
         loadAll().then(()=>render()); // load batches + models in background
@@ -2800,7 +3257,7 @@ function bindEvents(){
 
   // Refresh
   ['btnRefresh','btnRefreshMenu'].forEach(id=>{ const br=document.getElementById(id);
-    if(br) br.onclick=async()=>{ lotUnits={}; bxClear(); await loadAll(true); render(); toast('Refreshed'); }; });
+    if(br) br.onclick=async()=>{ lotUnits={}; bxClear(); cx.data=null; cx.afr=null; cx.entry=null; cx.checks=null; cx.status=null; await loadAll(true); render(); toast('Refreshed'); }; });
 
   // Create Batch
   const bcb=document.getElementById('btnCreateBatch');
