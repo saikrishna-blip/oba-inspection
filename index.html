@@ -1861,7 +1861,17 @@ const CX_FIELDS=[
 const CX_REQ=['model','batch','serial','invoiceDate','complaintDate','defect'];
 let cx={tool:'list',data:null,status:null,loading:{},busy:'',f:{},ui:{tab:'open',q:'',model:'',cat:'',kind:''},form:null,res:{},afr:null,entry:null,checks:null,ticket:null};
 function cxReset(){ cx={tool:'list',data:null,status:null,loading:{},busy:'',f:{},ui:{tab:'open',q:'',model:'',cat:'',kind:''},form:null,res:{},afr:null,entry:null,checks:null,ticket:null}; }
-async function capi(action,args){
+async function capi(action,args,retried){
+  const r=await capi1(action,args);
+  // the tracker address may have changed since login: read it again once and retry
+  if(!retried&&r&&r.netErr){
+    const w=await api('whoami');
+    if(w&&w.ok&&session&&w.complaintUrl&&w.complaintUrl!==session.complaintUrl){ session.complaintUrl=w.complaintUrl; saveSession(); return capi(action,args,true); }
+    return {ok:false,error:'Could not reach the complaint tracker. Check your internet connection, or ask an admin to check its Portal API deployment.'};
+  }
+  return r;
+}
+async function capi1(action,args){
   const url=session&&session.complaintUrl;
   if(!url) return {ok:false,error:'The complaint tracker is not connected. Log out and log in again.'};
   try{
@@ -1871,7 +1881,7 @@ async function capi(action,args){
     const res=JSON.parse(t);
     if(res&&res.auth&&user){ resetApp(); render(); toast('Your session has expired. Please log in again.','err'); }
     return res;
-  }catch(e){ return {ok:false,error:'Network error: '+e.message}; }
+  }catch(e){ return {ok:false,netErr:true,error:'Network error: '+e.message}; }
 }
 // one shared loader: key -> cx[key], call -> capi
 async function cxLoad(key,action,args,force){
