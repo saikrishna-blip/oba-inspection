@@ -27,8 +27,8 @@ var DEFAULT_ACCESS = ["bomverify","fai","sampling"];
 // Actions any signed-in user may call (reading, own password)
 // Actions that only read; every other successful action clears the cache
 var READ_ACTIONS = ["login","logout","whoami","bootstrap","getBatches","getModels","modelInsights","getBomList","getBom","getBomVerification","getBomDraft",
-                    "getLotUnits","checkSerial","getFaiSpec","getFai","listUsers","scanDuplicates","searchRecords","qListAll","qLogFor"];
-var ALWAYS_ACTIONS = ["qListAll","qLogFor","bootstrap","modelInsights","logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai","getBom"];
+                    "getLotUnits","checkSerial","getFaiSpec","getFai","listUsers","scanDuplicates","searchRecords","qListAll","qLogFor","qAnalytics"];
+var ALWAYS_ACTIONS = ["qListAll","qLogFor","qAnalytics","bootstrap","modelInsights","logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai","getBom"];
 // recordRework (rework data + reoffer) belongs to the sampling module
 // Actions unlocked by a module; everything not listed here or above is admin only
 var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify", getBomDraft:"bomverify", saveBomDraft:"bomverify",
@@ -242,6 +242,7 @@ function doPost(e){
       result = getBomVerification(data);
     }
     if(action === "qListAll") result = qListAll(data);
+    if(action === "qAnalytics") result = qAnalytics();
     if(action === "qLogFor") result = qLogFor(data);
     if(action === "qSaveDefect") result = qSaveDefect(data);
     if(action === "qCreateDefects") result = qCreateDefects(data);
@@ -4225,4 +4226,40 @@ function qApproveCapa(d){
     qLog_("CAPA", cur.CapaID, approve ? "Approved and closed" : "Sent back", "Awaiting Approval", cur.Status, note, by);
     return {ok:true, id:cur.CapaID, status:cur.Status};
   } finally { lock.releaseLock(); }
+}
+
+/* ── analytics feed for the dashboard, inspections table and insights ──
+   One call, compact rows. Everything shown on those pages is calculated in the portal from these records. */
+function qAnalytics(){
+  var ss = getSpreadsheet(), out = {ok:true, samples:[], history:[], qlog:[], bomlog:[]};
+  var tz = function(v){ return v instanceof Date ? v.toISOString() : String(v || ""); };
+  var pf = function(v){ return String(v) === "Fail" ? "F" : "P"; };
+  var m = ss.getSheetByName("Master");
+  if(m && m.getLastRow() > 1){
+    var v = m.getRange(2, 1, m.getLastRow() - 1, 20).getValues();
+    v.forEach(function(r){
+      if(!r[3] || !r[4]) return;
+      var bdFail = /FAIL/i.test(String(r[9] || "")) ? "F" : "P";
+      out.samples.push([tz(r[0]), String(r[1] || ""), String(r[2] || ""), String(r[3] || ""), normSerial_(r[4]),
+        pf(r[5]) + pf(r[6]) + pf(r[7]) + pf(r[8]) + bdFail, pf(r[11]), String(r[12] || ""), String(r[15] || ""),
+        mmyy_(r[16]), Number(r[19]) || 1, String(r[10] || "").substring(0, 160), String(r[9] || "").substring(0, 120)]);
+    });
+  }
+  var h = ss.getSheetByName("LotHistory");
+  if(h && h.getLastRow() > 1){
+    var n = Math.min(h.getLastRow() - 1, 600), hv = h.getRange(h.getLastRow() - n + 1, 1, n, 7).getValues();
+    hv.forEach(function(r){ out.history.push([tz(r[0]), String(r[1]), String(r[2]), Number(r[3]) || 1, String(r[4]), String(r[5]).substring(0, 240), String(r[6])]); });
+  }
+  var q = ss.getSheetByName("QualityLog");
+  if(q && q.getLastRow() > 1){
+    var k = Math.min(q.getLastRow() - 1, 300), qv = q.getRange(q.getLastRow() - k + 1, 1, k, 8).getValues();
+    qv.forEach(function(r){ out.qlog.push([tz(r[0]), String(r[1]), String(r[2]), String(r[3]), String(r[4]), String(r[5]), String(r[6]).substring(0, 240), String(r[7])]); });
+  }
+  var b = ss.getSheetByName("BOM_VERIFY_LOG");
+  if(b && b.getLastRow() > 1){
+    b.getRange(2, 1, b.getLastRow() - 1, 10).getValues().forEach(function(r){
+      if(r[0]) out.bomlog.push([String(r[0]), tz(r[1]), String(r[2]), String(r[3]), Number(r[6]) || 0, Number(r[7]) || 0, String(r[8]), String(r[9])]);
+    });
+  }
+  return out;
 }

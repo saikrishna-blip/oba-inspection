@@ -1096,6 +1096,122 @@ body{font-feature-settings:"cv11","ss01";letter-spacing:-.003em}
 .dlg-it{display:grid;grid-template-columns:auto 150px 1fr 110px;gap:8px;align-items:center;font-size:12.5px}
 .dlg-it input[type=checkbox]{width:16px;height:16px;accent-color:var(--color-brand)}
 @media (max-width:640px){ .dlg-it{grid-template-columns:auto 1fr} .dlg-it .field{grid-column:1/-1} }
+
+/* ── analytics ──────────────────────────────────────────── */
+.eyebrow{font-size:12.5px;font-weight:500;color:var(--ink-3);margin-bottom:6px}
+.an-f{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.an-f select.field{min-height:36px;height:36px;width:auto;max-width:220px;padding:0 30px 0 10px;font-size:13px}
+.seg-sm .seg-btn{min-height:28px;font-size:12px;padding:0 10px}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.kpi{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;padding:16px 18px;border-radius:var(--radius-lg);border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow-1);cursor:pointer;position:relative;overflow:hidden;transition:border-color .18s,transform .18s var(--ease),box-shadow .18s}
+.theme-dark .kpi{background:linear-gradient(180deg,rgba(255,255,255,.025),transparent 90px),var(--panel)}
+.kpi::after{content:"";position:absolute;inset:auto 0 0 0;height:2px;background:linear-gradient(90deg,var(--color-brand),var(--color-accent));opacity:0;transition:opacity .2s}
+.kpi:hover{border-color:var(--line-strong);transform:translateY(-1px);box-shadow:var(--shadow-lift)}
+.kpi:hover::after,.kpi:focus-visible::after{opacity:1}
+.kpi:focus-visible{outline:2px solid var(--color-brand);outline-offset:2px}
+.kpi-l{font-size:12.5px;font-weight:500;color:var(--ink-2)}
+.kpi-v{font-size:30px;font-weight:600;letter-spacing:-.03em;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.05}
+.kpi-s{font-size:12px;color:var(--ink-3);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.kpi-warn .kpi-v{color:var(--color-warn)}
+.kpi-crit .kpi-v{color:var(--color-danger)}
+.dl{font-weight:600;font-size:11.5px;padding:1px 6px;border-radius:5px}
+.dl-g{color:var(--color-ok);background:var(--pass-bg)}.dl-b{color:var(--color-danger);background:var(--fail-bg)}.dl-0{color:var(--ink-3);background:var(--sunk)}
+.an-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.an-card{margin:0;padding:18px 20px;min-width:0}
+.an-wide{grid-column:1/-1}
+.an-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.an-h h2{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.an-k{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3)}
+.an-k i{display:inline-block;width:12px;height:8px;border-radius:2px}
+.an-k .k-bar{background:color-mix(in srgb,var(--color-brand) 55%,transparent)}
+.an-k .k-line{height:2px;background:var(--color-accent);margin-left:8px}
+.an-note{font-size:12.5px;color:var(--ink-3);margin-top:10px}
+.an-foot{font-size:12px;color:var(--ink-3);margin:6px 0 0}
+.ch{width:100%;height:auto;display:block;overflow:visible}
+.ch-grid{stroke:var(--line);stroke-width:1}
+.ch-ax{font-size:10.5px;fill:var(--ink-3);font-family:var(--font-ui)}
+.ch-n{fill:var(--ink-2);font-weight:600}
+.ch-bar{fill:color-mix(in srgb,var(--color-brand) 55%,transparent);cursor:pointer;transition:fill .15s}
+.ch-bar:hover{fill:var(--color-brand)}
+.ch-bar-d{fill:color-mix(in srgb,var(--color-danger) 60%,transparent)}
+.ch-bar-d:hover{fill:var(--color-danger)}
+.ch-line{fill:none;stroke:var(--color-accent);stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round}
+.ch-line-c{stroke:var(--color-warn)}
+.ch-dot{fill:var(--color-surface);stroke:var(--color-accent);stroke-width:2;cursor:default}
+.ch-dot-c{stroke:var(--color-warn)}
+.ch-80{stroke:var(--color-warn);stroke-dasharray:4 4;opacity:.6}
+.ch-80t{fill:var(--color-warn)}
+.ch-empty{padding:34px 10px;text-align:center;color:var(--ink-3);font-size:13.5px}
+.anim-bar{transform-box:fill-box;transform-origin:bottom;animation:barUp .6s var(--ease-out) both;animation-delay:var(--d,0ms)}
+@keyframes barUp{from{transform:scaleY(0)}to{transform:none}}
+.anim-line{stroke-dasharray:1;stroke-dashoffset:1;animation:lineDraw .9s .25s var(--ease-out) forwards}
+@keyframes lineDraw{to{stroke-dashoffset:0}}
+.ch-tip{position:fixed;left:0;top:0;z-index:300;pointer-events:none;background:var(--color-text);color:var(--color-inverse-text);font-size:12px;font-weight:500;padding:6px 9px;border-radius:7px;box-shadow:var(--shadow-2);opacity:0;transition:opacity .12s;max-width:280px}
+.stack{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--sunk);gap:2px;margin:8px 0 16px}
+.stk{width:var(--w);transform-origin:left;animation:stkIn .6s var(--ease-out) both;animation-delay:var(--d,0ms);cursor:default}
+@keyframes stkIn{from{transform:scaleX(0)}to{transform:none}}
+.s-first{background:var(--color-pass-solid)}.s-rew{background:var(--color-accent)}.s-hold{background:var(--color-warn)}.s-fail{background:var(--color-danger-solid)}
+.stk-leg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stk-l{all:unset;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);padding:6px 8px;border-radius:7px;cursor:pointer}
+.stk-l:hover,.stk-l:focus-visible{background:var(--sunk);color:var(--ink)}
+.stk-l i{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.stk-l b{margin-left:auto;color:var(--ink);font-variant-numeric:tabular-nums}
+.stk-l span{color:var(--ink-3);font-size:12px;width:36px;text-align:right}
+.mp{width:100%;border-collapse:collapse;font-size:13px}
+.mp th{text-align:left;font-size:12px;font-weight:600;color:var(--ink-3);padding:0 8px 8px}
+.mp td{padding:9px 8px;border-top:1px solid var(--line)}
+.mp tr.anaDrill{cursor:pointer}
+.mp tr.anaDrill:hover td{background:color-mix(in srgb,var(--color-brand) 6%,transparent)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.mp-bar{display:flex;align-items:center;gap:8px}
+.mp-bar i{display:block;height:6px;width:var(--w);min-width:2px;max-width:70%;border-radius:3px;background:var(--color-brand);animation:stkIn .6s var(--ease-out) both;transform-origin:left}
+.mp-bar i.hot{background:var(--color-danger)}
+.mp-bar span{font-variant-numeric:tabular-nums;font-size:12.5px}
+.iss,.pend{list-style:none;display:grid;gap:4px}
+.ins-go{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px}
+.ins-go:hover,.ins-go:focus-visible{background:var(--sunk)}
+.iss-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.iss-m{font-size:12px;color:var(--ink-3);white-space:nowrap}
+@media (max-width:560px){ .iss .ins-go{flex-wrap:wrap} .iss-t{white-space:normal;flex-basis:60%} .iss-m{white-space:normal} }
+.pend .ins-go .ico{color:var(--ink-3)}
+.pend .ins-go > span{display:flex;flex-direction:column;min-width:0}
+.pend b{font-weight:500;color:var(--ink)}
+.pend .muted{font-size:12px}
+.tl2.act li{padding-bottom:10px}
+.ins{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:8px;background:var(--panel)}
+.ins-h{display:flex;gap:10px;align-items:flex-start}
+.ins-h .ico{width:18px;height:18px;margin-top:1px;flex-shrink:0}
+.ins-crit{border-left:3px solid var(--color-danger-solid)}.ins-crit .ins-h .ico{color:var(--color-danger)}
+.ins-warn{border-left:3px solid var(--color-warn)}.ins-warn .ins-h .ico{color:var(--color-warn)}
+.ins-info{border-left:3px solid var(--color-accent)}.ins-info .ins-h .ico{color:var(--color-accent)}
+.ins-t{font-weight:600;font-size:13.5px;color:var(--ink)}
+.ins-r{font-size:12px;color:var(--ink-3);margin-top:2px}
+.ins-d{margin-top:8px;padding-left:28px}
+.ins-d summary{cursor:pointer;font-size:12.5px;color:var(--color-brand-strong);font-weight:500}
+.theme-dark .ins-d summary{color:#C7CEFF}
+.ins-d ul{list-style:none;margin-top:6px;display:grid;gap:2px;max-height:280px;overflow:auto}
+.ins-d li{display:flex;gap:10px;align-items:center;font-size:12.5px}
+.ins-d li .ins-go{width:auto;padding:3px 6px;font-family:var(--font-code);font-size:12px;color:var(--ink)}
+.ins-d li span{color:var(--ink-3)}
+.ins-list{display:grid;gap:4px}
+.ins-banner{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:10px;border:1px solid color-mix(in srgb,var(--color-accent) 35%,transparent);background:color-mix(in srgb,var(--color-accent) 8%,transparent);font-size:13.5px;color:var(--ink-2);margin-bottom:16px}
+.ins-banner .ico{color:var(--color-accent);margin-top:1px}
+.cp-chip{display:inline-block;font-size:11.5px;font-weight:600;padding:1px 7px;border-radius:5px;margin:1px 3px 1px 0;background:var(--fail-bg);color:var(--fail);border:1px solid var(--fail-line)}
+.cp-chip.ok{background:transparent;color:var(--ink-3);border-color:var(--line);font-weight:500}
+.cp-chip.bad{background:var(--color-danger-solid);color:#fff;border-color:var(--color-danger-solid)}
+.facts2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 16px;margin-top:4px}
+.facts2 span{display:block;font-size:11.5px;color:var(--ink-3)}
+.facts2 b{font-size:13.5px;font-weight:500}
+.smp{width:100%;border-collapse:collapse;font-size:13px}
+.smp th{text-align:left;font-size:11.5px;color:var(--ink-3);font-weight:600;padding:6px;border-bottom:1px solid var(--line)}
+.smp td{padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.smp tr.bad td{background:var(--fail-row)}
+.cp-v{color:var(--ink-3)}.cp-x{color:var(--color-danger);font-weight:700}
+.badge-hold{background:var(--color-warn-bg);color:var(--color-warn);border-color:var(--color-warn-border)}
+@media (max-width:1200px){ .kpis{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:860px){ .an-grid{grid-template-columns:1fr} .kpis{grid-template-columns:repeat(2,minmax(0,1fr))} .facts2{grid-template-columns:1fr 1fr} .stk-leg{grid-template-columns:1fr} }
+@media (max-width:420px){ .kpis{grid-template-columns:1fr 1fr} .kpi-v{font-size:24px} }
+@media (prefers-reduced-motion:reduce){ .anim-line{stroke-dashoffset:0} }
 </style>
 </head>
 <body>
@@ -1232,7 +1348,7 @@ function restoreSession(){
   }catch(e){}
   return false;
 }
-function resetApp(){ qd={loaded:false,loading:false,error:'',defects:[],capa:[],meta:null}; qui={drawer:null,anim:false,dlg:null}; introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; activeRework=null; activeFai=null; faiSpecEd=null; samples=[]; expandedSample=null; bxReset(); saveSession(); }
+function resetApp(){ an={loaded:false,loading:false,error:'',raw:null}; anCache=null; qd={loaded:false,loading:false,error:'',defects:[],capa:[],meta:null}; qui={drawer:null,anim:false,dlg:null}; introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; activeRework=null; activeFai=null; faiSpecEd=null; samples=[]; expandedSample=null; bxReset(); saveSession(); }
 let expiredShown=false;
 async function api(action,data={}){
   data.action=action;
@@ -1323,7 +1439,7 @@ async function loadAll(fresh){
   if(r.models&&r.models.ok) models=(r.models.models||[]).map(normModel).filter(m=>m.name);
   bomModels=r.bomList&&r.bomList.ok?(r.bomList.models||[]):[];
   if(page==='models') loadModelInsights();
-  loadQuality(true);
+  loadQuality(true); an.stale=true;
 }
 function bomFor(modelName){ const m=getModel(modelName); return m&&m.lumioModel?bomModels.find(b=>b.model===m.lumioModel)||null:null; }
 function batchBom(batchName){ const l=batches.find(b=>b.batchName===batchName); return l?(l.bomStatus||''):''; }
@@ -1332,6 +1448,7 @@ function samplingLocked(batchName){ const s=batchBom(batchName); return s==='Pen
 async function loadBatches(){
   const r=await api('getBatches');
   if(r.ok) batches=r.batches||[];
+  an.stale=true;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1468,7 +1585,7 @@ function render(){
   try{
     const overlays=user&&!activeLot&&!activeBom&&!activeRework&&!activeFai?buildDrawer():'';
     document.getElementById('app').innerHTML=buildPage()+overlays+(user?buildDialog():'');
-    bindEvents(); if(user){ bindQuality(); bindDialog(); }
+    bindEvents(); if(user){ bindQuality(); bindDialog(); bindAnalytics(); }
   }
   finally{ rendering=false; }
 }
@@ -1771,7 +1888,7 @@ let qd={loaded:false,loading:false,error:'',defects:[],capa:[],meta:null};
 let qui={drawer:null,anim:false,dlg:null};
 const SEV_ORDER={Critical:0,Major:1,Minor:2};
 async function loadQuality(force){
-  if(qd.loading||(qd.loaded&&!force)) return;
+  if(qd.loading||(qd.loaded&&!force)||(qd.error&&!force)) return;
   qd.loading=true;
   const r=await api('qListAll');
   qd.loading=false;
@@ -2071,6 +2188,7 @@ function evidenceHtml(text){
 }
 function buildDrawer(){
   const D=qui.drawer; if(!D) return '';
+  if(D.kind==='insp') return buildInspDrawer();
   const isDef=D.kind==='defect', rec=D.rec, S=isDef?qd.meta.defectStages:qd.meta.capaStages, st=rec?rec.Status:'Open';
   const canEdit=can('quality'), closed=st==='Closed';
   D.ro=!canEdit||closed;
@@ -2254,6 +2372,370 @@ function bindDialog(){
   setTimeout(()=>document.getElementById('dlgGo')?.focus(),30);
 }
 
+// ═══════════════════════════════════════════════════════════
+// ANALYTICS: dashboard, inspections table, quality insights
+// Every number is calculated here from the inspection records (Master), lot history,
+// BOM verification log, defects and CAPA. Nothing is stored or estimated.
+// ═══════════════════════════════════════════════════════════
+let an={loaded:false,loading:false,error:'',raw:null};
+let anF={range:'90',model:'',batch:''};
+const CHECKS=['Aesthetic','General','Functional','Screen','Black dot'];
+async function loadAnalytics(force){
+  if(an.loading||(an.loaded&&!force)||(an.error&&!force)) return;   // after an error, only Try again reloads
+  an.loading=true;
+  const r=await api('qAnalytics');
+  an.loading=false;
+  if(r.ok){ an={loaded:true,loading:false,error:'',raw:r}; anCache=null; }
+  else { an.error=r.error||'Could not load inspection records'; }
+  if(!activeLot&&!activeBom&&!activeRework&&!activeFai&&['home','inspections','insights'].includes(page)) render();
+}
+let anCache=null;
+function modelKeyOf(name){ const m=getModel(name); return m?(m.lumioModel||m.name):name; }
+/* all samples → lot inspections (one per lot and round) */
+function anBase(){
+  if(anCache) return anCache;
+  const S=(an.raw.samples||[]).map(r=>({t:r[0],ins:r[1],batch:r[2],lot:r[3],serial:r[4],fl:r[5],ok:r[6]==='P',lr:r[7],model:r[8],pm:r[9],round:r[10],remark:r[11],bd:r[12]}));
+  const byKey={};
+  S.forEach(s=>{
+    const k=s.lot+'#'+s.round;
+    const x=byKey[k]||(byKey[k]={id:k,batch:s.batch,lot:s.lot,round:s.round,model:s.model,pm:s.pm,t:s.t,ins:new Set(),n:0,bad:0,fails:{},samples:[],result:s.lr});
+    x.n++; if(!s.ok) x.bad++; x.ins.add(s.ins); if(s.t>x.t) x.t=s.t; x.samples.push(s);
+    s.fl.split('').forEach((c,i)=>{ if(c==='F') x.fails[CHECKS[i]]=(x.fails[CHECKS[i]]||0)+1; });
+    if(s.lr) x.result=s.lr;
+  });
+  const insp=Object.values(byKey).map(x=>({...x,ins:[...x.ins].join(', ')})).sort((a,b)=>a.t<b.t?1:-1);
+  anCache={S,insp};
+  return anCache;
+}
+function anWindow(rangeDays,offset){
+  if(rangeDays==='all') return {from:'',to:''};
+  const d=Number(rangeDays), end=new Date(Date.now()-offset*d*864e5), start=new Date(end.getTime()-d*864e5);
+  return {from:start.toISOString(),to:end.toISOString()};
+}
+function inWin(t,w){ return (!w.from||t>=w.from)&&(!w.to||t<w.to); }
+function anFilter(w){
+  const {S,insp}=anBase();
+  const mOK=m=>!anF.model||m===anF.model, bOK=b=>!anF.batch||b===anF.batch;
+  return {S:S.filter(s=>inWin(s.t,w)&&mOK(s.model)&&bOK(s.batch)), insp:insp.filter(x=>inWin(x.t,w)&&mOK(x.model)&&bOK(x.batch))};
+}
+function anMetrics(w){
+  const {S,insp}=anFilter(w);
+  const r1=insp.filter(x=>x.round===1), pass1=r1.filter(x=>x.result==='PASS').length;
+  const defs=qd.defects.filter(d=>inWin(d.CreatedAt,w)&&(!anF.model||d.Model===anF.model||d.Model===modelKeyOf(anF.model))&&(!anF.batch||d.Batch===anF.batch));
+  const caps=qd.capa.filter(c=>inWin(c.CreatedAt,w));
+  return {S,insp,inspections:insp.length,samples:S.length,bad:S.filter(s=>!s.ok).length,
+    fpy:r1.length?pass1/r1.length*100:null,r1:r1.length,pass1,
+    rate:S.length?S.filter(s=>!s.ok).length/S.length*100:null,
+    open:qd.defects.filter(d=>d.Status!=='Closed'&&(!anF.model||d.Model===anF.model||d.Model===modelKeyOf(anF.model))&&(!anF.batch||d.Batch===anF.batch)).length,
+    capaRate:caps.length?caps.filter(c=>c.Status==='Closed').length/caps.length*100:null,capaN:caps.length,defs};
+}
+/* ── tiny SVG chart kit ── */
+function niceMax(v){ if(v<=0) return 1; const p=Math.pow(10,Math.floor(Math.log10(v))), n=v/p; return (n<=1?1:n<=2?2:n<=5?5:10)*p; }
+function chTrend(weeks){
+  const W=1100,H=250,L=40,R=40,T=14,B=28, iw=W-L-R, ih=H-T-B, n=weeks.length;
+  if(!n) return '<div class="ch-empty">No inspections in this period.</div>';
+  const mx=niceMax(Math.max(...weeks.map(w=>w.n))), mr=niceMax(Math.max(5,...weeks.map(w=>w.rate||0)));
+  const bw=Math.min(36,iw/n*0.62), x=i=>L+iw*(i+.5)/n;
+  const grid=[0,.25,.5,.75,1].map(f=>`<line class="ch-grid" x1="${L}" x2="${W-R}" y1="${T+ih*(1-f)}" y2="${T+ih*(1-f)}"/><text class="ch-ax" x="${L-6}" y="${T+ih*(1-f)+4}" text-anchor="end">${Math.round(mx*f)}</text><text class="ch-ax" x="${W-R+6}" y="${T+ih*(1-f)+4}">${(mr*f).toFixed(mr<10?1:0)}%</text>`).join('');
+  const bars=weeks.map((w,i)=>`<rect class="ch-bar anim-bar" style="--d:${i*30}ms" x="${x(i)-bw/2}" y="${T+ih-ih*w.n/mx}" width="${bw}" height="${Math.max(0,ih*w.n/mx)}" rx="3" data-tip="${esc(w.label)}: ${w.n} samples, ${w.bad} defective (${w.rate==null?'—':w.rate.toFixed(1)+'%'})" data-drill="week" data-from="${w.from}" data-to="${w.to}"/>`).join('');
+  const pts=weeks.map((w,i)=>[x(i),T+ih-ih*(w.rate||0)/mr]);
+  const path=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const lab=weeks.map((w,i)=>i%Math.ceil(n/8)===0?`<text class="ch-ax" x="${x(i)}" y="${H-8}" text-anchor="middle">${esc(w.short)}</text>`:'').join('');
+  return `<svg class="ch" viewBox="0 0 ${W} ${H}" role="img" aria-label="Samples inspected per week with defect rate">${grid}${bars}<path class="ch-line anim-line" d="${path}" pathLength="1"/>${pts.map((p,i)=>`<circle class="ch-dot" cx="${p[0]}" cy="${p[1]}" r="3.5" data-tip="${esc(weeks[i].label)}: defect rate ${weeks[i].rate==null?'—':weeks[i].rate.toFixed(1)+'%'}"/>`).join('')}${lab}</svg>`;
+}
+function chPareto(items,drill){
+  const W=520,H=240,L=40,R=40,T=14,B=46, iw=W-L-R, ih=H-T-B, n=items.length;
+  const tot=items.reduce((a,b)=>a+b.n,0);
+  if(!tot) return '<div class="ch-empty">No defects in this period.</div>';
+  const mx=niceMax(items[0].n), bw=Math.min(54,iw/n*0.6), x=i=>L+iw*(i+.5)/n;
+  let cum=0; const pts=items.map((it,i)=>{ cum+=it.n; return [x(i),T+ih-ih*cum/tot,cum/tot*100]; });
+  const grid=[0,.5,1].map(f=>`<line class="ch-grid" x1="${L}" x2="${W-R}" y1="${T+ih*(1-f)}" y2="${T+ih*(1-f)}"/><text class="ch-ax" x="${L-6}" y="${T+ih*(1-f)+4}" text-anchor="end">${Math.round(mx*f)}</text><text class="ch-ax" x="${W-R+6}" y="${T+ih*(1-f)+4}">${f*100}%</text>`).join('');
+  const y80=T+ih*.2;
+  return `<svg class="ch" viewBox="0 0 ${W} ${H}" role="img" aria-label="Defect Pareto">${grid}<line class="ch-80" x1="${L}" x2="${W-R}" y1="${y80}" y2="${y80}"/><text class="ch-ax ch-80t" x="${W-R-4}" y="${y80-4}" text-anchor="end">80%</text>
+    ${items.map((it,i)=>`<rect class="ch-bar ch-bar-d anim-bar" style="--d:${i*45}ms" x="${x(i)-bw/2}" y="${T+ih-ih*it.n/mx}" width="${bw}" height="${ih*it.n/mx}" rx="3" data-tip="${esc(it.k)}: ${it.n} (${(it.n/tot*100).toFixed(1)}%)" ${drill?`data-drill="${drill}" data-k="${esc(it.k)}"`:''}/><text class="ch-ax" x="${x(i)}" y="${H-28}" text-anchor="middle">${esc(it.k.length>14?it.k.slice(0,13)+'…':it.k)}</text><text class="ch-ax ch-n" x="${x(i)}" y="${H-12}" text-anchor="middle">${it.n}</text>`).join('')}
+    <path class="ch-line ch-line-c anim-line" d="${pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')}" pathLength="1"/>${pts.map((p,i)=>`<circle class="ch-dot ch-dot-c" cx="${p[0]}" cy="${p[1]}" r="3" data-tip="Cumulative ${p[2].toFixed(0)}%"/>`).join('')}</svg>`;
+}
+function chStack(parts){
+  const tot=parts.reduce((a,b)=>a+b.n,0);
+  if(!tot) return '<div class="ch-empty">No lots in this selection.</div>';
+  return `<div class="stack" role="img" aria-label="Lot outcomes">${parts.filter(p=>p.n).map((p,i)=>`<span class="stk ${p.c} anim-stk" style="--w:${p.n/tot*100}%;--d:${i*60}ms" data-tip="${esc(p.t)}: ${p.n} lots (${(p.n/tot*100).toFixed(1)}%)"></span>`).join('')}</div>
+    <div class="stk-leg">${parts.map(p=>`<button class="stk-l anaDrill" data-drill="outcome" data-k="${esc(p.k)}"><i class="${p.c}"></i>${esc(p.t)}<b>${p.n}</b><span>${(p.n/tot*100).toFixed(0)}%</span></button>`).join('')}</div>`;
+}
+function weekStart(iso){ const d=new Date(iso); const day=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-day); return d; }
+function anWeeks(S){
+  const m={};
+  S.forEach(s=>{ const w=weekStart(s.t), k=w.toISOString(); const x=m[k]||(m[k]={d:w,n:0,bad:0}); x.n++; if(!s.ok) x.bad++; });
+  return Object.values(m).sort((a,b)=>a.d-b.d).map(x=>{ const e=new Date(x.d.getTime()+7*864e5); return {...x,rate:x.n?x.bad/x.n*100:null,from:x.d.toISOString(),to:e.toISOString(),
+    short:x.d.toLocaleDateString([], {day:'2-digit',month:'short'}),label:'Week of '+x.d.toLocaleDateString([], {day:'2-digit',month:'short',year:'numeric'})}; });
+}
+function lotOutcomes(insp){
+  const byLot={}; insp.slice().sort((a,b)=>a.round-b.round).forEach(x=>{ (byLot[x.lot]=byLot[x.lot]||[]).push(x); });
+  const cur=l=>batches.find(b=>b.lotNumber===l);
+  const o={first:0,rework:0,hold:0,fail:0}, lots={first:[],rework:[],hold:[],fail:[]};
+  Object.entries(byLot).forEach(([lot,arr])=>{ const last=arr[arr.length-1], b=cur(lot);
+    const k=last.result==='PASS'?(arr.length===1&&arr[0].round===1?'first':'rework'):last.result==='FAIL'?'fail':(b&&b.status==='Closed'&&b.result==='PASS'?'rework':'hold');
+    o[k]++; lots[k].push(lot); });
+  return {o,lots};
+}
+function countUp(v,dec,suf){ return `<span class="cnt" data-count="${v==null?'':v}" data-dec="${dec||0}">${v==null?'—':Number(v).toFixed(dec||0)}</span>${v==null?'':(suf||'')}`; }
+function delta(cur,prev,goodUp,suf){
+  if(cur==null||prev==null||anF.range==='all') return '';
+  const d=cur-prev; if(Math.abs(d)<0.05) return `<span class="dl dl-0">no change</span>`;
+  const good=goodUp?d>0:d<0;
+  return `<span class="dl ${good?'dl-g':'dl-b'}">${d>0?'▲':'▼'} ${Math.abs(d).toFixed(suf==='%'?1:0)}${suf==='%'?' pts':''}</span>`;
+}
+/* ── insights: fixed, explainable rules ── */
+function anInsights(){
+  const w=anWindow(anF.range,0), {S,insp}=anFilter(w), out=[];
+  const rate=S.length?S.filter(s=>!s.ok).length/S.length:0;
+  // 1 models with high defect rate
+  const byM={}; S.forEach(s=>{ const x=byM[s.model]||(byM[s.model]={n:0,bad:0}); x.n++; if(!s.ok) x.bad++; });
+  Object.entries(byM).forEach(([m,x])=>{ const r=x.bad/x.n; if(x.n>=26&&r>=0.02&&r>=rate*1.5&&Object.keys(byM).length>1)
+    out.push({lvl:'warn',t:`${modelLabel(m)}: defect rate ${(r*100).toFixed(1)}%, against ${(rate*100).toFixed(1)}% across all models`,rule:'A model with at least 26 samples whose defect rate is 2% or more and at least 1.5 times the overall rate.',
+      recs:insp.filter(i=>i.model===m&&i.bad).map(i=>({t:`${i.lot} · round ${i.round}`,s:`${i.bad} of ${i.n} defective`,go:{kind:'insp',id:i.id}}))}); });
+  // 2 lots with repeated failures
+  const holds={}; insp.forEach(i=>{ if(i.result==='HOLD'||i.result==='FAIL') (holds[i.lot]=holds[i.lot]||[]).push(i); });
+  const rep=Object.entries(holds).filter(([,a])=>a.length>=2);
+  if(rep.length) out.push({lvl:'crit',t:`${rep.length} lot${rep.length===1?'':'s'} failed again after rework`,rule:'A lot put on hold in two or more inspection rounds.',
+    recs:rep.map(([lot,a])=>({t:lot,s:`held in rounds ${a.map(x=>x.round).sort().join(', ')}`,go:{kind:'insp',id:a[a.length-1].id}}))});
+  // 3 recurring checkpoint failures (last 30 days of the window)
+  const end=w.to?new Date(w.to):new Date(), from30=new Date(end.getTime()-30*864e5).toISOString();
+  CHECKS.forEach((c,ci)=>{ const fs=S.filter(s=>s.t>=from30&&s.fl[ci]==='F'), lots=[...new Set(fs.map(s=>s.lot))];
+    if(lots.length>=3) out.push({lvl:'warn',t:`${c} failures in ${lots.length} different lots within 30 days`,rule:'The same checkpoint failing in 3 or more lots within 30 days.',
+      recs:fs.map(s=>({t:s.serial,s:`${s.lot}${s.remark?' · '+s.remark.slice(0,60):''}`,go:{kind:'insp',id:s.lot+'#'+s.round}}))}); });
+  // 4 overdue actions
+  const oc=overdueCapa(), od=qd.defects.filter(d=>isOverdue(d.TargetDate,d.Status==='Closed'));
+  if(oc.length) out.push({lvl:'crit',t:`${oc.length} CAPA past due date`,rule:'A CAPA not closed by its due date.',recs:oc.map(c=>({t:c.CapaID+' '+c.Title,s:`due ${fmtDay(c.DueDate)}, ${c.Status}, ${c.Owner||'no owner'}`,go:{kind:'capa',id:c.CapaID}}))});
+  if(od.length) out.push({lvl:'warn',t:`${od.length} defect${od.length===1?'':'s'} past target closure date`,rule:'An open defect whose target date has passed.',recs:od.map(d=>({t:d.DefectID+' '+d.Title,s:`target ${fmtDay(d.TargetDate)}, ${d.Status}`,go:{kind:'defect',id:d.DefectID}}))});
+  // 5 stage pass rates
+  const r1=insp.filter(i=>i.round===1), fpy=r1.length?r1.filter(i=>i.result==='PASS').length/r1.length*100:null;
+  const bl=(an.raw.bomlog||[]).filter(b=>inWin(b[1],w)), firstV={}; bl.slice().sort((a,b)=>a[1]<b[1]?-1:1).forEach(b=>{ if(!(b[3] in firstV)) firstV[b[3]]=b[6]; });
+  const bv=Object.values(firstV), bomPass=bv.length?bv.filter(x=>/All matched/i.test(x)).length/bv.length*100:null;
+  const fb=groupBatches().filter(g=>g.lots.some(l=>l.faiStatus)), faiPass=fb.length?fb.filter(g=>g.lots.some(l=>l.faiStatus==='Pass')).length/fb.length*100:null;
+  const stages=[['Sampling inspection, first time',fpy,r1.length],['BOM verification, first time',bomPass,bv.length],['FAI',faiPass,fb.length]].filter(s=>s[1]!=null);
+  const low=stages.filter(s=>s[1]<90);
+  if(low.length) out.push({lvl:'info',t:`Lowest first-time pass rate: ${low.sort((a,b)=>a[1]-b[1])[0][0]} at ${low[0][1].toFixed(0)}%`,rule:'Each inspection stage\'s first-time pass rate; shown when a stage is under 90%.',
+    recs:stages.map(s=>({t:s[0],s:`${s[1].toFixed(0)}% of ${s[2]}`}))});
+  // 6 defects back after corrective action
+  const reopened=[...new Set((an.raw.qlog||[]).filter(e=>e[3]==='Reopened').map(e=>e[2]))];
+  const after=[]; qd.capa.filter(c=>c.Status==='Closed'&&c.ClosedAt).forEach(c=>{ const linked=qd.defects.filter(d=>String(c.DefectIDs).split(', ').includes(d.DefectID));
+    qd.defects.forEach(d=>{ if(d.CreatedAt>c.ClosedAt&&linked.some(l=>l.Category===d.Category&&l.Model===d.Model)) after.push({d,c}); }); });
+  if(reopened.length||after.length) out.push({lvl:'crit',t:`${reopened.length+after.length} defect${reopened.length+after.length===1?'':'s'} came back after corrective action`,rule:'A defect reopened after closure, or a new defect of the same category and model raised after a CAPA on it was closed.',
+    recs:reopened.map(id=>({t:id,s:'reopened after closure',go:{kind:'defect',id}})).concat(after.map(x=>({t:x.d.DefectID+' '+x.d.Title,s:`after ${x.c.CapaID} closed`,go:{kind:'defect',id:x.d.DefectID}})))});
+  // 7 same unit failing twice
+  const twice={}; S.filter(s=>!s.ok).forEach(s=>{ (twice[s.serial]=twice[s.serial]||[]).push(s); });
+  const tw=Object.values(twice).filter(a=>a.length>=2);
+  if(tw.length) out.push({lvl:'warn',t:`${tw.length} unit${tw.length===1?'':'s'} failed again after rework`,rule:'The same serial number defective in two inspection rounds.',recs:tw.map(a=>({t:a[0].serial,s:a.map(x=>`${x.lot} R${x.round}`).join(', '),go:{kind:'insp',id:a[a.length-1].lot+'#'+a[a.length-1].round}}))});
+  const order={crit:0,warn:1,info:2}; return out.sort((a,b)=>order[a.lvl]-order[b.lvl]);
+}
+function insightCard(x,i,compact){
+  return `<article class="ins ins-${x.lvl} rv" style="--i:${i+1}"><div class="ins-h">${ico(x.lvl==='crit'?'alert':x.lvl==='warn'?'pulse':'chart')}<div><div class="ins-t">${esc(x.t)}</div><div class="ins-r">Rule: ${esc(x.rule)}</div></div></div>
+    ${compact?'':`<details class="ins-d"><summary>${x.recs.length} supporting record${x.recs.length===1?'':'s'}</summary><ul>${x.recs.slice(0,40).map(r=>`<li>${r.go?`<button class="ins-go" data-kind="${r.go.kind}" data-id="${esc(r.go.id)}">${esc(r.t)}</button>`:`<b>${esc(r.t)}</b>`}<span>${esc(r.s)}</span></li>`).join('')}${x.recs.length>40?`<li class="muted">and ${x.recs.length-40} more</li>`:''}</ul></details>`}</article>`;
+}
+/* ── dashboard ── */
+function anFiltersHtml(withBatch){
+  const ms=uniq(anBase().S.map(s=>s.model)), bs=uniq(anBase().S.filter(s=>!anF.model||s.model===anF.model).map(s=>s.batch));
+  return `<div class="an-f" role="group" aria-label="Filters">
+    <div class="seg">${[['7','7 days'],['30','30 days'],['90','90 days'],['all','All time']].map(([k,t])=>`<button class="seg-btn anRange ${anF.range===k?'on':''}" data-k="${k}" aria-pressed="${anF.range===k}">${t}</button>`).join('')}</div>
+    <select class="field anModel" aria-label="Model"><option value="">All models</option>${ms.map(m=>`<option value="${esc(m)}" ${anF.model===m?'selected':''}>${esc(modelLabel(m))}</option>`).join('')}</select>
+    ${withBatch?`<select class="field anBatch" aria-label="Batch"><option value="">All batches</option>${bs.map(b=>`<option ${anF.batch===b?'selected':''}>${esc(b)}</option>`).join('')}</select>`:''}
+  </div>`;
+}
+function anLoadingHtml(){
+  if(an.error) return `<div class="card err" role="alert">${esc(an.error)} <button class="btn btn-ghost btn-sm" id="anRetry">Try again</button></div>`;
+  return `<div class="kpis">${'<div class="kpi"><div class="skel" style="height:12px;width:60%"></div><div class="skel" style="height:30px;width:50%;margin-top:12px"></div></div>'.repeat(5)}</div><div class="an-grid"><div class="card"><div class="skel" style="height:220px"></div></div><div class="card"><div class="skel" style="height:220px"></div></div></div>`;
+}
+function buildExecDashboard(){
+  if(!an.loaded){ loadAnalytics(); } else if(an.stale){ an.stale=false; loadAnalytics(true); }
+  if(!qd.loaded) loadQuality();
+  const hello=new Date().toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'});
+  const head=`<div class="pg-head rv" style="--i:0"><div><p class="eyebrow">${esc(hello)}</p><h1 class="pg-title">Quality overview</h1><p class="pg-sub">Calculated live from inspection records, lot history, defects and CAPA in the portal's sheet.</p></div>${an.loaded?anFiltersHtml(true):''}</div>`;
+  if(!an.loaded||!qd.loaded) return head+(qd.error&&!an.error?`<div class="card err" role="alert">${esc(qd.error)} <button class="btn btn-ghost btn-sm" id="qRetry">Try again</button></div>`:anLoadingHtml());
+  const w=anWindow(anF.range,0), M=anMetrics(w), P=anF.range==='all'?null:anMetrics(anWindow(anF.range,1));
+  const per=anF.range==='all'?'all time':`last ${anF.range} days`;
+  const kpi=(k,label,val,sub,dl,drill,cls)=>`<button class="kpi rv ${cls||''}" style="--i:${k}" data-drill="${drill}"><span class="kpi-l">${label}</span><span class="kpi-v">${val}</span><span class="kpi-s">${sub}${dl||''}</span></button>`;
+  const lo=lotOutcomes(M.insp), notInsp=batches.filter(b=>(b.status==='Open')&&!M.insp.some(i=>i.lot===b.lotNumber)&&(!anF.model||b.model===anF.model)&&(!anF.batch||b.batchName===anF.batch)).length;
+  const pareto=CHECKS.map((c,i)=>({k:c,n:M.S.filter(s=>s.fl[i]==='F').length})).sort((a,b)=>b.n-a.n);
+  const catP=uniq(M.defs.map(d=>d.Category)).map(k=>({k,n:M.defs.filter(d=>d.Category===k).length})).sort((a,b)=>b.n-a.n);
+  const byM={}; M.insp.forEach(i=>{ const x=byM[i.model]||(byM[i.model]={m:i.model,insp:0,n:0,bad:0,r1:0,p1:0}); x.insp++; x.n+=i.n; x.bad+=i.bad; if(i.round===1){ x.r1++; if(i.result==='PASS') x.p1++; } });
+  const modelsRows=Object.values(byM).sort((a,b)=>b.n-a.n);
+  const maxRate=Math.max(1,...modelsRows.map(x=>x.n?x.bad/x.n*100:0));
+  const crit=qd.defects.filter(d=>d.Status!=='Closed'&&(d.Severity==='Critical'||d.Severity==='Major')).sort((a,b)=>(SEV_ORDER[a.Severity]-SEV_ORDER[b.Severity])||(a.CreatedAt<b.CreatedAt?1:-1)).slice(0,6);
+  const holds=batches.filter(b=>b.status==='Hold');
+  const acts=(an.raw.history||[]).map(h=>({t:h[0],what:`${h[4]}: ${h[2]}`,d:h[5],by:h[6],k:h[4]})).concat((an.raw.qlog||[]).map(q=>({t:q[0],what:`${q[1]} ${q[2]}: ${q[3]}${q[5]?' → '+q[5]:''}`,d:q[6],by:q[7],k:q[3]}))).sort((a,b)=>a.t<b.t?1:-1).slice(0,8);
+  const pend=[];
+  qd.capa.filter(c=>c.Status==='Awaiting Approval').forEach(c=>pend.push({ic:'shield',t:`${c.CapaID} awaiting approval`,s:c.Title,go:{kind:'capa',id:c.CapaID}}));
+  holds.forEach(l=>pend.push({ic:'alert',t:`${l.lotNumber} on hold`,s:'Rework to record, then reoffer',go:{kind:'lot',id:l.batchName+'||'+l.lotNumber}}));
+  groupBatches().filter(g=>g.bomStatus==='Pending'||g.bomStatus==='Failed').forEach(g=>pend.push({ic:'layers',t:`${g.name}: BOM verification ${g.bomStatus==='Failed'?'failed':'not done'}`,s:(g.lots.find(l=>l.bomDraft)||{}).bomDraft?'Draft in progress':'Sampling locked until it passes',go:{kind:'batch',id:g.name}}));
+  groupBatches().filter(g=>!g.lots.some(l=>l.faiStatus)&&g.completed>0).forEach(g=>pend.push({ic:'spec',t:`${g.name}: FAI not done`,s:`${g.completed} lots already inspected`,go:{kind:'batch',id:g.name}}));
+  const ins=anInsights();
+  return head+`
+  <div class="kpis">
+    ${kpi(1,'Lot inspections',countUp(M.inspections),`${M.samples.toLocaleString()} samples, ${per}`,delta(M.inspections,P&&P.inspections,true),'inspections')}
+    ${kpi(2,'First pass yield',countUp(M.fpy,1,'%'),`${M.pass1} of ${M.r1} lots passed first time`,delta(M.fpy,P&&P.fpy,true,'%'),'fpy',M.fpy!=null&&M.fpy<90?'kpi-warn':'')}
+    ${kpi(3,'Defect rate',countUp(M.rate,2,'%'),`${M.bad} defective samples`,delta(M.rate,P&&P.rate,false,'%'),'rate',M.rate!=null&&M.rate>=2?'kpi-warn':'')}
+    ${kpi(4,'Open quality issues',countUp(M.open),`${qd.defects.filter(d=>d.Status!=='Closed'&&d.Severity==='Critical').length} critical`,'','open',qd.defects.some(d=>d.Status!=='Closed'&&d.Severity==='Critical')?'kpi-crit':'')}
+    ${kpi(5,'CAPA closure rate',countUp(M.capaRate,0,'%'),M.capaN?`${qd.capa.filter(c=>c.Status==='Closed'&&inWin(c.CreatedAt,w)).length} of ${M.capaN} closed${overdueCapa().length?`, ${overdueCapa().length} overdue`:''}`:'No CAPA in this period','','capa',overdueCapa().length?'kpi-warn':'')}
+  </div>
+  <div class="an-grid">
+    <section class="card an-card an-wide rv" style="--i:6"><div class="an-h"><h2>Inspection trend</h2><span class="an-k"><i class="k-bar"></i>Samples per week <i class="k-line"></i>Defect rate</span></div>${chTrend(anWeeks(M.S))}</section>
+    <section class="card an-card rv" style="--i:7"><div class="an-h"><h2>Lot outcomes</h2><span class="muted">${per}</span></div>${chStack([{k:'first',t:'Passed first time',n:lo.o.first,c:'s-first'},{k:'rework',t:'Passed after rework',n:lo.o.rework,c:'s-rew'},{k:'hold',t:'On hold',n:lo.o.hold,c:'s-hold'},{k:'fail',t:'Failed',n:lo.o.fail,c:'s-fail'}])}
+      <p class="an-note">${notInsp} open lot${notInsp===1?'':'s'} not inspected yet.</p></section>
+    <section class="card an-card rv" style="--i:8"><div class="an-h"><h2>Defect Pareto</h2><div class="seg seg-sm"><button class="seg-btn anPar ${anPareto==='cp'?'on':''}" data-k="cp">Checkpoints</button><button class="seg-btn anPar ${anPareto==='cat'?'on':''}" data-k="cat">Defect categories</button></div></div>
+      ${anPareto==='cp'?chPareto(pareto,'checkpoint'):chPareto(catP,'category')}</section>
+    <section class="card an-card rv" style="--i:9"><div class="an-h"><h2>Model performance</h2><span class="muted">${per}</span></div>
+      ${modelsRows.length?`<table class="mp"><thead><tr><th>Model</th><th class="num">Lots</th><th class="num">FPY</th><th>Defect rate</th></tr></thead><tbody>${modelsRows.map(x=>{ const r=x.n?x.bad/x.n*100:0, f=x.r1?x.p1/x.r1*100:null; return `<tr class="anaDrill" data-drill="model" data-k="${esc(x.m)}" tabindex="0"><td><b>${esc(modelLabel(x.m))}</b><div class="muted">${x.n} samples</div></td><td class="num">${x.insp}</td><td class="num ${f!=null&&f<90?'late':''}">${f==null?'—':f.toFixed(0)+'%'}</td><td><div class="mp-bar"><i style="--w:${r/maxRate*100}%" class="${r>=2?'hot':''}"></i><span>${r.toFixed(2)}%</span></div></td></tr>`; }).join('')}</tbody></table>`:'<div class="ch-empty">No inspections in this period.</div>'}</section>
+    <section class="card an-card rv" style="--i:10"><div class="an-h"><h2>Quality intelligence</h2><button class="btn btn-ghost btn-sm navGo" data-go="insights">All insights</button></div>
+      <p class="an-note">Fixed rules applied to your records, not AI. Each insight lists the records behind it.</p>
+      ${ins.length?ins.slice(0,3).map((x,i)=>insightCard(x,i,true)).join(''):'<div class="ch-empty">No patterns flagged by the rules in this period.</div>'}</section>
+    <section class="card an-card rv" style="--i:11"><div class="an-h"><h2>Critical quality issues</h2><button class="btn btn-ghost btn-sm navGo" data-go="defects">Defects</button></div>
+      ${crit.length?`<ul class="iss">${crit.map(d=>`<li><button class="ins-go" data-kind="defect" data-id="${esc(d.DefectID)}">${sevBadge(d.Severity)}<span class="iss-t">${esc(d.Title)}</span><span class="iss-m"><span class="mono">${esc(d.DefectID)}</span> · ${esc(d.Status)}${d.Lot?' · '+esc(d.Lot):''}</span></button></li>`).join('')}</ul>`:'<div class="ch-empty">No open critical or major defects.</div>'}</section>
+    <section class="card an-card rv" style="--i:12"><div class="an-h"><h2>Pending approvals and actions</h2><span class="muted">${pend.length}</span></div>
+      ${pend.length?`<ul class="pend">${pend.slice(0,8).map(p=>`<li><button class="ins-go" data-kind="${p.go.kind}" data-id="${esc(p.go.id)}">${ico(p.ic)}<span><b>${esc(p.t)}</b><span class="muted">${esc(p.s)}</span></span></button></li>`).join('')}</ul>${pend.length>8?`<p class="an-note">and ${pend.length-8} more</p>`:''}`:'<div class="ch-empty">Nothing waiting.</div>'}</section>
+    <section class="card an-card rv" style="--i:13"><div class="an-h"><h2>Recent activity</h2></div>
+      ${acts.length?`<ol class="tl2 act">${acts.map(a=>`<li class="${/Passed|Approved|advanced|Created/.test(a.k)?'tl-fw':/Hold|back|Reopened/.test(a.k)?'tl-bk':''}"><div class="tl-h"><b>${esc(a.what)}</b></div>${a.d?`<div class="tl-d">${esc(a.d.slice(0,110))}</div>`:''}<div class="tl-m">${esc(a.by)} · ${esc(fmtDate(a.t))}</div></li>`).join('')}</ol>`:'<div class="ch-empty">No activity yet.</div>'}</section>
+  </div>
+  <details class="rules rv" style="--i:14"><summary>Acceptance and black dot rules</summary><div class="rules-body">
+    <b>Acceptance:</b> each lot of 90 units is judged on 13 samples (a smaller lot on 13, or all its units when it has fewer). Any defect, minor (aesthetic) or major (general, functional, screen or black dot), puts the lot on hold.<br>
+    ${models.map(m=>`<b>Black dot, ${esc(m.lumioModel||m.name)}:</b> ${esc(specText(m))}`).join('<br>')}</div></details>
+  <p class="an-foot">FPY = lots passed in their first inspection ÷ lots inspected for the first time. Defect rate = defective samples ÷ samples inspected. Changes compare with the ${anF.range==='all'?'':'previous '+anF.range+' days'}${anF.range==='all'?'whole history':''}.</p>`;
+}
+let anPareto='cp';
+/* ── inspections page ── */
+PAGE_INFO.inspections={t:'Inspections',d:'Every sampling inspection, one row per lot and round, or every inspected unit. Open one to see its samples.'};
+PAGE_INFO.insights={t:'Quality intelligence',d:'Patterns found in your records by fixed, transparent rules. Not AI: each insight states its rule and lists the records behind it.'};
+EXTRA_NAV.work.push(['inspections','Inspections','table',()=>true]);
+EXTRA_NAV.quality.unshift(['insights','Insights','pulse',()=>true,()=>0]);
+let inspView='lots', inspWin={from:'',to:'',label:''};
+function inspTable(){
+  const {insp}=anBase();
+  const rows=insp.filter(x=>inWin(x.t,inspWin));
+  const cfg={id:'insp',label:'inspections',ph:'Search lot, batch, inspector, serial',rowKey:r=>r.id,onRow:k=>openInsp(k),
+    rowCls:r=>r.result==='HOLD'||r.result==='FAIL'?'row-late':'',
+    search:r=>[r.lot,r.batch,r.ins,r.model,r.samples.map(s=>s.serial).join(' ')].join(' '), sort:{k:'date',dir:-1},
+    cols:[
+      {k:'id',t:'Inspection',v:r=>`${r.lot} R${r.round}`,html:r=>`<div class="cell-title">${esc(r.lot)}</div><div class="cell-sub mono">Round ${r.round}${r.round>1?' · reoffer':''}</div>`,always:true,cls:'w-title'},
+      {k:'batch',t:'Batch',v:r=>r.batch,cls:'nowrap'},
+      {k:'model',t:'Model',v:r=>modelLabel(r.model),cls:'nowrap'},
+      {k:'pm',t:'Production',v:r=>r.pm?mmyyDisp(r.pm):'',cls:'nowrap'},
+      {k:'type',t:'Inspection type',v:r=>r.round>1?'Reoffer (OBA)':'OBA sampling'},
+      {k:'ins',t:'Inspector',v:r=>r.ins},
+      {k:'date',t:'Inspected',v:r=>r.t,html:r=>esc(fmtDate(r.t)),cls:'nowrap'},
+      {k:'n',t:'Samples',v:r=>r.n,cls:'num'},
+      {k:'bad',t:'Defective',v:r=>r.bad,html:r=>r.bad?`<b class="late">${r.bad}</b>`:'0',cls:'num'},
+      {k:'fails',t:'Failed checkpoints',v:r=>Object.keys(r.fails).join(', '),html:r=>Object.entries(r.fails).map(([k,n])=>`<span class="cp-chip">${esc(k)}${n>1?' ×'+n:''}</span>`).join('')||'<span class="muted">—</span>'},
+      {k:'result',t:'Result',v:r=>r.result,html:r=>r.result==='PASS'?'<span class="badge badge-pass">Passed</span>':r.result==='HOLD'?'<span class="badge badge-hold">On hold</span>':r.result==='FAIL'?'<span class="badge badge-fail">Failed</span>':esc(r.result)}],
+    hidden:['pm','type'],
+    filters:[{k:'model',t:'Model',opts:()=>uniq(insp.map(x=>x.model)),v:r=>r.model},{k:'result',t:'Result',opts:()=>uniq(insp.map(x=>x.result)),v:r=>r.result},{k:'round',t:'Round',opts:()=>uniq(insp.map(x=>String(x.round))),v:r=>String(r.round)},{k:'ins',t:'Inspector',opts:()=>uniq(insp.map(x=>x.ins)),v:r=>r.ins}],
+    bulk:[], empty:'No inspections recorded yet.',exportName:'lot_inspections'};
+  return {cfg,rows};
+}
+function sampTable(){
+  const {S}=anBase(); const rows=S.filter(s=>inWin(s.t,inspWin));
+  const cfg={id:'samp',label:'samples',ph:'Search serial, lot, remark',rowKey:r=>r.lot+'#'+r.round+'#'+r.serial,onRow:k=>openInsp(k.split('#').slice(0,2).join('#')),
+    rowCls:r=>r.ok?'':'row-late', search:r=>[r.serial,r.lot,r.batch,r.ins,r.remark,r.model].join(' '), sort:{k:'date',dir:-1},
+    cols:[
+      {k:'serial',t:'Serial number',v:r=>r.serial,html:r=>`<span class="mono">${esc(r.serial)}</span>`,always:true,cls:'nowrap'},
+      {k:'lot',t:'Lot',v:r=>r.lot,html:r=>`${esc(r.lot)}<div class="cell-sub">Round ${r.round}</div>`,cls:'nowrap'},
+      {k:'model',t:'Model',v:r=>modelLabel(r.model),cls:'nowrap'},
+      {k:'ins',t:'Inspector',v:r=>r.ins},
+      {k:'date',t:'Inspected',v:r=>r.t,html:r=>esc(fmtDate(r.t)),cls:'nowrap'},
+      {k:'cps',t:'Checkpoints',v:r=>CHECKS.filter((c,i)=>r.fl[i]==='F').join(', ')||'All passed',html:r=>CHECKS.map((c,i)=>`<span class="cp-chip ${r.fl[i]==='F'?'bad':'ok'}" title="${esc(c)}: ${r.fl[i]==='F'?'failed':'passed'}">${esc(c==='Black dot'?'BD':c[0])}</span>`).join('')},
+      {k:'remark',t:'Remark',v:r=>r.remark,html:r=>r.remark?`<span class="cell-sub" style="font-size:12.5px">${esc(r.remark.slice(0,80))}</span>`:'<span class="muted">—</span>'},
+      {k:'res',t:'Result',v:r=>r.ok?'Pass':'Fail',html:r=>r.ok?'<span class="badge badge-pass">Pass</span>':'<span class="badge badge-fail">Fail</span>'}],
+    filters:[{k:'res',t:'Result',opts:()=>['Pass','Fail'],v:r=>r.ok?'Pass':'Fail'},{k:'cp',t:'Failed checkpoint',opts:()=>CHECKS,v:r=>r.__cp},{k:'model',t:'Model',opts:()=>uniq(S.map(s=>s.model)),v:r=>r.model}],
+    bulk:[], empty:'No inspected units yet.',exportName:'inspected_units'};
+  // a unit can fail several checkpoints: the checkpoint filter matches any of them
+  const fcp=DT.samp&&DT.samp.f.cp;
+  const rows2=fcp?rows.filter(r=>r.fl[CHECKS.indexOf(fcp)]==='F').map(r=>({...r,__cp:fcp})):rows;
+  return {cfg,rows:rows2};
+}
+DT_CFG.insp=inspTable; DT_CFG.samp=sampTable;
+function buildInspectionsPage(){
+  if(!an.loaded){ loadAnalytics(); return pageHead('inspections')+anLoadingHtml(); }
+  if(an.stale){ an.stale=false; loadAnalytics(true); }
+  const x=inspView==='lots'?inspTable():sampTable(); dtState(x.cfg.id,x.cfg);
+  const right=`<div class="seg" role="group" aria-label="View"><button class="seg-btn inspV ${inspView==='lots'?'on':''}" data-k="lots">Lot inspections</button><button class="seg-btn inspV ${inspView==='units'?'on':''}" data-k="units">Inspected units</button></div>`;
+  return pageHead('inspections',right)+(inspWin.label?`<div class="q-alerts rv" style="--i:1"><span class="q-alert wait">${ico('clock')}${esc(inspWin.label)}<button class="btn-icon" id="inspWinX" aria-label="Clear date filter">${ico('x')}</button></span></div>`:'')+`<div class="rv" style="--i:2">${dtHtml(x.cfg,x.rows)}</div>`;
+}
+function openInsp(id){
+  const x=anBase().insp.find(i=>i.id===id); if(!x){ toast('Inspection not found','err'); return; }
+  qui.drawer={kind:'insp',id,rec:x,form:{},dirty:false,log:null}; qui.anim=true; render();
+}
+function buildInspDrawer(){
+  const x=qui.drawer.rec;
+  return `<div class="dw-wrap ${qui.anim?'dw-anim':''}" id="dwWrap"><div class="dw-scrim" id="dwScrim"></div><aside class="dw" role="dialog" aria-modal="true" aria-labelledby="dwTitle">
+    <header class="dw-h"><div class="dw-id"><span class="mono">${esc(x.lot)} · R${x.round}</span>${x.result==='PASS'?'<span class="badge badge-pass">Passed</span>':x.result==='HOLD'?'<span class="badge badge-hold">On hold</span>':'<span class="badge badge-fail">'+esc(x.result)+'</span>'}</div>
+      <h2 id="dwTitle">${esc(x.lot)}, ${x.round>1?'reoffer round '+x.round:'first inspection'}</h2><button class="btn-icon dw-x" id="dwClose" aria-label="Close">${ico('x')}</button>
+      <div class="facts2"><div><span>Model</span><b>${esc(modelLabel(x.model))}</b></div><div><span>Batch</span><b>${esc(x.batch)}</b></div><div><span>Production</span><b>${x.pm?esc(mmyyDisp(x.pm)):'—'}</b></div><div><span>Inspector</span><b>${esc(x.ins)}</b></div><div><span>Inspected</span><b>${esc(fmtDate(x.t))}</b></div><div><span>Defective</span><b class="${x.bad?'late':''}">${x.bad} of ${x.n}</b></div></div></header>
+    <div class="dw-b"><section class="dw-sec"><h3>Samples</h3><table class="smp"><thead><tr><th>#</th><th>Serial number</th>${CHECKS.map(c=>`<th title="${esc(c)}">${esc(c==='Black dot'?'BD':c.slice(0,4))}</th>`).join('')}<th>Result</th></tr></thead><tbody>
+      ${x.samples.map((s,i)=>`<tr class="${s.ok?'':'bad'}"><td>${i+1}</td><td class="mono">${esc(s.serial)}${s.remark?`<div class="cell-sub" style="font-family:var(--font-ui)">${esc(s.remark)}</div>`:''}${s.bd&&s.bd!=='No BD'?`<div class="cell-sub" style="font-family:var(--font-ui)">Black dot: ${esc(s.bd)}</div>`:''}</td>${CHECKS.map((c,j)=>`<td>${s.fl[j]==='F'?'<span class="cp-x" aria-label="failed">✕</span>':'<span class="cp-v" aria-label="passed">✓</span>'}</td>`).join('')}<td>${s.ok?'<span class="badge badge-pass">Pass</span>':'<span class="badge badge-fail">Fail</span>'}</td></tr>`).join('')}</tbody></table></section>
+      ${qd.defects.filter(d=>d.Lot===x.lot).length?`<section class="dw-sec"><h3>Defect records for this lot</h3><div class="chips">${qd.defects.filter(d=>d.Lot===x.lot).map(d=>`<button class="chip ins-go" data-kind="defect" data-id="${esc(d.DefectID)}"><span class="mono">${esc(d.DefectID)}</span> ${esc(d.Title)} · ${esc(d.Status)}</button>`).join('')}</div></section>`:''}
+    </div>
+    <footer class="dw-f"><div class="row-btns"><div class="more"></div><div class="main-btns"><button class="btn btn-ghost ins-go" data-kind="lot" data-id="${esc(x.batch+'||'+x.lot)}">Open the lot</button></div></div></footer></aside></div>`;
+}
+/* ── insights page ── */
+function buildInsightsPage(){
+  if(!an.loaded||!qd.loaded){ loadAnalytics(); loadQuality(); return pageHead('insights')+anLoadingHtml(); }
+  const ins=anInsights();
+  return pageHead('insights',anFiltersHtml(false))+`<div class="ins-banner rv" style="--i:1">${ico('pulse')}<span><b>Calculated insights.</b> Each one comes from a fixed rule applied to the records in the portal. They point to patterns worth a look; they are not predictions or AI analysis.</span></div>
+    ${ins.length?`<div class="ins-list">${ins.map((x,i)=>insightCard(x,i,false)).join('')}</div>`:`<div class="card ch-empty rv" style="--i:2">No patterns flagged for this period and model. The rules check: models with high defect rates, lots failing again after rework, checkpoints failing in several lots, overdue actions, stage pass rates, defects back after corrective action, and units failing twice.</div>`}`;
+}
+/* drill-downs and links */
+function anGo(kind,id){
+  if(kind==='defect'){ go('defects'); openDrawer('defect',id); }
+  else if(kind==='capa'){ go('capa'); openDrawer('capa',id); }
+  else if(kind==='insp'){ if(page!=='inspections') go('inspections'); openInsp(id); }
+  else if(kind==='lot'){ const [b,l]=id.split('||'); qui.drawer=null; view.batch=b; view.status='all'; view.q=''; selLot=id; go('batches',()=>document.querySelector('.lot-detail')?.scrollIntoView({block:'center'})); }
+  else if(kind==='batch'){ qui.drawer=null; view.batch=id; view.status='all'; view.q=''; selLot=null; go('batches'); }
+}
+function anDrill(kind,k,el){
+  const w=anWindow(anF.range,0), lbl=anF.range==='all'?'':`Last ${anF.range} days`;
+  const setWin=()=>{ inspWin={from:w.from,to:w.to,label:lbl}; };
+  const st=id=>{ const x=DT_CFG[id](); const s=dtState(id,x.cfg); s.f={}; s.q=''; s.page=0; return s; };
+  if(kind==='inspections'){ setWin(); inspView='lots'; const s=st('insp'); if(anF.model) s.f.model=anF.model; go('inspections'); }
+  else if(kind==='fpy'){ setWin(); inspView='lots'; const s=st('insp'); s.f.round='1'; if(anF.model) s.f.model=anF.model; go('inspections'); }
+  else if(kind==='rate'){ setWin(); inspView='units'; const s=st('samp'); s.f.res='Fail'; if(anF.model) s.f.model=anF.model; go('inspections'); }
+  else if(kind==='open'){ const s=dtState('def',defectTable().cfg); s.stage='open'; go('defects'); }
+  else if(kind==='capa'){ go('capa'); }
+  else if(kind==='checkpoint'){ setWin(); inspView='units'; const s=st('samp'); s.f.res='Fail'; s.f.cp=k; if(anF.model) s.f.model=anF.model; go('inspections'); }
+  else if(kind==='category'){ const s=dtState('def',defectTable().cfg); s.f.cat=k; s.stage=''; go('defects'); }
+  else if(kind==='model'){ setWin(); inspView='lots'; const s=st('insp'); s.f.model=k; go('inspections'); }
+  else if(kind==='week'){ inspWin={from:el.dataset.from,to:el.dataset.to,label:'Week of '+new Date(el.dataset.from).toLocaleDateString([], {day:'2-digit',month:'short',year:'numeric'})}; inspView='lots'; st('insp'); go('inspections'); }
+  else if(kind==='outcome'){ setWin(); inspView='lots'; const s=st('insp'); s.f.result=k==='hold'?'HOLD':k==='fail'?'FAIL':'PASS'; if(k==='first') s.f.round='1'; go('inspections'); }
+}
+function bindAnalytics(){
+  document.querySelectorAll('.anRange').forEach(b=>{ b.onclick=()=>{ anF.range=b.dataset.k; render(); }; });
+  document.querySelectorAll('.anModel').forEach(s=>{ s.onchange=()=>{ anF.model=s.value; anF.batch=''; render(); }; });
+  document.querySelectorAll('.anBatch').forEach(s=>{ s.onchange=()=>{ anF.batch=s.value; render(); }; });
+  document.querySelectorAll('.anPar').forEach(b=>{ b.onclick=()=>{ anPareto=b.dataset.k; render(); }; });
+  document.querySelectorAll('.inspV').forEach(b=>{ b.onclick=()=>{ inspView=b.dataset.k; render(); }; });
+  const wx=document.getElementById('inspWinX'); if(wx) wx.onclick=()=>{ inspWin={from:'',to:'',label:''}; render(); };
+  const rt=document.getElementById('anRetry'); if(rt) rt.onclick=()=>{ an.error=''; render(); loadAnalytics(true); };
+  document.querySelectorAll('[data-drill]').forEach(el=>{ const f=()=>anDrill(el.dataset.drill,el.dataset.k,el); el.addEventListener('click',f); if(el.tagName==='TR') el.addEventListener('keydown',e=>{ if(e.key==='Enter') f(); }); });
+  document.querySelectorAll('.ins-go').forEach(b=>{ b.onclick=e=>{ e.stopPropagation(); anGo(b.dataset.kind,b.dataset.id); }; });
+  // count-up, once per page visit
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll('.cnt').forEach(el=>{ const v=el.dataset.count; if(v===''||reduce||el.dataset.done) return; const end=Number(v), dec=Number(el.dataset.dec||0), t0=performance.now(), dur=700;
+    if(anCounted===page+anF.range+anF.model+anF.batch) return;
+    const step=t=>{ const p=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-p,3); el.textContent=(end*e).toFixed(dec); if(p<1) requestAnimationFrame(step); }; requestAnimationFrame(step); });
+  if(document.querySelector('.cnt')) anCounted=page+anF.range+anF.model+anF.batch;
+}
+let anCounted='';
+/* chart tooltips */
+(function(){
+  let tip=null;
+  document.addEventListener('mousemove',e=>{
+    const t=e.target.closest&&e.target.closest('[data-tip]');
+    if(!t){ if(tip) tip.style.opacity='0'; return; }
+    if(!tip){ tip=document.createElement('div'); tip.className='ch-tip'; tip.setAttribute('role','tooltip'); document.body.appendChild(tip); }
+    tip.textContent=t.getAttribute('data-tip'); tip.style.opacity='1';
+    const x=Math.min(window.innerWidth-tip.offsetWidth-8,e.clientX+12), y=Math.max(8,e.clientY-tip.offsetHeight-10);
+    tip.style.transform=`translate(${x}px,${y}px)`;
+  });
+})();
+KP_EXTRA.push(()=>an.loaded?anBase().insp.slice(0,300).map(i=>({g:'Inspections',t:`${i.lot} · round ${i.round}`,sub:`${i.result}, ${fmtDate(i.t)}`,icon:'table',run:()=>{ go('inspections'); openInsp(i.id); }})):[]);
+
 function buildDashboard(){
   const isAdmin=user.role==='admin';
   if(page==='batches') return shell(pageHead('batches')+buildBatchesBody(isAdmin));
@@ -2265,8 +2747,10 @@ function buildDashboard(){
   if(page==='faispec'&&can('models')) return shell(pageHead('faispec')+buildFaiSpecPage());
   if(page==='reports'&&can('reports')) return shell(pageHead('reports')+buildReportsCard());
   if(page==='defects') return shell(buildDefectsPage());
+  if(page==='inspections') return shell(buildInspectionsPage());
+  if(page==='insights') return shell(buildInsightsPage());
   if(page==='capa') return shell(buildCapaPage());
-  return shell(buildOverview(isAdmin));
+  return shell(buildExecDashboard());
 }
 
 function buildOverview(isAdmin){
