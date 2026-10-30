@@ -528,6 +528,16 @@ button.logo{background:none;border:0;border-right:1px solid var(--line);cursor:p
 .bom-ecn{display:flex;align-items:center;gap:8px;font-size:13.5px}
 .bom-orph{margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:13.5px}
 .save-st{font-size:12.5px;color:var(--ink-3)}
+.ecn-panel{margin:0 0 14px;padding:16px 18px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.ecn-panel h2{margin:0 0 4px;font-size:18px}
+.ecn-tbl{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0}
+.ecn-tbl th{text-align:left;font-size:12px;color:var(--ink-3);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line)}
+.ecn-tbl td{padding:6px;vertical-align:top;border-bottom:1px solid var(--line)}
+.ecn-tbl .mono{font-family:var(--code)}
+.ecn-grid{display:grid;grid-template-columns:minmax(0,2fr) 170px minmax(0,1.4fr);gap:10px;align-items:start}
+.ecn-new{display:inline-block;margin-top:4px;font-size:11.5px;font-weight:600;padding:1px 7px;border-radius:99px;background:#e7f1fb;color:#1d4f86}
+.ecn-old{display:inline-block;margin-top:4px;font-size:11.5px;font-weight:600;padding:1px 7px;border-radius:99px;background:#e5f4e4;color:#2c6a2a}
+@media (max-width:820px){.ecn-grid{grid-template-columns:1fr}.ecn-tbl thead{display:none}.ecn-tbl tr,.ecn-tbl td{display:block}}
 .save-st.bad{color:var(--fail)}
 @media (max-width:760px){
   .flow{grid-template-columns:1fr}
@@ -2053,6 +2063,7 @@ function buildBomVerify(){
     </div>
   </section>
   ${a.notes&&a.notes.length?`<div class="bom-orph"><b>BOM changed since the draft was saved (Rev ${esc(a.draftRev||'?')} → Rev ${esc(a.control.rev)}).</b> ${a.notes.map(esc).join(' ')}</div>`:''}
+  ${bomEcnPanel()}
   <div class="lot-toolbar" style="grid-template-columns:auto minmax(200px,1fr) auto">
     <div><span class="lbl">Show parts</span><div class="seg" role="group" aria-label="Filter parts">${[['all','All',c.total],['todo','To check',c.todo+c.open],['match','Matched',c.match],['diff','Deviations',c.dev]].map(([k,l,n])=>`<button class="seg-btn bomFilter ${a.filter===k?'on':''}" data-k="${k}" aria-pressed="${a.filter===k}">${l}<span>${n}</span></button>`).join('')}</div></div>
     <div><label class="lbl" for="bomQ">Find a part</label><input id="bomQ" class="field" type="search" value="${esc(a.q)}" placeholder="Part number or description"></div>
@@ -2079,7 +2090,7 @@ function buildBomVerify(){
     <div class="insp-tally" id="bomTally">${bomTallyHtml()}</div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <input id="bomRemarks" class="field" type="text" style="width:240px" value="${esc(a.remarks||'')}" placeholder="Remarks (optional)">
-      <button id="btnBomEcn" class="btn btn-ghost ${c.dev?'':'hidden'}" ${canEcn?'':'disabled title="Ask an admin or a user with BOM management to raise the ECN"'}>Prepare ECN for deviations</button>
+      <button id="btnBomEcn" class="btn btn-primary ${c.dev?'':'hidden'}" ${canEcn?'title="Creates any new part codes and the ECN for the parts that do not match"':'disabled title="Ask an admin or a user with BOM management to generate the ECN"'}>Generate ECN</button>
       <button id="btnBomFail" class="btn btn-ghost ${c.dev?'':'hidden'}" style="color:var(--fail)" title="Records the verification as failed; sampling stays locked">Record as failed</button>
       <button id="btnBomPass" class="btn" disabled style="min-width:220px"></button>
     </div>
@@ -2122,6 +2133,115 @@ function realignBomItems(parts,items){
   const gone=Object.keys(items).filter(k=>!used.has(k));
   if(gone.length) notes.push(`No longer in the BOM: ${gone.join(', ')}.`);
   return {items:out,notes};
+}
+/* ── Generate ECN from the verification screen ── */
+/* the usual part code prefix in PART_MASTER, e.g. "D018." (the most common text up to the first dot) */
+function partCodePrefix(rows){
+  const n={}; (rows||[]).forEach(r=>{ const m=String(r.partNo).match(/^([^.]+\.)/); if(m) n[m[1]]=(n[m[1]]||0)+1; });
+  let best='',c=0; Object.keys(n).forEach(k=>{ if(n[k]>c){ best=k; c=n[k]; } }); return best;
+}
+/* part code for a part number found on the material: an existing part if there is one, else prefix + number */
+function genPartCode(found,prefix,known){
+  const f=String(found||'').trim(); if(!f) return '';
+  const has=x=>known.has(String(x).toUpperCase());
+  if(has(f)) return f;
+  if(prefix&&has(prefix+f)) return prefix+f;
+  if(prefix&&f.toUpperCase().startsWith(prefix.toUpperCase())) return f;
+  return prefix+f;
+}
+function bomEcnRows(){
+  const a=activeBom, out=[];
+  a.parts.forEach(p=>{
+    const it=a.items[p.partNo], j=bomJudge(p,it); if(j.state!=='dev') return;
+    const kind=j.total===0?'remove':!j.okPn?'replace':'qps';
+    out.push({p,it,j,kind});
+  });
+  return out;
+}
+function bomEcnPanel(){
+  const a=activeBom, e=a.ecn; if(!e||!e.open) return '';
+  if(e.loading) return '<div class="ecn-panel text-muted">Loading parts…</div>';
+  if(e.error) return `<div class="ecn-panel err">${esc(e.error)} <button class="btn btn-ghost btn-sm" id="btnEcnCancel">Close</button></div>`;
+  const rows=bomEcnRows(), known=e.known;
+  const body=rows.map(({p,it,j,kind})=>{
+    const r=e.rows[p.partNo]||{};
+    if(kind==='remove') return `<tr><td><div class="mono">${esc(p.partNo)}</div><div class="text-muted">${esc(p.description)}</div></td><td>Remove (not used, QPS ${esc(p.qps)} → 0)</td><td colspan="2" class="text-muted">No new part</td></tr>`;
+    if(kind==='qps') return `<tr><td><div class="mono">${esc(p.partNo)}</div><div class="text-muted">${esc(p.description)}</div></td><td>QPS ${esc(p.qps)} → <b>${esc(j.total)}</b></td><td class="mono">${esc(j.okPn?p.partNo:j.found)}</td><td class="text-muted">Same part, new QPS</td></tr>`;
+    const code=r.code??genPartCode(j.found,e.prefix,known), isNew=code&&!known.has(code.toUpperCase());
+    return `<tr><td><div class="mono">${esc(p.partNo)}</div><div class="text-muted">${esc(p.description)}</div></td>
+      <td>Replace, QPS ${esc(j.total)}<div class="text-muted">Found: <span class="mono">${esc(j.found)}</span></div></td>
+      <td><input class="field mono ecnRow" data-pn="${esc(p.partNo)}" data-f="code" value="${esc(code)}" aria-label="New part code for ${esc(p.partNo)}" maxlength="60">
+        <span class="ecn-code-st" data-pn="${esc(p.partNo)}">${isNew?'<span class="ecn-new">New part code, created with the ECN</span>':'<span class="ecn-old">Already in Parts</span>'}</span></td>
+      <td>${isNew?`<input class="field ecnRow" data-pn="${esc(p.partNo)}" data-f="desc" value="${esc(r.desc??p.description)}" placeholder="Description of the new part" aria-label="Description of the new part">
+        <div class="text-muted" style="font-size:12px;margin-top:3px">Supplier and UOM are copied from ${esc(p.partNo)}; add the image later under Parts.</div>`:'<span class="text-muted">—</span>'}</td></tr>`;
+  }).join('');
+  return `<section class="ecn-panel" aria-label="Generate ECN">
+    <h2>Generate ECN for ${rows.length} deviation${rows.length===1?'':'s'}</h2>
+    <div class="text-muted">BOM ${esc(a.model)} Rev ${esc(a.control.rev)} goes to Rev ${esc((Number(a.control.rev)||0)+1)}. Part codes not yet in Parts are created first, then the ECN changes the BOM and this verification is checked again against the new revision.</div>
+    <div class="ecn-grid" style="margin-top:10px">
+      <label class="lbl">Reason for the change<textarea class="field ecnF" data-k="reason" rows="2" maxlength="1000">${esc(e.reason)}</textarea></label>
+      <label class="lbl">Effective date<input class="field ecnF" type="date" data-k="date" value="${esc(e.date)}"></label>
+      <label class="lbl">Part code prefix<input class="field mono ecnF" data-k="prefix" value="${esc(e.prefix)}" maxlength="20" title="Put in front of a part number found to make its part code"><span class="text-muted" style="font-size:12px">New code = prefix + part number found</span></label>
+    </div>
+    <table class="ecn-tbl"><thead><tr><th>BOM part</th><th>Change</th><th>New part code</th><th>New part description</th></tr></thead><tbody>${body}</tbody></table>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span class="lbl" style="margin:0">ECN document received?</span>
+      <div class="seg"><button class="seg-btn ecnRecv ${e.recv?'on':''}" data-v="1">Yes</button><button class="seg-btn ecnRecv ${e.recv?'':'on'}" data-v="0">Not yet</button></div>
+      ${e.recv?`<input class="field ecnF" data-k="doc" type="url" style="flex:1;min-width:220px" value="${esc(e.doc)}" placeholder="https:// link to the ECN document">`:''}
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost" id="btnEcnCancel">Cancel</button>
+      <button class="btn btn-primary" id="btnEcnGo" ${e.busy?'disabled':''}>${e.busy?esc(e.busy):'Generate ECN'}</button>
+    </div>
+  </section>`;
+}
+async function openBomEcn(){
+  const a=activeBom;
+  const why=bomEcnRows().map(r=>String(r.it.remark||'').trim()?`${r.p.partNo}: ${String(r.it.remark).trim()}`:'').filter(Boolean);
+  a.ecn={open:true,loading:true,rows:{},reason:(`BOM verification of ${a.batch}. `+why.join('; ')).slice(0,1000),
+    date:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),recv:false,doc:'',prefix:''};
+  render();
+  try{
+    const lp=await bomApi('listParts');
+    a.ecn.master=lp; a.ecn.known=new Set(lp.rows.map(r=>String(r.partNo).toUpperCase())); a.ecn.prefix=partCodePrefix(lp.rows); a.ecn.loading=false;
+  }catch(x){ a.ecn.loading=false; a.ecn.error=x.message; }
+  if(activeBom===a){ render(); document.querySelector('.ecn-panel')?.scrollIntoView({block:'start',behavior:'smooth'}); }
+}
+async function runBomEcn(){
+  const a=activeBom, e=a.ecn, rows=bomEcnRows();
+  const lp=e.master, f=lp.fields, descF=lp.descField, row=pn=>lp.rows.find(r=>r.partNo===pn);
+  const reason=String(e.reason||'').trim(); if(!reason) return toast('Enter the reason for the change.','err');
+  if(!e.date) return toast('Enter the effective date.','err');
+  if(e.recv&&!/^https:\/\//.test(String(e.doc||'').trim())) return toast('Paste the https link to the ECN document, or choose Not yet.','err');
+  const oldParts=[], newParts=[], create={}, codeOf={};
+  for(const {p,j,kind} of rows){
+    oldParts.push(p.partNo);
+    if(kind==='remove') continue;
+    if(kind==='qps'){ newParts.push({partNo:j.okPn?p.partNo:j.found,qps:j.total}); continue; }
+    const r=e.rows[p.partNo]||{}, code=String(r.code??genPartCode(j.found,e.prefix,e.known)).trim();
+    if(!code) return toast(`Enter the new part code for ${p.partNo}.`,'err');
+    if(!/^[A-Za-z0-9][A-Za-z0-9 ._\-\/]{0,59}$/.test(code)) return toast(`Part code ${code}: use letters, numbers, . _ - / (up to 60).`,'err');
+    codeOf[p.partNo]=code; newParts.push({partNo:code,qps:j.total});
+    if(!e.known.has(code.toUpperCase())&&!create[code.toUpperCase()]){
+      const desc=String(r.desc??p.description).trim(); if(!desc) return toast(`Enter the description of new part ${code}.`,'err');
+      const src=row(p.partNo), values={};
+      f.forEach((h,i)=>{ if(h===descF) values[h]=desc; else if(h===lp.urlField||/^image$/i.test(h)) values[h]=''; else values[h]=src?src.v[i]:''; });
+      create[code.toUpperCase()]={partNo:code,values};
+    }
+  }
+  const nNew=Object.keys(create).length;
+  if(!confirm(`Generate an ECN for ${a.model}?\n\n${nNew?`New part codes: ${Object.values(create).map(x=>x.partNo).join(', ')}\n`:''}Remove or replace: ${oldParts.join(', ')}\nAdd: ${newParts.map(x=>x.partNo+' (QPS '+x.qps+')').join(', ')||'none'}\n\nThe BOM changes now and its revision goes up by one.`)) return;
+  try{
+    for(const c of Object.values(create)){ e.busy='Creating '+c.partNo+'…'; render(); await bomApi('savePart',{payload:{partNo:c.partNo,isNew:true,values:c.values}}); e.known.add(c.partNo.toUpperCase()); }
+    e.busy='Generating ECN…'; render();
+    const d=await bomApi('runEcnChange',{payload:{model:a.model,oldParts,newParts,reason,effectiveDate:e.date,received:!!e.recv,docUrl:e.recv?String(e.doc).trim():''}});
+    // the draft follows the new part codes, then is checked against the new BOM revision
+    Object.keys(codeOf).forEach(pn=>{ if(a.items[pn]) a.items[pn].found=codeOf[pn]; });
+    bxClear();
+    const r=await api('getBom',{model:a.model});
+    if(r.ok){ const al=realignBomItems(r.parts,a.items); a.parts=r.parts; a.items=al.items; a.notes=al.notes; a.draftRev=a.control.rev; a.control=r.control||a.control; }
+    a.ecn=null; saveBomDraft(); render(); window.scrollTo(0,0);
+    toast(`${d.ecnNo} saved, ${a.model} is now at Rev ${d.rev}.${nNew?` ${nNew} new part code${nNew===1?'':'s'} created.`:''}`);
+  }catch(x){ e.busy=''; render(); toast(x.message,'err'); }
 }
 function bomEcnPrefill(){
   const a=activeBom, old=[], add=[], why=[];
@@ -3236,13 +3356,22 @@ function bindEvents(){
   const brm=document.getElementById('bomRemarks');
   if(brm) brm.oninput=()=>{ activeBom.remarks=brm.value; saveBomDraft(); };
   const becn=document.getElementById('btnBomEcn');
-  if(becn) becn.onclick=async()=>{
-    const pf=bomEcnPrefill(), a=activeBom;
-    if(!confirm(`Open a new ECN for ${a.model} with the ${pf.old.split('\n').filter(Boolean).length} deviating part(s) filled in?\n\nCheck the lists before generating it. The draft is kept; reopen the BOM verification after the ECN to pass it.`)) return;
-    await flushBomSave();
-    bx.model=a.model; bx.f.ecnOld=pf.old; bx.f.ecnNew=pf.add; bx.f.ecnReason=pf.reason.slice(0,1000); bx.ui.ecnTab='new'; bx.ui.ecnCheck=null;
-    activeBom=null; go('bom/ecn');
-  };
+  if(becn) becn.onclick=()=>{ if(activeBom.ecn&&activeBom.ecn.open){ document.querySelector('.ecn-panel')?.scrollIntoView({block:'start',behavior:'smooth'}); return; } openBomEcn(); };
+  const ecc=document.getElementById('btnEcnCancel'); if(ecc) ecc.onclick=()=>{ activeBom.ecn=null; render(); };
+  const ego=document.getElementById('btnEcnGo'); if(ego) ego.onclick=()=>runBomEcn();
+  document.querySelectorAll('.ecnRecv').forEach(b=>{ b.onclick=()=>{ activeBom.ecn.recv=b.getAttribute('data-v')==='1'; render(); }; });
+  document.querySelectorAll('.ecnF').forEach(el=>{
+    el.oninput=()=>{ const e=activeBom.ecn, k=el.getAttribute('data-k'); e[k]=el.value;
+      if(k==='prefix'){ // codes that were not typed by hand follow the prefix
+        bomEcnRows().forEach(({p,j,kind})=>{ if(kind!=='replace'||(e.rows[p.partNo]||{}).code!==undefined) return;
+          const inp=document.querySelector(`.ecnRow[data-pn="${CSS.escape(p.partNo)}"][data-f="code"]`); if(inp) inp.value=genPartCode(j.found,e.prefix,e.known); });
+      } };
+    if(el.getAttribute('data-k')==='prefix') el.onchange=()=>render();
+  });
+  document.querySelectorAll('.ecnRow').forEach(el=>{
+    el.oninput=()=>{ const e=activeBom.ecn, pn=el.getAttribute('data-pn'); e.rows[pn]=e.rows[pn]||{}; e.rows[pn][el.getAttribute('data-f')]=el.value; };
+    if(el.getAttribute('data-f')==='code') el.onchange=()=>render();
+  });
   const submitBom=async(asFail)=>{
     const a=activeBom, c=bomCounts();
     if(!confirm(asFail?`Record the BOM verification of ${a.batch} as failed with ${c.dev} deviation${c.dev===1?'':'s'}?\n\nSampling stays locked, and the draft is closed. Usually it is better to raise the ECN and pass.`:`Pass the BOM verification of ${a.batch}?\n\nAll ${c.total} parts matched. Sampling will be unlocked.`)) return;
