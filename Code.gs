@@ -22,13 +22,13 @@ var PARTDB_URL   = "https://script.google.com/macros/s/AKfycbyPiE-gcrUZH7cEA6KKB
 var SESSION_HOURS = 12;
 // Modules an admin can give each user (Users sheet, column E "Access", comma separated).
 // Admins always have every module. An empty cell means the original inspector set.
-var MODULES        = ["bomverify","fai","sampling","reports","createbatch","models","data","bommgmt"];
+var MODULES        = ["bomverify","fai","sampling","reports","createbatch","models","data","bommgmt","quality"];
 var DEFAULT_ACCESS = ["bomverify","fai","sampling"];
 // Actions any signed-in user may call (reading, own password)
 // Actions that only read; every other successful action clears the cache
 var READ_ACTIONS = ["login","logout","whoami","bootstrap","getBatches","getModels","modelInsights","getBomList","getBom","getBomVerification","getBomDraft",
-                    "getLotUnits","checkSerial","getFaiSpec","getFai","listUsers","scanDuplicates","searchRecords"];
-var ALWAYS_ACTIONS = ["bootstrap","modelInsights","logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai","getBom"];
+                    "getLotUnits","checkSerial","getFaiSpec","getFai","listUsers","scanDuplicates","searchRecords","qListAll","qLogFor"];
+var ALWAYS_ACTIONS = ["qListAll","qLogFor","bootstrap","modelInsights","logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai","getBom"];
 // recordRework (rework data + reoffer) belongs to the sampling module
 // Actions unlocked by a module; everything not listed here or above is admin only
 var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify", getBomDraft:"bomverify", saveBomDraft:"bomverify",
@@ -37,7 +37,8 @@ var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify", get
                       createBatch:"createbatch",
                       saveModel:"models", deleteModel:"models",
                       scanDuplicates:"data", searchRecords:"data", removeDuplicates:"data", approveSerial:"data",
-                      bom:"bommgmt"};
+                      bom:"bommgmt",
+                      qSaveDefect:"quality", qCreateDefects:"quality", qMoveDefect:"quality", qBulkDefects:"quality", qSaveCapa:"quality", qMoveCapa:"quality"};
 
 // Security settings
 var PW_ITERATIONS    = 1000;    // PBKDF2-HMAC-SHA256 rounds (each round is slow in Apps Script: 1000 = about 1.5 s per login)
@@ -123,6 +124,7 @@ function doPost(e){
       // record who did it from the session, not from what the browser sent
       if(action === "submitLot" || action === "recordRework" || action === "holdLot" || action === "setOfferedQty" || action === "saveFai" || action === "saveFaiSpec") data.inspector = sess.name;
       if(action === "submitBomVerification" || action === "saveBomDraft") data.by = sess.name;
+      if(/^q(Save|Create|Move|Bulk|Approve)/.test(action)) data.by = sess.name;
       if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser","setUserAccess"].indexOf(action) > -1){
         data.createdBy = sess.username; data.updatedBy = sess.username; data.by = sess.username;
       }
@@ -239,6 +241,15 @@ function doPost(e){
     if(action === "getBomVerification"){
       result = getBomVerification(data);
     }
+    if(action === "qListAll") result = qListAll(data);
+    if(action === "qLogFor") result = qLogFor(data);
+    if(action === "qSaveDefect") result = qSaveDefect(data);
+    if(action === "qCreateDefects") result = qCreateDefects(data);
+    if(action === "qMoveDefect") result = qMoveDefect(data);
+    if(action === "qBulkDefects") result = qBulkDefects(data);
+    if(action === "qSaveCapa") result = qSaveCapa(data);
+    if(action === "qMoveCapa") result = qMoveCapa(data);
+    if(action === "qApproveCapa") result = qApproveCapa(data);
     if(action === "getBomDraft"){
       result = getBomDraft(data);
     }
@@ -429,7 +440,7 @@ function allowed_(sess, action){
 }
 function moduleName_(m){
   return {bomverify:"BOM verification", fai:"FAI inspection", sampling:"Sampling inspection", reports:"Reports", createbatch:"Create batches",
-          models:"Models and black dot spec", data:"Data records", bommgmt:"BOM management"}[m] || m;
+          models:"Models and black dot spec", data:"Data records", bommgmt:"BOM management", quality:"Defects and CAPA"}[m] || m;
 }
 /* Who is signed in, and what they may use (the portal calls this on every refresh). */
 function whoami(sess){
@@ -3879,3 +3890,339 @@ return { call: call, isWrite: fn => !!(API_[fn] && API_[fn][0]), repairImages: r
 function bomCall(d){ return BOMX.call(d); }
 /* Run once from the editor: fixes the Image column (#REF! after the move into this spreadsheet). */
 function repairBomImages(){ var r = BOMX.repairImages(); console.log('Images rewritten: ' + r.fixed); return r; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   QUALITY: defects, CAPA and their audit log
+   Sheets: Defects, CAPA (key columns + DataJSON), QualityLog (every change).
+   The lifecycle rules live here; the portal shows the same gates.
+   ═══════════════════════════════════════════════════════════════════════ */
+var DEF_STAGES   = ["Open","Containment","Root Cause Analysis","Corrective Action","Verification","Effectiveness Review","Closed"];
+var DEF_CATS     = ["Design Limitation","Defective Part / Component Failure","Process Failure","Workmanship Error","Functional Failure","Cosmetic Defect","Compliance Failure","Other"];
+var DEF_SEV      = ["Critical","Major","Minor"];
+var DEF_SOURCES  = ["Sampling inspection","FAI inspection","BOM verification","Rework","Customer / field","Other"];
+var CAPA_STAGES  = ["Open","Root Cause Analysis","Action in Progress","Verification","Effectiveness Check","Awaiting Approval","Closed"];
+var DEF_COLS  = ["DefectID","Title","Status","Severity","Category","Source","Model","Batch","Lot","Serial","Owner","TargetDate","CapaID","CreatedBy","CreatedAt","UpdatedBy","UpdatedAt","ClosedAt","DataJSON"];
+var CAPA_COLS = ["CapaID","Title","Status","Severity","Owner","DueDate","DefectIDs","CreatedBy","CreatedAt","UpdatedBy","UpdatedAt","ClosedAt","ApprovedBy","ApprovedAt","DataJSON"];
+var QLOG_COLS = ["Time","Kind","ID","Event","From","To","Details","By"];
+/* text fields kept in DataJSON, with their size limit */
+var DEF_TEXT  = {description:2000, checkpoint:80, sourceRef:200, rootCause:2000, containment:2000, corrective:2000, preventive:2000,
+                 verification:2000, verificationResult:40, effectiveness:2000, effectivenessResult:40, productionDate:20};
+var CAPA_TEXT = {problem:2000, containment:2000, rootCause:2000, corrective:2000, preventive:2000, verificationEvidence:2000,
+                 verificationResult:40, effectiveness:2000, effectivenessResult:40, approvalNote:1000};
+var FISH_KEYS = ["man","machine","method","material","measurement","environment"];
+
+function qSheet_(name, cols){
+  var sh = getOrCreateSheet(name, cols);
+  if(sh.getLastRow() < 1) sh.appendRow(cols);
+  return sh;
+}
+function qNow_(){ return new Date(); }
+function qIso_(v){ return v instanceof Date ? v.toISOString() : String(v || ""); }
+function qDate_(v){ var t = String(v || "").trim(); return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : ""; }
+function qLinks_(v){
+  var arr = Array.isArray(v) ? v : String(v || "").split(/\s*\n\s*/);
+  return arr.map(function(x){ return String(x || "").trim(); }).filter(function(x){ return /^https:\/\/\S{3,1500}$/.test(x); }).slice(0, 20);
+}
+function qLog_(kind, id, event, from, to, details, by){
+  qSheet_("QualityLog", QLOG_COLS).appendRow([qNow_(), kind, id, safe_(event, 80), safe_(from, 60), safe_(to, 60), safe_(details, 1500), safe_(by, 80)]);
+}
+function qNextId_(sh, prefix){
+  var v = sh.getDataRange().getValues(), max = 0;
+  for(var i = 1; i < v.length; i++){ var m = String(v[i][0] || "").match(/(\d+)\s*$/); if(m) max = Math.max(max, Number(m[1])); }
+  return prefix + ("0000" + (max + 1)).slice(-4);
+}
+function qRead_(name, cols){
+  var sh = qSheet_(name, cols), v = sh.getDataRange().getValues(), out = [];
+  for(var i = 1; i < v.length; i++){
+    if(!v[i][0]) continue;
+    var o = {_row:i + 1};
+    cols.forEach(function(c, j){ if(c !== "DataJSON") o[c] = v[i][j] instanceof Date ? v[i][j].toISOString() : String(v[i][j] == null ? "" : v[i][j]); });
+    var data = {}; try{ data = JSON.parse(String(v[i][cols.indexOf("DataJSON")] || "{}")); }catch(e){}
+    o.data = data;
+    out.push(o);
+  }
+  return {sh:sh, rows:out};
+}
+function qWrite_(sh, cols, rowNo, obj){
+  var row = cols.map(function(c){ return c === "DataJSON" ? JSON.stringify(obj.data || {}) : (obj[c] === undefined ? "" : obj[c]); });
+  row = row.map(function(x){ return typeof x === "string" ? safe_(x, 49000) : x; });
+  if(rowNo) sh.getRange(rowNo, 1, 1, cols.length).setValues([row]); else sh.appendRow(row);
+}
+function qPublicDefect_(r){
+  var o = {}; Object.keys(r).forEach(function(k){ if(k !== "_row") o[k] = r[k]; }); return o;
+}
+
+/* ── defect gates: what a defect needs before it can enter each stage ── */
+function defectGate_(d, to){
+  var x = d.data || {}, has = function(k){ return String(x[k] || "").trim() !== ""; };
+  var need = [];
+  var idx = DEF_STAGES.indexOf(to);
+  if(idx >= 1 && !has("containment")) need.push("containment action");
+  if(idx >= 2 && !String(d.Owner || "").trim()) need.push("responsible owner");
+  if(idx >= 3 && !has("rootCause")) need.push("root cause");
+  if(idx >= 4 && !has("corrective")) need.push("corrective action");
+  if(idx >= 4 && !has("preventive")) need.push("preventive action");
+  if(idx >= 5 && !(has("verification") && x.verificationResult === "Verified")) need.push("verification result: Verified");
+  if(idx >= 6 && !(has("effectiveness") && x.effectivenessResult === "Effective")) need.push("effectiveness result: Effective");
+  return need;
+}
+function capaGate_(c, to){
+  var x = c.data || {}, has = function(k){ return String(x[k] || "").trim() !== ""; };
+  var whys = (x.whys || []).filter(function(w){ return String(w || "").trim(); }).length;
+  var fish = FISH_KEYS.some(function(k){ return String((x.fishbone || {})[k] || "").trim(); });
+  var need = [], idx = CAPA_STAGES.indexOf(to);
+  if(idx >= 1 && !has("problem")) need.push("problem statement");
+  if(idx >= 1 && !has("containment")) need.push("immediate containment");
+  if(idx >= 2 && !has("rootCause")) need.push("root cause");
+  if(idx >= 2 && !whys && !fish) need.push("5 Whys or fishbone analysis");
+  if(idx >= 2 && !has("corrective")) need.push("corrective action");
+  if(idx >= 2 && !String(c.Owner || "").trim()) need.push("action owner");
+  if(idx >= 2 && !qDate_(c.DueDate)) need.push("due date");
+  if(idx >= 3 && !has("preventive")) need.push("preventive action");
+  if(idx >= 4 && !(has("verificationEvidence") && x.verificationResult === "Verified")) need.push("verification evidence and result: Verified");
+  if(idx >= 5 && !(has("effectiveness") && x.effectivenessResult === "Effective")) need.push("effectiveness check result: Effective");
+  return need;
+}
+
+function qListAll(d){
+  var D = qRead_("Defects", DEF_COLS).rows.map(qPublicDefect_);
+  var C = qRead_("CAPA", CAPA_COLS).rows.map(qPublicDefect_);
+  return {ok:true, defects:D, capa:C,
+          meta:{defectStages:DEF_STAGES, categories:DEF_CATS, severities:DEF_SEV, sources:DEF_SOURCES, capaStages:CAPA_STAGES}};
+}
+function qLogFor(d){
+  var id = String(d.id || "").trim();
+  var sh = qSheet_("QualityLog", QLOG_COLS), v = sh.getDataRange().getValues(), out = [];
+  for(var i = 1; i < v.length; i++) if(String(v[i][2]) === id)
+    out.push({time:qIso_(v[i][0]), kind:String(v[i][1]), event:String(v[i][3]), from:String(v[i][4]), to:String(v[i][5]), details:String(v[i][6]), by:String(v[i][7])});
+  return {ok:true, log:out};
+}
+/* Fill a defect record from what the portal sent; returns an error text or "" */
+function qApplyDefect_(rec, f, isNew){
+  if(f.Title !== undefined) rec.Title = cleanStr_(f.Title, 200).trim();
+  if(f.Severity !== undefined){ if(DEF_SEV.indexOf(f.Severity) < 0) return "Choose a severity"; rec.Severity = f.Severity; }
+  if(f.Category !== undefined){ if(DEF_CATS.indexOf(f.Category) < 0) return "Choose a defect category"; rec.Category = f.Category; }
+  if(f.Source !== undefined){ if(DEF_SOURCES.indexOf(f.Source) < 0) return "Choose where the defect was found"; rec.Source = f.Source; }
+  ["Model","Batch","Lot","Owner"].forEach(function(k){ if(f[k] !== undefined) rec[k] = cleanStr_(f[k], 100).trim(); });
+  if(f.Serial !== undefined) rec.Serial = cleanStr_(f.Serial, 40).trim().toUpperCase();
+  if(f.TargetDate !== undefined){ if(f.TargetDate && !qDate_(f.TargetDate)) return "Target date must be a date"; rec.TargetDate = qDate_(f.TargetDate); }
+  rec.data = rec.data || {};
+  Object.keys(DEF_TEXT).forEach(function(k){ if(f[k] !== undefined) rec.data[k] = cleanStr_(f[k], DEF_TEXT[k]).trim(); });
+  if(f.verificationResult !== undefined && ["","Verified","Not effective"].indexOf(rec.data.verificationResult) < 0) return "Verification result must be Verified or Not effective";
+  if(f.effectivenessResult !== undefined && ["","Effective","Not effective"].indexOf(rec.data.effectivenessResult) < 0) return "Effectiveness result must be Effective or Not effective";
+  if(f.evidence !== undefined) rec.data.evidence = qLinks_(f.evidence);
+  if(isNew || f.Title !== undefined){ if(!rec.Title) return "Enter a defect title"; }
+  if(isNew){ if(!rec.Severity) return "Choose a severity"; if(!rec.Category) return "Choose a defect category"; }
+  return "";
+}
+var DEF_FIELD_LABEL = {Title:"title",Severity:"severity",Category:"category",Source:"source",Model:"model",Batch:"batch",Lot:"lot",Serial:"serial",Owner:"owner",TargetDate:"target date",
+  description:"description",rootCause:"root cause",containment:"containment",corrective:"corrective action",preventive:"preventive action",verification:"verification",
+  verificationResult:"verification result",effectiveness:"effectiveness",effectivenessResult:"effectiveness result",evidence:"evidence",checkpoint:"checkpoint",sourceRef:"source reference",productionDate:"production date"};
+function qChanged_(before, after){
+  var out = [];
+  Object.keys(DEF_FIELD_LABEL).forEach(function(k){
+    var a = DEF_TEXT[k] !== undefined || k === "evidence" ? (before.data || {})[k] : before[k];
+    var b = DEF_TEXT[k] !== undefined || k === "evidence" ? (after.data || {})[k] : after[k];
+    if(JSON.stringify(a == null ? "" : a) !== JSON.stringify(b == null ? "" : b)) out.push(DEF_FIELD_LABEL[k]);
+  });
+  return out;
+}
+function qSaveDefect(d){
+  var by = String(d.by || ""), f = d.fields || {};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var R = qRead_("Defects", DEF_COLS), now = qNow_();
+    if(!d.id){
+      var rec = {Status:"Open", Source:"Other", data:{}};
+      var err = qApplyDefect_(rec, f, true); if(err) return {ok:false, error:err};
+      rec.DefectID = qNextId_(R.sh, "DEF-");
+      rec.CreatedBy = by; rec.CreatedAt = now; rec.UpdatedBy = by; rec.UpdatedAt = now;
+      qWrite_(R.sh, DEF_COLS, 0, rec);
+      qLog_("Defect", rec.DefectID, "Created", "", "Open", rec.Severity + ", " + rec.Category + (rec.Lot ? ", " + rec.Lot : "") + (rec.Serial ? ", " + rec.Serial : ""), by);
+      return {ok:true, id:rec.DefectID};
+    }
+    var cur = R.rows.filter(function(x){ return x.DefectID === String(d.id); })[0];
+    if(!cur) return {ok:false, error:"Defect " + d.id + " not found"};
+    if(d.baseUpdatedAt && String(d.baseUpdatedAt) !== cur.UpdatedAt) return {ok:false, conflict:true, error:"Someone else changed " + d.id + " (" + cur.UpdatedBy + "). Reopen it to see the latest."};
+    var before = JSON.parse(JSON.stringify(cur));
+    var err2 = qApplyDefect_(cur, f, false); if(err2) return {ok:false, error:err2};
+    if(cur.Status === "Closed") return {ok:false, error:"A closed defect cannot be changed. Reopen it first."};
+    var ch = qChanged_(before, cur);
+    if(!ch.length) return {ok:true, id:cur.DefectID, unchanged:true};
+    cur.UpdatedBy = by; cur.UpdatedAt = now;
+    qWrite_(R.sh, DEF_COLS, cur._row, cur);
+    qLog_("Defect", cur.DefectID, "Updated", "", "", "Changed: " + ch.join(", "), by);
+    return {ok:true, id:cur.DefectID};
+  } finally { lock.releaseLock(); }
+}
+/* several defects at once, e.g. one per defective sample of a lot put on hold */
+function qCreateDefects(d){
+  var list = Array.isArray(d.items) ? d.items.slice(0, 50) : [], by = String(d.by || "");
+  if(!list.length) return {ok:false, error:"Nothing to create"};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var R = qRead_("Defects", DEF_COLS), now = qNow_(), ids = [];
+    var recs = [];
+    for(var i = 0; i < list.length; i++){
+      var rec = {Status:"Open", Source:"Other", data:{}};
+      var err = qApplyDefect_(rec, list[i] || {}, true); if(err) return {ok:false, error:"Row " + (i + 1) + ": " + err};
+      recs.push(rec);
+    }
+    var next = Number(qNextId_(R.sh, "DEF-").replace(/\D/g, ""));
+    recs.forEach(function(rec, k){
+      rec.DefectID = "DEF-" + ("0000" + (next + k)).slice(-4);
+      rec.CreatedBy = by; rec.CreatedAt = now; rec.UpdatedBy = by; rec.UpdatedAt = now;
+      qWrite_(R.sh, DEF_COLS, 0, rec); ids.push(rec.DefectID);
+      qLog_("Defect", rec.DefectID, "Created", "", "Open", rec.Severity + ", " + rec.Category + (rec.Lot ? ", " + rec.Lot : "") + (rec.Serial ? ", " + rec.Serial : ""), by);
+    });
+    return {ok:true, ids:ids};
+  } finally { lock.releaseLock(); }
+}
+function qMoveDefect(d){
+  var to = String(d.to || ""), by = String(d.by || ""), note = cleanStr_(d.note, 1000).trim();
+  if(DEF_STAGES.indexOf(to) < 0) return {ok:false, error:"Unknown stage"};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var R = qRead_("Defects", DEF_COLS);
+    var cur = R.rows.filter(function(x){ return x.DefectID === String(d.id); })[0];
+    if(!cur) return {ok:false, error:"Defect " + d.id + " not found"};
+    var from = cur.Status, fi = DEF_STAGES.indexOf(from), ti = DEF_STAGES.indexOf(to);
+    if(ti === fi) return {ok:false, error:"The defect is already in " + to};
+    if(ti > fi + 1) return {ok:false, error:"Move one stage at a time: next is " + DEF_STAGES[fi + 1]};
+    if(ti > fi){ var need = defectGate_(cur, to); if(need.length) return {ok:false, error:"Before " + to + ", enter: " + need.join(", ") + "."}; }
+    else if(!note) return {ok:false, error:"Give the reason for moving it back to " + to + "."};
+    cur.Status = to; cur.UpdatedBy = by; cur.UpdatedAt = qNow_();
+    cur.ClosedAt = to === "Closed" ? qNow_() : "";
+    qWrite_(R.sh, DEF_COLS, cur._row, cur);
+    qLog_("Defect", cur.DefectID, ti > fi ? "Stage advanced" : (from === "Closed" ? "Reopened" : "Moved back"), from, to, note, by);
+    return {ok:true, id:cur.DefectID, status:to};
+  } finally { lock.releaseLock(); }
+}
+/* bulk: owner or target date for several defects */
+function qBulkDefects(d){
+  var ids = Array.isArray(d.ids) ? d.ids.map(String).slice(0, 200) : [], f = {}, by = String(d.by || "");
+  if(d.Owner !== undefined) f.Owner = d.Owner;
+  if(d.TargetDate !== undefined) f.TargetDate = d.TargetDate;
+  if(!ids.length || !Object.keys(f).length) return {ok:false, error:"Nothing to change"};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var R = qRead_("Defects", DEF_COLS), n = 0;
+    for(var i = 0; i < R.rows.length; i++){
+      var cur = R.rows[i]; if(ids.indexOf(cur.DefectID) < 0 || cur.Status === "Closed") continue;
+      var before = JSON.parse(JSON.stringify(cur));
+      var err = qApplyDefect_(cur, f, false); if(err) return {ok:false, error:err};
+      var ch = qChanged_(before, cur); if(!ch.length) continue;
+      cur.UpdatedBy = by; cur.UpdatedAt = qNow_(); qWrite_(R.sh, DEF_COLS, cur._row, cur);
+      qLog_("Defect", cur.DefectID, "Updated", "", "", "Changed: " + ch.join(", ") + " (bulk)", by); n++;
+    }
+    return {ok:true, changed:n};
+  } finally { lock.releaseLock(); }
+}
+
+/* ── CAPA ── */
+function qApplyCapa_(rec, f, isNew){
+  if(f.Title !== undefined) rec.Title = cleanStr_(f.Title, 200).trim();
+  if(f.Severity !== undefined){ if(DEF_SEV.indexOf(f.Severity) < 0) return "Choose a severity"; rec.Severity = f.Severity; }
+  if(f.Owner !== undefined) rec.Owner = cleanStr_(f.Owner, 100).trim();
+  if(f.DueDate !== undefined){ if(f.DueDate && !qDate_(f.DueDate)) return "Due date must be a date"; rec.DueDate = qDate_(f.DueDate); }
+  if(f.DefectIDs !== undefined){
+    var ids = (Array.isArray(f.DefectIDs) ? f.DefectIDs : String(f.DefectIDs).split(/[\s,]+/)).map(function(x){ return String(x).trim().toUpperCase(); }).filter(function(x){ return /^DEF-\d{4,}$/.test(x); });
+    rec.DefectIDs = ids.filter(function(x, i){ return ids.indexOf(x) === i; }).slice(0, 50).join(", ");
+  }
+  rec.data = rec.data || {};
+  Object.keys(CAPA_TEXT).forEach(function(k){ if(f[k] !== undefined) rec.data[k] = cleanStr_(f[k], CAPA_TEXT[k]).trim(); });
+  if(f.whys !== undefined) rec.data.whys = (Array.isArray(f.whys) ? f.whys : []).slice(0, 5).map(function(w){ return cleanStr_(w, 500).trim(); });
+  if(f.fishbone !== undefined){ var fb = {}; FISH_KEYS.forEach(function(k){ fb[k] = cleanStr_((f.fishbone || {})[k], 1000).trim(); }); rec.data.fishbone = fb; }
+  if(f.evidence !== undefined) rec.data.evidence = qLinks_(f.evidence);
+  if(f.verificationResult !== undefined && ["","Verified","Not effective"].indexOf(rec.data.verificationResult) < 0) return "Verification result must be Verified or Not effective";
+  if(f.effectivenessResult !== undefined && ["","Effective","Not effective"].indexOf(rec.data.effectivenessResult) < 0) return "Effectiveness result must be Effective or Not effective";
+  if(isNew || f.Title !== undefined){ if(!rec.Title) return "Enter a CAPA title"; }
+  if(isNew && !rec.Severity) return "Choose a severity";
+  return "";
+}
+function qSaveCapa(d){
+  var by = String(d.by || ""), f = d.fields || {};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var R = qRead_("CAPA", CAPA_COLS), now = qNow_();
+    var defs = qRead_("Defects", DEF_COLS);
+    var known = {}; defs.rows.forEach(function(x){ known[x.DefectID] = x; });
+    if(!d.id){
+      var rec = {Status:"Open", data:{}};
+      var err = qApplyCapa_(rec, f, true); if(err) return {ok:false, error:err};
+      var bad = String(rec.DefectIDs || "").split(", ").filter(function(x){ return x && !known[x]; });
+      if(bad.length) return {ok:false, error:"Defect not found: " + bad.join(", ")};
+      rec.CapaID = qNextId_(R.sh, "CAPA-");
+      rec.CreatedBy = by; rec.CreatedAt = now; rec.UpdatedBy = by; rec.UpdatedAt = now;
+      qWrite_(R.sh, CAPA_COLS, 0, rec);
+      qLog_("CAPA", rec.CapaID, "Created", "", "Open", rec.Severity + (rec.DefectIDs ? ", defects " + rec.DefectIDs : ""), by);
+      qLinkDefects_(defs, rec.CapaID, rec.DefectIDs, by);
+      return {ok:true, id:rec.CapaID};
+    }
+    var cur = R.rows.filter(function(x){ return x.CapaID === String(d.id); })[0];
+    if(!cur) return {ok:false, error:"CAPA " + d.id + " not found"};
+    if(cur.Status === "Closed") return {ok:false, error:"A closed CAPA cannot be changed."};
+    if(d.baseUpdatedAt && String(d.baseUpdatedAt) !== cur.UpdatedAt) return {ok:false, conflict:true, error:"Someone else changed " + d.id + " (" + cur.UpdatedBy + "). Reopen it to see the latest."};
+    var beforeJson = JSON.stringify([cur.Title, cur.Severity, cur.Owner, cur.DueDate, cur.DefectIDs, cur.data]);
+    var err2 = qApplyCapa_(cur, f, false); if(err2) return {ok:false, error:err2};
+    var bad2 = String(cur.DefectIDs || "").split(", ").filter(function(x){ return x && !known[x]; });
+    if(bad2.length) return {ok:false, error:"Defect not found: " + bad2.join(", ")};
+    if(beforeJson === JSON.stringify([cur.Title, cur.Severity, cur.Owner, cur.DueDate, cur.DefectIDs, cur.data])) return {ok:true, id:cur.CapaID, unchanged:true};
+    cur.UpdatedBy = by; cur.UpdatedAt = now;
+    qWrite_(R.sh, CAPA_COLS, cur._row, cur);
+    qLog_("CAPA", cur.CapaID, "Updated", "", "", "Changed: " + Object.keys(f).join(", "), by);
+    qLinkDefects_(defs, cur.CapaID, cur.DefectIDs, by);
+    return {ok:true, id:cur.CapaID};
+  } finally { lock.releaseLock(); }
+}
+/* defects listed on a CAPA point back to it */
+function qLinkDefects_(defs, capaId, idList, by){
+  var ids = String(idList || "").split(", ").filter(String);
+  defs.rows.forEach(function(x){
+    var want = ids.indexOf(x.DefectID) > -1;
+    if(want && x.CapaID !== capaId){ x.CapaID = capaId; qWrite_(defs.sh, DEF_COLS, x._row, x); qLog_("Defect", x.DefectID, "Linked to CAPA", "", "", capaId, by); }
+    else if(!want && x.CapaID === capaId){ x.CapaID = ""; qWrite_(defs.sh, DEF_COLS, x._row, x); qLog_("Defect", x.DefectID, "Unlinked from CAPA", "", "", capaId, by); }
+  });
+}
+function qMoveCapa(d){
+  var to = String(d.to || ""), by = String(d.by || ""), note = cleanStr_(d.note, 1000).trim();
+  if(CAPA_STAGES.indexOf(to) < 0) return {ok:false, error:"Unknown stage"};
+  if(to === "Closed") return {ok:false, error:"A CAPA is closed by approving it."};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var R = qRead_("CAPA", CAPA_COLS);
+    var cur = R.rows.filter(function(x){ return x.CapaID === String(d.id); })[0];
+    if(!cur) return {ok:false, error:"CAPA " + d.id + " not found"};
+    if(cur.Status === "Closed") return {ok:false, error:"This CAPA is closed."};
+    var fi = CAPA_STAGES.indexOf(cur.Status), ti = CAPA_STAGES.indexOf(to);
+    if(ti === fi) return {ok:false, error:"The CAPA is already in " + to};
+    if(ti > fi + 1) return {ok:false, error:"Move one stage at a time: next is " + CAPA_STAGES[fi + 1]};
+    if(ti > fi){ var need = capaGate_(cur, to); if(need.length) return {ok:false, error:"Before " + to + ", enter: " + need.join(", ") + "."}; }
+    else if(!note) return {ok:false, error:"Give the reason for moving it back to " + to + "."};
+    var from = cur.Status; cur.Status = to; cur.UpdatedBy = by; cur.UpdatedAt = qNow_();
+    qWrite_(R.sh, CAPA_COLS, cur._row, cur);
+    qLog_("CAPA", cur.CapaID, ti > fi ? "Stage advanced" : "Moved back", from, to, note, by);
+    return {ok:true, id:cur.CapaID, status:to};
+  } finally { lock.releaseLock(); }
+}
+/* Admin: approve (closes the CAPA) or send back to the effectiveness check */
+function qApproveCapa(d){
+  var by = String(d.by || ""), approve = !!d.approve, note = cleanStr_(d.note, 1000).trim();
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var R = qRead_("CAPA", CAPA_COLS);
+    var cur = R.rows.filter(function(x){ return x.CapaID === String(d.id); })[0];
+    if(!cur) return {ok:false, error:"CAPA " + d.id + " not found"};
+    if(cur.Status !== "Awaiting Approval") return {ok:false, error:"Only a CAPA awaiting approval can be approved or sent back."};
+    var need = capaGate_(cur, "Awaiting Approval");
+    if(approve && need.length) return {ok:false, error:"Cannot approve, missing: " + need.join(", ") + "."};
+    if(!approve && !note) return {ok:false, error:"Say why it is sent back."};
+    cur.data = cur.data || {}; cur.data.approvalNote = note;
+    if(approve){ cur.Status = "Closed"; cur.ClosedAt = qNow_(); cur.ApprovedBy = by; cur.ApprovedAt = qNow_(); }
+    else cur.Status = "Effectiveness Check";
+    cur.UpdatedBy = by; cur.UpdatedAt = qNow_();
+    qWrite_(R.sh, CAPA_COLS, cur._row, cur);
+    qLog_("CAPA", cur.CapaID, approve ? "Approved and closed" : "Sent back", "Awaiting Approval", cur.Status, note, by);
+    return {ok:true, id:cur.CapaID, status:cur.Status};
+  } finally { lock.releaseLock(); }
+}

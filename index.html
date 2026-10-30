@@ -112,7 +112,7 @@ body::before{content:none;position:fixed;inset:0;pointer-events:none;z-index:0;o
 #toast{position:fixed;z-index:9999}
 .skip-link{position:absolute;left:12px;top:-60px;z-index:100;background:var(--color-text);color:var(--color-inverse-text);padding:8px 14px;border-radius:var(--radius-sm);font-weight:600}
 .skip-link:focus{top:12px}
-button,input,select{font-family:inherit}
+button,input,select,textarea{font-family:inherit}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px;border:2px solid var(--paper)}
 :focus-visible{outline:3px solid var(--lime);outline-offset:2px}
@@ -914,6 +914,188 @@ body{font-feature-settings:"cv11","ss01";letter-spacing:-.003em}
 @keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
 .hero-actions .btn{border-radius:9px;min-height:42px;font-size:14px}
 @media (prefers-reduced-motion:reduce){.sb-ind,.app{transition:none!important}}
+
+/* ── quality: tables, badges, drawer ─────────────────────── */
+.muted{color:var(--ink-3)}
+.late{color:var(--color-danger);font-weight:600}
+.nowrap{white-space:nowrap}
+.sev{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;border:1px solid}
+.sev .ico{width:13px;height:13px}
+.sev-c{background:var(--color-danger-solid);border-color:var(--color-danger-solid);color:#fff}
+.sev-ma{background:var(--fail-bg);border-color:var(--fail-line);color:var(--fail)}
+.sev-mi{background:var(--minor-bg);border-color:var(--minor-line);color:var(--minor)}
+.stg{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--ink-2);white-space:nowrap}
+.stg i{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex-shrink:0;transition:background .3s}
+.stg.st-open i{background:var(--color-brand)}
+.stg.st-prog i{background:var(--color-accent)}
+.stg.st-wait i{background:var(--color-warn)}
+.stg.st-closed i{background:var(--color-pass-solid)}
+.stg.st-closed{color:var(--ink-3)}
+.q-alerts{display:flex;gap:10px;flex-wrap:wrap;margin:-6px 0 14px}
+.q-alert{display:inline-flex;align-items:center;gap:8px;border:1px solid;border-radius:9px;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer;background:none;transition:transform .15s var(--ease)}
+.q-alert:hover{transform:translateY(-1px)}
+.q-alert .ico{width:16px;height:16px}
+.q-alert b{font-variant-numeric:tabular-nums}
+.q-alert.crit{border-color:var(--fail-line);background:var(--fail-bg);color:var(--fail)}
+.q-alert.late{border-color:var(--minor-line);background:var(--minor-bg);color:var(--minor)}
+.q-alert.wait{border-color:color-mix(in srgb,var(--color-brand) 40%,transparent);background:var(--color-brand-soft);color:var(--color-brand-strong)}
+.theme-dark .q-alert.wait{color:#C7CEFF}
+.stage-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:thin}
+.ss-it{flex-shrink:0;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;color:var(--ink-2);font:inherit;font-size:13px;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+.ss-it b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.ss-it:hover{border-color:var(--color-brand);color:var(--ink)}
+.ss-it.on{background:var(--color-brand-soft);border-color:var(--color-brand);color:var(--ink)}
+/* data table */
+.dt{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-1)}
+.dt-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line)}
+.dt-search{display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--color-bg-2);min-width:200px;flex:1 1 200px;max-width:320px;color:var(--ink-3)}
+.dt-search:focus-within{border-color:var(--color-brand);box-shadow:var(--ring)}
+.dt-search input{flex:1;border:0;background:none;outline:none;color:var(--ink);font:inherit;font-size:13.5px;min-width:0}
+.dt-f select.field{min-height:36px;height:36px;padding:0 30px 0 10px;font-size:13px;width:auto;max-width:200px}
+.dt-f select.field.on{border-color:var(--color-brand);color:var(--ink)}
+.dt-sp{flex:1}
+.dt .dd-menu{min-width:230px}
+.dt-col{display:flex!important;align-items:center;gap:8px;cursor:pointer}
+.dt-col input{accent-color:var(--color-brand)}
+.dt-view{display:flex;align-items:center}
+.dt-view .dd-item{flex:1}
+.dt-bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;background:var(--color-brand-soft);border-bottom:1px solid var(--line);font-size:13px;animation:fadeIn .18s var(--ease)}
+.dt-bulk b{margin-right:6px}
+.dt-wrap{overflow-x:auto}
+.dt-t{width:100%;border-collapse:collapse;font-size:13.5px}
+.dt-t th{position:sticky;top:0;background:var(--color-bg-2);text-align:left;font-size:12px;font-weight:600;color:var(--ink-3);padding:0;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
+.dtSort{all:unset;display:flex;align-items:center;gap:5px;padding:9px 12px;cursor:pointer;width:100%;box-sizing:border-box}
+.dtSort:hover,.dtSort.on{color:var(--ink)}
+.dtSort:focus-visible{outline:2px solid var(--color-brand);outline-offset:-2px}
+.dt-arr{opacity:.45;font-size:11px}
+.dtSort.on .dt-arr{opacity:1;color:var(--color-brand)}
+.dt-t td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.dt-t tbody tr{cursor:pointer;transition:background .12s}
+.dt-t tbody tr:hover td,.dt-t tbody tr:focus-visible td{background:color-mix(in srgb,var(--color-brand) 6%,transparent)}
+.dt-t tbody tr:focus-visible{outline:none}
+.dt-t tbody tr.sel td{background:var(--color-brand-soft)}
+.dt-t tr.row-crit td:first-child{box-shadow:inset 3px 0 0 var(--color-danger-solid)}
+.dt-t tr.row-late td:first-child{box-shadow:inset 3px 0 0 var(--color-warn)}
+.dt-t tr.row-crit.row-late td:first-child{box-shadow:inset 3px 0 0 var(--color-danger-solid)}
+.dt-ck{width:40px;padding-left:14px!important}
+.dt-ck input{width:16px;height:16px;accent-color:var(--color-brand);cursor:pointer}
+.id-cell{font-size:12.5px;color:var(--ink-2)}
+.cell-title{font-weight:500;color:var(--ink)}
+.cell-sub{font-size:12px;color:var(--ink-3);margin-top:1px}
+.w-title{min-width:220px}
+.dt-empty{text-align:center;color:var(--ink-3);padding:40px 16px!important;cursor:default}
+.dt-foot{display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:12.5px;color:var(--ink-3)}
+.dt-size{display:flex;align-items:center;gap:6px}
+.dt-size select.field{min-height:30px;height:30px;padding:0 26px 0 8px;font-size:12.5px;width:auto}
+.dt-pn{font-variant-numeric:tabular-nums}
+.btn-icon:disabled{opacity:.35;cursor:default}
+.cp-cell{display:flex;flex-direction:column;gap:5px}
+.cp-bar{display:flex;gap:3px}
+.cp-bar i{width:14px;height:4px;border-radius:2px;background:var(--sunk)}
+.cp-bar i.done{background:var(--color-pass-solid)}
+.cp-bar i.cur{background:var(--color-brand)}
+@media (max-width:760px){
+  .dt-t thead{display:none}
+  .dt-t,.dt-t tbody,.dt-t tr,.dt-t td{display:block;width:100%}
+  .dt-t tr{padding:10px 14px;border-bottom:1px solid var(--line)}
+  .dt-t td{border:0;padding:3px 0;display:flex;gap:10px;justify-content:space-between;align-items:center}
+  .dt-t td::before{content:attr(data-l);font-size:12px;color:var(--ink-3);flex-shrink:0}
+  .dt-t td.dt-ck{display:none}
+  .dt-t td.w-title{display:block}.dt-t td.w-title::before{content:none}
+  .dt-search{max-width:none}
+  .dt-f{flex:1 1 45%}.dt-f select.field{max-width:none;width:100%}
+  .dt-t tr.row-crit,.dt-t tr.row-late{box-shadow:inset 3px 0 0 var(--color-warn)}
+  .dt-t tr.row-crit{box-shadow:inset 3px 0 0 var(--color-danger-solid)}
+  .dt-t tr td:first-child{box-shadow:none!important}
+}
+/* drawer */
+.dw-wrap{position:fixed;inset:0;z-index:120;pointer-events:none}
+.dw-scrim{position:absolute;inset:0;background:rgba(2,6,23,.5);pointer-events:auto}
+.dw{position:absolute;top:0;right:0;bottom:0;width:min(720px,100%);background:var(--color-surface);border-left:1px solid var(--line-strong);box-shadow:-30px 0 60px -30px rgba(0,0,0,.6);display:flex;flex-direction:column;pointer-events:auto}
+.dw-anim .dw{animation:dwIn .34s var(--ease-out) both}
+.dw-anim .dw-scrim{animation:fadeIn .25s ease both}
+.dw-out .dw{animation:dwOut .18s ease-in both}.dw-out .dw-scrim{animation:fadeOut .18s ease-in both}
+@keyframes dwIn{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes dwOut{to{transform:translateX(40px);opacity:0}}
+@keyframes fadeOut{to{opacity:0}}
+.dw-h{position:relative;padding:18px 22px 14px;border-bottom:1px solid var(--line)}
+.dw-id{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3);padding-right:40px}
+.dw-id .mono{color:var(--ink-2)}
+.dirty{font-size:11.5px;color:var(--color-warn);font-weight:600}
+.dw-h h2{font-size:19px;font-weight:600;letter-spacing:-.015em;margin:6px 0 12px;padding-right:30px;line-height:1.3}
+.dw-x{position:absolute;top:14px;right:14px}
+.dw-b{flex:1;overflow-y:auto;padding:6px 22px 22px}
+.dw-sec{padding:16px 0;border-bottom:1px solid var(--line)}
+.dw-sec:last-child{border-bottom:0}
+.dw-sec h3{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-bottom:12px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.fgrid .fw{grid-column:1/-1}
+.fgrid .fg{margin-bottom:12px}
+.req{color:var(--color-danger);margin-left:2px}
+.hint{font-size:12px;color:var(--ink-3);margin-top:4px}
+.dw textarea.field{resize:vertical;min-height:64px;line-height:1.45}
+.dw .field[readonly],.dw select.field:disabled{background:transparent;border-style:dashed;color:var(--ink-2)}
+.dw-f{border-top:1px solid var(--line);padding:12px 22px;background:var(--color-bg-2);display:flex;flex-direction:column;gap:10px}
+.row-btns{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.row-btns .more,.row-btns .main-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row-btns .main-btns{margin-left:auto}
+.gate{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink-2);padding:8px 10px;border-radius:8px;background:var(--minor-bg);border:1px solid var(--minor-line)}
+.gate .ico{width:16px;height:16px;color:var(--color-warn);flex-shrink:0;margin-top:1px}
+.gate.ok{background:var(--pass-bg);border-color:var(--pass-line)}
+.gate.ok .ico{color:var(--color-ok)}
+.dw-b > .gate{margin-top:14px}
+.back-box{display:grid;gap:8px;padding:10px;border:1px solid var(--fail-line);border-radius:8px;background:var(--fail-bg);animation:fadeIn .2s}
+.back-box .row-btns{justify-content:flex-end}
+/* stepper */
+.stepper{list-style:none;display:flex;gap:0;margin:0;padding:0;overflow-x:auto;scrollbar-width:none}
+.stepper li{flex:1;min-width:72px;display:flex;flex-direction:column;align-items:center;gap:5px;position:relative;font-size:11px;color:var(--ink-3);text-align:center}
+.stepper li::before{content:"";position:absolute;top:11px;left:-50%;right:50%;height:2px;background:var(--line-strong);z-index:0}
+.stepper li:first-child::before{content:none}
+.stepper li.done::before,.stepper li.cur::before{background:var(--color-pass-solid)}
+.sp-dot{position:relative;z-index:1;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;background:var(--color-surface);border:2px solid var(--line-strong);color:var(--ink-3);transition:all .3s var(--ease)}
+.sp-dot .ico{width:13px;height:13px}
+.stepper li.done .sp-dot{background:var(--color-pass-solid);border-color:var(--color-pass-solid);color:var(--color-on-pass)}
+.stepper li.cur .sp-dot{border-color:var(--color-brand);color:var(--color-brand);box-shadow:0 0 0 4px var(--color-brand-soft);animation:spPulse .6s var(--ease-out)}
+.stepper li.cur{color:var(--ink);font-weight:600}
+@keyframes spPulse{from{transform:scale(.7)}60%{transform:scale(1.12)}to{transform:none}}
+.sp-t{line-height:1.25;padding:0 2px}
+/* timeline */
+.tl2{list-style:none;margin:0;padding:0 0 0 18px;border-left:2px solid var(--line)}
+.tl2 li{position:relative;padding:0 0 14px 6px;font-size:13px}
+.tl2 li::before{content:"";position:absolute;left:-24px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--color-surface);border:2px solid var(--ink-3)}
+.tl2 li.tl-fw::before{border-color:var(--color-pass-solid);background:var(--color-pass-solid)}
+.tl2 li.tl-bk::before{border-color:var(--color-warn)}
+.tl-d{color:var(--ink-2);margin-top:2px;white-space:pre-wrap}
+.tl-m{font-size:12px;color:var(--ink-3);margin-top:2px}
+/* evidence */
+.ev-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:4px}
+.ev{display:block;aspect-ratio:4/3;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;background:var(--sunk);transition:border-color .15s,transform .15s var(--ease)}
+.ev:hover{border-color:var(--color-brand);transform:translateY(-1px)}
+.ev img{width:100%;height:100%;object-fit:cover;display:block}
+.ev-f{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:100%;font-size:12px;color:var(--ink-2)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);border-radius:999px;padding:4px 10px;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;cursor:pointer}
+.chip:hover{border-color:var(--color-brand);color:var(--ink)}
+/* 5 whys + fishbone */
+.whys{display:grid;gap:6px;margin-bottom:14px}
+.why{display:grid;grid-template-columns:64px 1fr;align-items:center;gap:8px;position:relative}
+.why-n{font-size:12px;font-weight:600;color:var(--ink-3)}
+.why:not(:last-child)::after{content:"";position:absolute;left:30px;bottom:-6px;height:6px;width:1px;background:var(--line-strong)}
+.fish{display:grid;grid-template-columns:1fr 110px;align-items:stretch;gap:0;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.fish-bones{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line);position:relative}
+.bone{background:var(--color-surface);padding:8px;display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--ink-3)}
+.bone textarea.field{min-height:46px;font-size:12.5px;font-weight:400}
+.fish-head{display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;font-size:12.5px;font-weight:600;background:linear-gradient(90deg,var(--color-brand-soft),transparent);border-left:2px solid var(--color-brand);color:var(--ink)}
+@media (max-width:640px){ .fgrid{grid-template-columns:1fr} .fish{grid-template-columns:1fr} .fish-bones{grid-template-columns:1fr 1fr} .fish-head{border-left:0;border-top:2px solid var(--color-brand)} .dw-h,.dw-b,.dw-f{padding-left:16px;padding-right:16px} }
+/* dialog */
+.dlg-wrap{position:fixed;inset:0;z-index:150;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,23,.55);animation:fadeIn .18s}
+.dlg{width:min(640px,100%);max-height:90vh;overflow:auto;background:var(--color-surface);border:1px solid var(--line-strong);border-radius:14px;padding:22px;box-shadow:0 40px 80px -20px rgba(0,0,0,.6);animation:kpIn .24s var(--ease-out)}
+.dlg h2{font-size:18px;font-weight:600;letter-spacing:-.015em;margin-bottom:6px}
+.dlg .muted{font-size:13.5px;margin-bottom:14px}
+.dlg-list{display:grid;gap:8px;margin-bottom:16px}
+.dlg-it{display:grid;grid-template-columns:auto 150px 1fr 110px;gap:8px;align-items:center;font-size:12.5px}
+.dlg-it input[type=checkbox]{width:16px;height:16px;accent-color:var(--color-brand)}
+@media (max-width:640px){ .dlg-it{grid-template-columns:auto 1fr} .dlg-it .field{grid-column:1/-1} }
 </style>
 </head>
 <body>
@@ -1050,7 +1232,7 @@ function restoreSession(){
   }catch(e){}
   return false;
 }
-function resetApp(){ introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; activeRework=null; activeFai=null; faiSpecEd=null; samples=[]; expandedSample=null; bxReset(); saveSession(); }
+function resetApp(){ qd={loaded:false,loading:false,error:'',defects:[],capa:[],meta:null}; qui={drawer:null,anim:false,dlg:null}; introDone=false; activeBom=null; bomResult=null; dataScan=null; userList=null; recSearch={q:'',loading:false,res:null}; view={batch:'',status:'all',q:''}; selLot=null; lotUnits={}; user=null; session=null; page='home'; bomTool=null; batches=[]; activeLot=null; activeRework=null; activeFai=null; faiSpecEd=null; samples=[]; expandedSample=null; bxReset(); saveSession(); }
 let expiredShown=false;
 async function api(action,data={}){
   data.action=action;
@@ -1141,6 +1323,7 @@ async function loadAll(fresh){
   if(r.models&&r.models.ok) models=(r.models.models||[]).map(normModel).filter(m=>m.name);
   bomModels=r.bomList&&r.bomList.ok?(r.bomList.models||[]):[];
   if(page==='models') loadModelInsights();
+  loadQuality(true);
 }
 function bomFor(modelName){ const m=getModel(modelName); return m&&m.lumioModel?bomModels.find(b=>b.model===m.lumioModel)||null:null; }
 function batchBom(batchName){ const l=batches.find(b=>b.batchName===batchName); return l?(l.bomStatus||''):''; }
@@ -1282,7 +1465,11 @@ function render(){
   // replacing the page blurs the focused field, whose change handler may ask for another render: run that one afterwards
   if(rendering){ setTimeout(render,0); return; }
   rendering=true;
-  try{ document.getElementById('app').innerHTML=buildPage(); bindEvents(); }
+  try{
+    const overlays=user&&!activeLot&&!activeBom&&!activeRework&&!activeFai?buildDrawer():'';
+    document.getElementById('app').innerHTML=buildPage()+overlays+(user?buildDialog():'');
+    bindEvents(); if(user){ bindQuality(); bindDialog(); }
+  }
   finally{ rendering=false; }
 }
 
@@ -1346,7 +1533,8 @@ const MODULES=[
   {k:'createbatch',t:'Create batches',            d:'Make new batches and lots'},
   {k:'models',     t:'Models and black dot spec', d:'Add or change models and limits'},
   {k:'data',       t:'Data records',              d:'Duplicate check and record lookup'},
-  {k:'bommgmt',    t:'BOM management',            d:'All Part DB tools: assign, compare, lock, ECN, images'}
+  {k:'bommgmt',    t:'BOM management',            d:'All Part DB tools: assign, compare, lock, ECN, images'},
+  {k:'quality',    t:'Defects and CAPA',          d:'Record defects, move them through their stages, raise and run CAPA'}
 ];
 const PAGE_MODULE={create:'createbatch',models:'models',faispec:'models',data:'data',reports:'reports',bom:'bommgmt'};
 function isAdminUser(){ return !!user&&user.role==='admin'; }
@@ -1576,6 +1764,496 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='/'&&!kp&&user&&!/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName||'')&&!document.activeElement?.isContentEditable&&document.getElementById('btnKbar')){ e.preventDefault(); kpOpen(); }
 });
 
+// ═══════════════════════════════════════════════════════════
+// QUALITY: defects and CAPA (data in the Defects, CAPA and QualityLog tabs)
+// ═══════════════════════════════════════════════════════════
+let qd={loaded:false,loading:false,error:'',defects:[],capa:[],meta:null};
+let qui={drawer:null,anim:false,dlg:null};
+const SEV_ORDER={Critical:0,Major:1,Minor:2};
+async function loadQuality(force){
+  if(qd.loading||(qd.loaded&&!force)) return;
+  qd.loading=true;
+  const r=await api('qListAll');
+  qd.loading=false;
+  if(r.ok){ qd={loaded:true,loading:false,error:'',defects:r.defects||[],capa:r.capa||[],meta:r.meta}; }
+  else { qd.error=r.error||'Could not load defects and CAPA'; qd.loaded=false; }
+  if(!activeLot&&!activeBom&&!activeRework&&!activeFai&&(['home','defects','capa','insights','inspections'].includes(page))) render();
+  else placeSbBadges();
+}
+function placeSbBadges(){ /* sidebar counts refresh without a full render */
+  [['defects',openDefects().length],['capa',overdueCapa().length]].forEach(([r,n])=>{
+    const l=document.querySelector(`.sb-link[data-go="${r}"]`); if(!l) return;
+    let b=l.querySelector('.sb-n'); if(!n){ b&&b.remove(); return; }
+    if(!b){ b=document.createElement('span'); b.className='sb-n'; l.appendChild(b); } b.textContent=n;
+  });
+}
+function todayIso(){ return new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10); }
+function isOverdue(date,closed){ return !!date&&!closed&&date<todayIso(); }
+function fmtDay(v){ if(!v) return '—'; const d=new Date(v.length===10?v+'T00:00:00':v); return isNaN(d)?v:d.toLocaleDateString([], {day:'2-digit',month:'short',year:'numeric'}); }
+function openDefects(){ return qd.defects.filter(x=>x.Status!=='Closed'); }
+function overdueCapa(){ return qd.capa.filter(x=>isOverdue(x.DueDate,x.Status==='Closed')); }
+function sevBadge(s){ const c=s==='Critical'?'sev-c':s==='Major'?'sev-ma':'sev-mi'; return `<span class="sev ${c}">${s==='Critical'?ico('alert'):''}${esc(s||'—')}</span>`; }
+function stageBadge(s){
+  const k=s==='Closed'?'st-closed':s==='Open'?'st-open':s==='Awaiting Approval'?'st-wait':'st-prog';
+  return `<span class="stg ${k}"><i></i>${esc(s)}</span>`;
+}
+EXTRA_NAV.quality.push(['defects','Defects','bug',()=>true,()=>qd.loaded?openDefects().length:0]);
+EXTRA_NAV.quality.push(['capa','CAPA','shield',()=>true,()=>qd.loaded?overdueCapa().length:0]);
+PAGE_INFO.defects={t:'Defects',d:'Every defect found in inspection, from containment to closure. Each stage opens only when the one before it is complete.'};
+PAGE_INFO.capa={t:'CAPA',d:'Corrective and preventive actions. A CAPA closes only after verification, an effectiveness check and an admin approval.'};
+KP_EXTRA.push(()=>qd.defects.map(x=>({g:'Defects',t:x.DefectID+'  '+x.Title,sub:x.Status+(x.Lot?', '+x.Lot:''),icon:'bug',run:()=>{ go('defects'); openDrawer('defect',x.DefectID); }})));
+KP_EXTRA.push(()=>qd.capa.map(x=>({g:'CAPA',t:x.CapaID+'  '+x.Title,sub:x.Status+(x.Owner?', '+x.Owner:''),icon:'shield',run:()=>{ go('capa'); openDrawer('capa',x.CapaID); }})));
+KP_EXTRA.push(()=>can('quality')?[{g:'Commands',t:'New defect',sub:'Defects',icon:'plus',run:()=>{ go('defects'); openDrawer('defect',null); }},{g:'Commands',t:'New CAPA',sub:'CAPA',icon:'plus',run:()=>{ go('capa'); openDrawer('capa',null); }}]:[]);
+
+/* ── reusable data table ───────────────────────────────── */
+const DT={};   // per-table state
+function dtState(id,def){
+  if(!DT[id]){
+    let hidden=def.hidden||[], views=[];
+    try{ const s=JSON.parse(localStorage.getItem('lqm_dt_'+id)||'null'); if(s){ hidden=s.hidden||hidden; views=s.views||[]; } }catch(e){}
+    DT[id]={q:'',sort:def.sort||null,f:{},page:0,size:def.size||25,hidden,views,sel:new Set(),menu:''};
+  }
+  return DT[id];
+}
+function dtSave(id){ const s=DT[id]; try{ localStorage.setItem('lqm_dt_'+id,JSON.stringify({hidden:s.hidden,views:s.views})); }catch(e){} }
+/* cfg: {id, cols:[{k,t,v(row),html(row),sort(row),cls,always}], filters:[{k,t,opts:[..],v(row)}], search(row)->text, rowKey, onRow, empty, bulk:[{k,t}], exportName} */
+function dtFiltered(cfg,rows){
+  const s=dtState(cfg.id,cfg), q=s.q.trim().toLowerCase();
+  let out=rows.filter(r=>(!q||cfg.search(r).toLowerCase().includes(q))&&cfg.filters.every(f=>!s.f[f.k]||String(f.v(r))===s.f[f.k]));
+  if(cfg.pre) out=out.filter(cfg.pre);
+  if(s.sort){ const c=cfg.cols.find(x=>x.k===s.sort.k); if(c){ const g=c.sort||c.v; out=out.slice().sort((a,b)=>{ const x=g(a),y=g(b); return (x<y?-1:x>y?1:0)*(s.sort.dir); }); } }
+  return out;
+}
+function dtHtml(cfg,rows){
+  const s=dtState(cfg.id,cfg), all=dtFiltered(cfg,rows), pages=Math.max(1,Math.ceil(all.length/s.size));
+  if(s.page>=pages) s.page=pages-1;
+  const shown=all.slice(s.page*s.size,(s.page+1)*s.size), cols=cfg.cols.filter(c=>c.always||!s.hidden.includes(c.k));
+  const selN=[...s.sel].filter(k=>rows.some(r=>cfg.rowKey(r)===k)).length;
+  const active=cfg.filters.filter(f=>s.f[f.k]).length+(s.q?1:0);
+  const bulk=cfg.bulk&&cfg.bulk.length;
+  let h=`<div class="dt" data-dt="${cfg.id}">
+  <div class="dt-bar">
+    <div class="dt-search">${ico('search')}<input class="dtQ" data-dt="${cfg.id}" type="search" value="${esc(s.q)}" placeholder="${esc(cfg.ph||'Search')}" aria-label="Search ${esc(cfg.label||'records')}"></div>
+    ${cfg.filters.map(f=>`<label class="dt-f"><span class="sr-only">${esc(f.t)}</span><select class="field dtF ${s.f[f.k]?'on':''}" data-dt="${cfg.id}" data-k="${f.k}"><option value="">${esc(f.t)}: all</option>${f.opts().map(o=>`<option ${s.f[f.k]===o?'selected':''}>${esc(o)}</option>`).join('')}</select></label>`).join('')}
+    ${active?`<button class="btn btn-ghost btn-sm dtClear" data-dt="${cfg.id}">Clear</button>`:''}
+    <span class="dt-sp"></span>
+    <div class="dd dd-right"><button class="btn btn-ghost btn-sm ddBtn" aria-haspopup="menu" aria-expanded="false">${ico('filter')}Views${CHEV}</button><div class="dd-menu" role="menu">
+      ${s.views.length?s.views.map((v,i)=>`<div class="dt-view"><button class="dd-item dtView" data-dt="${cfg.id}" data-i="${i}" role="menuitem">${esc(v.n)}</button><button class="btn-icon dtViewDel" data-dt="${cfg.id}" data-i="${i}" aria-label="Delete view ${esc(v.n)}">${ico('x')}</button></div>`).join(''):'<div class="dd-head"><span>No saved views yet</span></div>'}
+      <div class="dd-sep"></div><button class="dd-item dtViewSave" data-dt="${cfg.id}" role="menuitem">Save current filters as a view…</button></div></div>
+    <div class="dd dd-right"><button class="btn btn-ghost btn-sm ddBtn" aria-haspopup="menu" aria-expanded="false">${ico('cols')}Columns${CHEV}</button><div class="dd-menu" role="menu">
+      ${cfg.cols.filter(c=>!c.always).map(c=>`<label class="dd-item dt-col"><input type="checkbox" class="dtCol" data-dt="${cfg.id}" data-k="${c.k}" ${s.hidden.includes(c.k)?'':'checked'}> ${esc(c.t)}</label>`).join('')}</div></div>
+    <button class="btn btn-ghost btn-sm dtExport" data-dt="${cfg.id}">${ico('download')}Export</button>
+  </div>
+  ${bulk&&selN?`<div class="dt-bulk"><b>${selN} selected</b>${cfg.bulk.map(b=>`<button class="btn btn-ghost btn-sm dtBulk" data-dt="${cfg.id}" data-k="${b.k}">${esc(b.t)}</button>`).join('')}<button class="btn btn-ghost btn-sm dtSelNone" data-dt="${cfg.id}">Clear selection</button></div>`:''}
+  <div class="dt-wrap"><table class="dt-t"><thead><tr>
+    ${bulk?`<th class="dt-ck"><input type="checkbox" class="dtAll" data-dt="${cfg.id}" aria-label="Select all on this page" ${shown.length&&shown.every(r=>s.sel.has(cfg.rowKey(r)))?'checked':''}></th>`:''}
+    ${cols.map(c=>{ const on=s.sort&&s.sort.k===c.k; return `<th class="${c.cls||''}" ${on?`aria-sort="${s.sort.dir>0?'ascending':'descending'}"`:''}><button class="dtSort ${on?'on':''}" data-dt="${cfg.id}" data-k="${c.k}">${esc(c.t)}<span class="dt-arr">${on?(s.sort.dir>0?'↑':'↓'):'↕'}</span></button></th>`; }).join('')}
+  </tr></thead><tbody>
+  ${shown.length?shown.map(r=>{ const k=cfg.rowKey(r); return `<tr class="dtRow ${cfg.rowCls?cfg.rowCls(r):''} ${s.sel.has(k)?'sel':''}" data-dt="${cfg.id}" data-key="${esc(k)}" tabindex="0">
+      ${bulk?`<td class="dt-ck"><input type="checkbox" class="dtSel" data-dt="${cfg.id}" data-key="${esc(k)}" ${s.sel.has(k)?'checked':''} aria-label="Select ${esc(k)}"></td>`:''}
+      ${cols.map(c=>`<td class="${c.cls||''}" data-l="${esc(c.t)}">${c.html?c.html(r):esc(c.v(r))}</td>`).join('')}</tr>`; }).join('')
+    :`<tr><td colspan="${cols.length+(bulk?1:0)}" class="dt-empty">${rows.length?`No records match these filters. <button class="btn btn-ghost btn-sm dtClear" data-dt="${cfg.id}">Clear filters</button>`:cfg.empty}</td></tr>`}
+  </tbody></table></div>
+  <div class="dt-foot"><span>${all.length?`${s.page*s.size+1}–${Math.min(all.length,(s.page+1)*s.size)} of ${all.length}`:'0 records'}${all.length!==rows.length?` (filtered from ${rows.length})`:''}</span>
+    <span class="dt-sp"></span>
+    <label class="dt-size">Rows <select class="field dtSize" data-dt="${cfg.id}">${[10,25,50,100].map(n=>`<option ${s.size===n?'selected':''}>${n}</option>`).join('')}</select></label>
+    <button class="btn-icon dtPg" data-dt="${cfg.id}" data-d="-1" ${s.page<=0?'disabled':''} aria-label="Previous page">${ico('chevL')}</button>
+    <span class="dt-pn">${s.page+1} / ${pages}</span>
+    <button class="btn-icon dtPg" data-dt="${cfg.id}" data-d="1" ${s.page>=pages-1?'disabled':''} aria-label="Next page"><span style="display:inline-flex;transform:rotate(180deg)">${ico('chevL')}</span></button></div>
+  </div>`;
+  return h;
+}
+const DT_CFG={};   // id -> function returning {cfg, rows}
+function dtBind(){
+  const get=id=>DT_CFG[id]&&DT_CFG[id]();
+  document.querySelectorAll('.dtQ').forEach(el=>{ el.oninput=()=>{ const id=el.dataset.dt, s=DT[id], pos=el.selectionStart; s.q=el.value; s.page=0; render(); const n=document.querySelector(`.dtQ[data-dt="${id}"]`); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} } }; });
+  document.querySelectorAll('.dtF').forEach(el=>{ el.onchange=()=>{ const s=DT[el.dataset.dt]; s.f[el.dataset.k]=el.value; s.page=0; render(); }; });
+  document.querySelectorAll('.dtClear').forEach(el=>{ el.onclick=()=>{ const s=DT[el.dataset.dt]; s.f={}; s.q=''; s.page=0; render(); }; });
+  document.querySelectorAll('.dtSort').forEach(el=>{ el.onclick=()=>{ const s=DT[el.dataset.dt], k=el.dataset.k; s.sort=s.sort&&s.sort.k===k?(s.sort.dir>0?{k,dir:-1}:null):{k,dir:1}; render(); }; });
+  document.querySelectorAll('.dtPg').forEach(el=>{ el.onclick=()=>{ const s=DT[el.dataset.dt]; s.page=Math.max(0,s.page+Number(el.dataset.d)); render(); }; });
+  document.querySelectorAll('.dtSize').forEach(el=>{ el.onchange=()=>{ const s=DT[el.dataset.dt]; s.size=Number(el.value); s.page=0; render(); }; });
+  document.querySelectorAll('.dtCol').forEach(el=>{ el.onchange=()=>{ const id=el.dataset.dt, s=DT[id], k=el.dataset.k; s.hidden=el.checked?s.hidden.filter(x=>x!==k):s.hidden.concat([k]); dtSave(id); render(); document.querySelector(`[data-dt="${id}"] .dtCol[data-k="${k}"]`)?.closest('.dd')?.classList.add('open'); }; });
+  document.querySelectorAll('.dtViewSave').forEach(el=>{ el.onclick=()=>{ const id=el.dataset.dt, s=DT[id]; const n=(prompt('Name for this view (filters, search and sort are saved in this browser):')||'').trim().slice(0,40); if(!n) return; s.views=s.views.filter(v=>v.n!==n).concat([{n,q:s.q,f:{...s.f},sort:s.sort}]); dtSave(id); toast('View saved: '+n); render(); }; });
+  document.querySelectorAll('.dtView').forEach(el=>{ el.onclick=()=>{ const s=DT[el.dataset.dt], v=s.views[+el.dataset.i]; if(!v) return; s.q=v.q||''; s.f={...(v.f||{})}; s.sort=v.sort||null; s.page=0; render(); }; });
+  document.querySelectorAll('.dtViewDel').forEach(el=>{ el.onclick=e=>{ e.stopPropagation(); const id=el.dataset.dt, s=DT[id]; s.views.splice(+el.dataset.i,1); dtSave(id); render(); }; });
+  document.querySelectorAll('.dtExport').forEach(el=>{ el.onclick=()=>{ const x=get(el.dataset.dt); if(!x) return; dtExport(x.cfg,dtFiltered(x.cfg,x.rows)); }; });
+  document.querySelectorAll('.dtSel').forEach(el=>{ el.onclick=e=>e.stopPropagation(); el.onchange=()=>{ const s=DT[el.dataset.dt]; el.checked?s.sel.add(el.dataset.key):s.sel.delete(el.dataset.key); render(); }; });
+  document.querySelectorAll('.dtAll').forEach(el=>{ el.onchange=()=>{ const id=el.dataset.dt, x=get(id), s=DT[id]; const all=dtFiltered(x.cfg,x.rows).slice(s.page*s.size,(s.page+1)*s.size).map(x.cfg.rowKey); all.forEach(k=>el.checked?s.sel.add(k):s.sel.delete(k)); render(); }; });
+  document.querySelectorAll('.dtSelNone').forEach(el=>{ el.onclick=()=>{ DT[el.dataset.dt].sel.clear(); render(); }; });
+  document.querySelectorAll('.dtBulk').forEach(el=>{ el.onclick=()=>{ const x=get(el.dataset.dt); if(x&&x.cfg.onBulk) x.cfg.onBulk(el.dataset.k,[...DT[el.dataset.dt].sel]); }; });
+  document.querySelectorAll('.dtRow').forEach(el=>{
+    const open=()=>{ const x=get(el.dataset.dt); if(x&&x.cfg.onRow) x.cfg.onRow(el.dataset.key); };
+    el.onclick=e=>{ if(e.target.closest('input,button,a,select')) return; open(); };
+    el.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); open(); } else if(e.key==='ArrowDown'){ e.preventDefault(); el.nextElementSibling?.focus(); } else if(e.key==='ArrowUp'){ e.preventDefault(); el.previousElementSibling?.focus(); } };
+  });
+}
+function dtExport(cfg,rows){
+  const cols=cfg.exportCols||cfg.cols;
+  const lines=[cols.map(c=>csvCell(c.t)).join(',')].concat(rows.map(r=>cols.map(c=>csvCell(c.v(r))).join(',')));
+  saveBlob(new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'}),`${cfg.exportName||cfg.id}_${todayIso()}.csv`);
+  toast(`${rows.length} record${rows.length===1?'':'s'} exported`);
+}
+
+/* ── defects page ──────────────────────────────────────── */
+function uniq(a){ return [...new Set(a.filter(Boolean))].sort(); }
+function defectTable(){
+  const meta=qd.meta||{};
+  const cfg={id:'def',label:'defects',ph:'Search ID, title, serial, lot, owner',
+    rowKey:r=>r.DefectID, onRow:k=>openDrawer('defect',k),
+    rowCls:r=>(r.Severity==='Critical'&&r.Status!=='Closed'?'row-crit':'')+(isOverdue(r.TargetDate,r.Status==='Closed')?' row-late':''),
+    search:r=>[r.DefectID,r.Title,r.Serial,r.Lot,r.Batch,r.Owner,r.Model,r.Category,r.CapaID,(r.data||{}).description].join(' '),
+    sort:{k:'created',dir:-1},
+    pre:r=>!DT.def||!DT.def.stage||(DT.def.stage==='open'?r.Status!=='Closed':r.Status===DT.def.stage),
+    cols:[
+      {k:'id',t:'ID',v:r=>r.DefectID,html:r=>`<span class="mono id-cell">${esc(r.DefectID)}</span>`,always:true,cls:'nowrap'},
+      {k:'title',t:'Defect',v:r=>r.Title,html:r=>`<div class="cell-title">${esc(r.Title)}</div>${r.Category?`<div class="cell-sub">${esc(r.Category)}</div>`:''}`,always:true,cls:'w-title'},
+      {k:'sev',t:'Severity',v:r=>r.Severity,sort:r=>SEV_ORDER[r.Severity]??9,html:r=>sevBadge(r.Severity)},
+      {k:'status',t:'Stage',v:r=>r.Status,sort:r=>(meta.defectStages||[]).indexOf(r.Status),html:r=>stageBadge(r.Status)},
+      {k:'model',t:'Model',v:r=>r.Model,cls:'nowrap'},
+      {k:'lot',t:'Lot',v:r=>r.Lot,cls:'nowrap'},
+      {k:'serial',t:'Serial number',v:r=>r.Serial,html:r=>r.Serial?`<span class="mono">${esc(r.Serial)}</span>`:'<span class="muted">—</span>'},
+      {k:'source',t:'Found in',v:r=>r.Source},
+      {k:'owner',t:'Owner',v:r=>r.Owner,html:r=>r.Owner?esc(r.Owner):'<span class="muted">Unassigned</span>',cls:'nowrap'},
+      {k:'target',t:'Target',v:r=>r.TargetDate,html:r=>r.TargetDate?`<span class="${isOverdue(r.TargetDate,r.Status==='Closed')?'late':''}">${esc(fmtDay(r.TargetDate))}</span>`:'<span class="muted">—</span>',cls:'nowrap'},
+      {k:'capa',t:'CAPA',v:r=>r.CapaID,html:r=>r.CapaID?`<span class="mono">${esc(r.CapaID)}</span>`:'<span class="muted">—</span>'},
+      {k:'created',t:'Raised',v:r=>r.CreatedAt,html:r=>esc(fmtDay(r.CreatedAt)),cls:'nowrap'}],
+    hidden:['source','capa'],
+    filters:[
+      {k:'sev',t:'Severity',opts:()=>meta.severities||[],v:r=>r.Severity},
+      {k:'cat',t:'Category',opts:()=>meta.categories||[],v:r=>r.Category},
+      {k:'model',t:'Model',opts:()=>uniq(qd.defects.map(x=>x.Model)),v:r=>r.Model},
+      {k:'owner',t:'Owner',opts:()=>uniq(qd.defects.map(x=>x.Owner)),v:r=>r.Owner}],
+    bulk:can('quality')?[{k:'owner',t:'Set owner…'},{k:'target',t:'Set target date…'},{k:'capa',t:'Raise CAPA for selected'}]:[],
+    onBulk:async(k,ids)=>{
+      if(k==='capa'){ DT.def.sel.clear(); openDrawer('capa',null,{DefectIDs:ids.join(', '),Severity:qd.defects.filter(x=>ids.includes(x.DefectID)).sort((a,b)=>SEV_ORDER[a.Severity]-SEV_ORDER[b.Severity])[0]?.Severity||'Major'}); return; }
+      const v=k==='owner'?prompt(`Owner for ${ids.length} defect(s):`):prompt(`Target date for ${ids.length} defect(s) (YYYY-MM-DD):`,todayIso());
+      if(v===null) return;
+      if(k==='target'&&!/^\d{4}-\d{2}-\d{2}$/.test(v.trim())) return toast('Use the date format YYYY-MM-DD','err');
+      const r=await api('qBulkDefects',{ids,[k==='owner'?'Owner':'TargetDate']:v.trim()});
+      if(r.ok){ toast(`${r.changed} defect${r.changed===1?'':'s'} updated`); DT.def.sel.clear(); await loadQuality(true); } else toast(r.error||'Could not update','err');
+    },
+    empty:'No defects recorded yet. Defects are raised from inspection, or with New defect.',exportName:'defects'};
+  return {cfg,rows:qd.defects};
+}
+DT_CFG.def=defectTable;
+function stageStrip(stages,rows,tableId,extra){
+  const s=dtState(tableId,{}), cnt=k=>rows.filter(r=>r.Status===k).length;
+  const opts=[['','All',rows.length],['open','Not closed',rows.filter(r=>r.Status!=='Closed').length]].concat(stages.map(k=>[k,k,cnt(k)])).concat(extra||[]);
+  return `<div class="stage-strip" role="group" aria-label="Filter by stage">${opts.map(([k,t,n])=>`<button class="ss-it stageF ${(s.stage||'')===k?'on':''}" data-dt="${tableId}" data-k="${esc(k)}" aria-pressed="${(s.stage||'')===k}"><span>${esc(t)}</span><b>${n}</b></button>`).join('')}</div>`;
+}
+function qLoadingHtml(){
+  if(qd.error) return `<div class="card err" role="alert">${esc(qd.error)} <button class="btn btn-ghost btn-sm" id="qRetry">Try again</button></div>`;
+  return `<div class="card"><div class="skel" style="height:18px;width:40%;margin-bottom:14px"></div>${'<div class="skel" style="height:40px;margin-bottom:8px"></div>'.repeat(6)}</div>`;
+}
+function buildDefectsPage(){
+  if(!qd.loaded){ loadQuality(); return pageHead('defects')+qLoadingHtml(); }
+  const x=defectTable(); dtState(x.cfg.id,x.cfg); const crit=qd.defects.filter(r=>r.Severity==='Critical'&&r.Status!=='Closed').length, late=qd.defects.filter(r=>isOverdue(r.TargetDate,r.Status==='Closed')).length;
+  const right=can('quality')?`<button class="btn btn-primary" id="btnNewDefect">${ico('plus')}New defect</button>`:'';
+  return pageHead('defects',right)+
+    `${crit||late?`<div class="q-alerts rv" style="--i:1">${crit?`<button class="q-alert crit qJump" data-dt="def" data-f="sev" data-v="Critical">${ico('alert')}<b>${crit}</b> critical defect${crit===1?'':'s'} open</button>`:''}${late?`<button class="q-alert late qLate" data-dt="def">${ico('clock')}<b>${late}</b> past target date</button>`:''}</div>`:''}
+    <div class="rv" style="--i:2">${stageStrip(qd.meta.defectStages,qd.defects,'def')}</div>
+    <div class="rv" style="--i:3">${dtHtml(x.cfg,x.rows)}</div>`;
+}
+/* ── CAPA page ─────────────────────────────────────────── */
+function capaProgress(st){ const S=(qd.meta||{}).capaStages||[], i=S.indexOf(st); return `<span class="cp-bar" title="${esc(st)}">${S.map((k,j)=>`<i class="${j<i||st==='Closed'?'done':j===i?'cur':''}"></i>`).join('')}</span>`; }
+function capaTable(){
+  const meta=qd.meta||{};
+  const cfg={id:'capa',label:'CAPA records',ph:'Search ID, title, owner, defect',
+    rowKey:r=>r.CapaID, onRow:k=>openDrawer('capa',k),
+    rowCls:r=>isOverdue(r.DueDate,r.Status==='Closed')?'row-late':'',
+    search:r=>[r.CapaID,r.Title,r.Owner,r.DefectIDs,(r.data||{}).problem].join(' '),
+    sort:{k:'due',dir:1},
+    pre:r=>{ const st=DT.capa&&DT.capa.stage; return !st||(st==='open'?r.Status!=='Closed':st==='overdue'?isOverdue(r.DueDate,r.Status==='Closed'):r.Status===st); },
+    cols:[
+      {k:'id',t:'ID',v:r=>r.CapaID,html:r=>`<span class="mono id-cell">${esc(r.CapaID)}</span>`,always:true,cls:'nowrap'},
+      {k:'title',t:'CAPA',v:r=>r.Title,html:r=>`<div class="cell-title">${esc(r.Title)}</div>${(r.data||{}).problem?`<div class="cell-sub">${esc(String(r.data.problem).slice(0,90))}</div>`:''}`,always:true,cls:'w-title'},
+      {k:'sev',t:'Severity',v:r=>r.Severity,sort:r=>SEV_ORDER[r.Severity]??9,html:r=>sevBadge(r.Severity)},
+      {k:'status',t:'Stage',v:r=>r.Status,sort:r=>(meta.capaStages||[]).indexOf(r.Status),html:r=>`<div class="cp-cell">${stageBadge(r.Status)}${capaProgress(r.Status)}</div>`},
+      {k:'owner',t:'Owner',v:r=>r.Owner,html:r=>r.Owner?esc(r.Owner):'<span class="muted">Unassigned</span>'},
+      {k:'due',t:'Due',v:r=>r.DueDate,sort:r=>r.DueDate||'9999',html:r=>r.DueDate?`<span class="${isOverdue(r.DueDate,r.Status==='Closed')?'late':''}">${esc(fmtDay(r.DueDate))}${isOverdue(r.DueDate,r.Status==='Closed')?' · overdue':''}</span>`:'<span class="muted">—</span>',cls:'nowrap'},
+      {k:'defects',t:'Defects',v:r=>r.DefectIDs,html:r=>r.DefectIDs?`<span class="mono">${esc(r.DefectIDs)}</span>`:'<span class="muted">—</span>'},
+      {k:'updated',t:'Updated',v:r=>r.UpdatedAt,html:r=>esc(fmtDay(r.UpdatedAt)),cls:'nowrap'}],
+    filters:[{k:'sev',t:'Severity',opts:()=>meta.severities||[],v:r=>r.Severity},{k:'owner',t:'Owner',opts:()=>uniq(qd.capa.map(x=>x.Owner)),v:r=>r.Owner}],
+    bulk:[], empty:'No CAPA yet. Raise one from selected defects, or with New CAPA.',exportName:'capa'};
+  return {cfg,rows:qd.capa};
+}
+DT_CFG.capa=capaTable;
+function buildCapaPage(){
+  if(!qd.loaded){ loadQuality(); return pageHead('capa')+qLoadingHtml(); }
+  const x=capaTable(); dtState(x.cfg.id,x.cfg); const od=overdueCapa().length, wait=qd.capa.filter(r=>r.Status==='Awaiting Approval').length;
+  const right=can('quality')?`<button class="btn btn-primary" id="btnNewCapa">${ico('plus')}New CAPA</button>`:'';
+  return pageHead('capa',right)+
+    `${od||wait?`<div class="q-alerts rv" style="--i:1">${od?`<button class="q-alert late stageJump" data-dt="capa" data-k="overdue">${ico('clock')}<b>${od}</b> overdue action${od===1?'':'s'}</button>`:''}${wait?`<button class="q-alert wait stageJump" data-dt="capa" data-k="Awaiting Approval">${ico('check')}<b>${wait}</b> awaiting approval${isAdminUser()?' by you':''}</button>`:''}</div>`:''}
+    <div class="rv" style="--i:2">${stageStrip(qd.meta.capaStages,qd.capa,'capa',[['overdue','Overdue',od]])}</div>
+    <div class="rv" style="--i:3">${dtHtml(x.cfg,x.rows)}</div>`;
+}
+
+/* ── drawer: one defect or CAPA ────────────────────────── */
+function openDrawer(kind,id,preset){
+  if(qui.drawer&&qui.drawer.dirty&&!confirm('Discard the changes you have not saved?')) return;
+  const rec=id?(kind==='defect'?qd.defects:qd.capa).find(x=>(kind==='defect'?x.DefectID:x.CapaID)===id):null;
+  if(id&&!rec){ toast('Record not found. Refresh and try again.','err'); return; }
+  qui.drawer={kind,id,rec,form:drawerForm(kind,rec,preset),dirty:!!preset,log:null,busy:'',err:'',back:false};
+  qui.anim=true; render();
+  if(id) api('qLogFor',{id}).then(r=>{ if(qui.drawer&&qui.drawer.id===id){ qui.drawer.log=r.ok?r.log:[]; const el=document.getElementById('dwLog'); if(el) el.innerHTML=timelineHtml(qui.drawer.log); } });
+  setTimeout(()=>document.querySelector('.dw [data-f]')?.focus(),60);
+}
+function closeDrawer(force){
+  if(!qui.drawer) return;
+  if(!force&&qui.drawer.dirty&&!confirm('Discard the changes you have not saved?')) return;
+  const el=document.querySelector('.dw-wrap');
+  qui.drawer=null;
+  if(el&&!matchMedia('(prefers-reduced-motion: reduce)').matches){ el.classList.add('dw-out'); setTimeout(render,180); } else render();
+}
+function drawerForm(kind,rec,preset){
+  const d=rec?rec.data||{}:{};
+  if(kind==='defect') return Object.assign({Title:rec?rec.Title:'',Severity:rec?rec.Severity:'Major',Category:rec?rec.Category:'',Source:rec?rec.Source:'Sampling inspection',
+    Model:rec?rec.Model:'',Batch:rec?rec.Batch:'',Lot:rec?rec.Lot:'',Serial:rec?rec.Serial:'',Owner:rec?rec.Owner:'',TargetDate:rec?rec.TargetDate:'',
+    description:d.description||'',checkpoint:d.checkpoint||'',productionDate:d.productionDate||'',containment:d.containment||'',rootCause:d.rootCause||'',corrective:d.corrective||'',preventive:d.preventive||'',
+    verification:d.verification||'',verificationResult:d.verificationResult||'',effectiveness:d.effectiveness||'',effectivenessResult:d.effectivenessResult||'',evidence:(d.evidence||[]).join('\n')},preset||{});
+  return Object.assign({Title:rec?rec.Title:'',Severity:rec?rec.Severity:'Major',Owner:rec?rec.Owner:'',DueDate:rec?rec.DueDate:'',DefectIDs:rec?rec.DefectIDs:'',
+    problem:d.problem||'',containment:d.containment||'',rootCause:d.rootCause||'',whys:(d.whys||['','','','','']).concat(['','','','','']).slice(0,5),
+    fishbone:Object.assign({man:'',machine:'',method:'',material:'',measurement:'',environment:''},d.fishbone||{}),
+    corrective:d.corrective||'',preventive:d.preventive||'',verificationEvidence:d.verificationEvidence||'',verificationResult:d.verificationResult||'',
+    effectiveness:d.effectiveness||'',effectivenessResult:d.effectivenessResult||'',evidence:(d.evidence||[]).join('\n')},preset||{});
+}
+/* the same gates as the server: what is still missing before stage `to` */
+function gateMissing(kind,f,to){
+  const has=k=>String(f[k]||'').trim()!=='';
+  const S=kind==='defect'?qd.meta.defectStages:qd.meta.capaStages, i=S.indexOf(to), need=[];
+  if(kind==='defect'){
+    if(i>=1&&!has('containment')) need.push('containment action');
+    if(i>=2&&!has('Owner')) need.push('responsible owner');
+    if(i>=3&&!has('rootCause')) need.push('root cause');
+    if(i>=4&&!has('corrective')) need.push('corrective action');
+    if(i>=4&&!has('preventive')) need.push('preventive action');
+    if(i>=5&&!(has('verification')&&f.verificationResult==='Verified')) need.push('verification result: Verified');
+    if(i>=6&&!(has('effectiveness')&&f.effectivenessResult==='Effective')) need.push('effectiveness result: Effective');
+  } else {
+    const whys=f.whys.filter(w=>String(w).trim()).length, fish=Object.values(f.fishbone).some(v=>String(v).trim());
+    if(i>=1&&!has('problem')) need.push('problem statement');
+    if(i>=1&&!has('containment')) need.push('immediate containment');
+    if(i>=2&&!has('rootCause')) need.push('root cause');
+    if(i>=2&&!whys&&!fish) need.push('5 Whys or fishbone analysis');
+    if(i>=2&&!has('corrective')) need.push('corrective action');
+    if(i>=2&&!has('Owner')) need.push('action owner');
+    if(i>=2&&!/^\d{4}-\d{2}-\d{2}$/.test(f.DueDate||'')) need.push('due date');
+    if(i>=3&&!has('preventive')) need.push('preventive action');
+    if(i>=4&&!(has('verificationEvidence')&&f.verificationResult==='Verified')) need.push('verification evidence and result: Verified');
+    if(i>=5&&!(has('effectiveness')&&f.effectivenessResult==='Effective')) need.push('effectiveness check result: Effective');
+  }
+  return need;
+}
+function stepperHtml(stages,cur){
+  const i=stages.indexOf(cur);
+  return `<ol class="stepper" aria-label="Lifecycle">${stages.map((k,j)=>`<li class="${j<i||cur==='Closed'?'done':j===i?'cur':''}" ${j===i?'aria-current="step"':''}><span class="sp-dot">${j<i||cur==='Closed'?ico('check'):j+1}</span><span class="sp-t">${esc(k)}</span></li>`).join('')}</ol>`;
+}
+function timelineHtml(log){
+  if(!log) return '<div class="skel" style="height:14px;width:60%;margin:6px 0"></div><div class="skel" style="height:14px;width:45%;margin:10px 0"></div>';
+  if(!log.length) return '<div class="muted">No history yet.</div>';
+  return `<ol class="tl2">${log.slice().reverse().map(e=>`<li class="${/advanced|Approved|Created/.test(e.event)?'tl-fw':/back|Reopened|Sent back/.test(e.event)?'tl-bk':''}"><div class="tl-h"><b>${esc(e.event)}</b>${e.to?` <span class="muted">${e.from?esc(e.from)+' → ':''}${esc(e.to)}</span>`:''}</div>${e.details?`<div class="tl-d">${esc(e.details)}</div>`:''}<div class="tl-m">${esc(e.by)} · ${esc(fmtDate(e.time))}</div></li>`).join('')}</ol>`;
+}
+function fIn(k,label,opt){
+  const f=qui.drawer.form, ro=qui.drawer.ro, o=opt||{}, v=k.includes('.')?k.split('.').reduce((a,b)=>a[b],f):f[k];
+  const id='f_'+k.replace(/\W/g,'_');
+  const req=o.req?'<span class="req" aria-hidden="true">*</span>':'';
+  let ctl;
+  if(o.ta) ctl=`<textarea id="${id}" class="field" data-f="${k}" rows="${o.rows||3}" maxlength="${o.max||2000}" ${ro?'readonly':''} placeholder="${esc(o.ph||'')}">${esc(v)}</textarea>`;
+  else if(o.sel) ctl=`<select id="${id}" class="field" data-f="${k}" ${ro?'disabled':''}>${o.blank?`<option value="">${esc(o.blank)}</option>`:''}${o.sel.map(x=>`<option ${x===v?'selected':''}>${esc(x)}</option>`).join('')}</select>`;
+  else ctl=`<input id="${id}" class="field ${o.mono?'mono':''}" data-f="${k}" type="${o.type||'text'}" value="${esc(v)}" maxlength="${o.max||200}" ${o.list?`list="${o.list}"`:''} ${ro?'readonly':''} placeholder="${esc(o.ph||'')}">`;
+  return `<div class="fg ${o.wide?'fw':''}"><label class="lbl" for="${id}">${esc(label)}${req}</label>${ctl}${o.hint?`<div class="hint">${esc(o.hint)}</div>`:''}</div>`;
+}
+function evidenceHtml(text){
+  const links=String(text||'').split(/\n/).map(x=>x.trim()).filter(x=>/^https:\/\//.test(x));
+  if(!links.length) return '';
+  return `<div class="ev-grid">${links.map(u=>{ const m=u.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|thumbnail\?id=)([\w-]{20,})/); const img=m?`https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`:(/\.(png|jpe?g|webp|gif)(\?|$)/i.test(u)?u:'');
+    return `<a class="ev" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${img?`<img src="${esc(img)}" alt="Evidence" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ev-f',textContent:'Open link'}))">`:`<span class="ev-f">${ico('file')}Open link</span>`}</a>`; }).join('')}</div>`;
+}
+function buildDrawer(){
+  const D=qui.drawer; if(!D) return '';
+  const isDef=D.kind==='defect', rec=D.rec, S=isDef?qd.meta.defectStages:qd.meta.capaStages, st=rec?rec.Status:'Open';
+  const canEdit=can('quality'), closed=st==='Closed';
+  D.ro=!canEdit||closed;
+  const next=S[S.indexOf(st)+1], prev=S[S.indexOf(st)-1];
+  const need=rec&&next&&!(next==='Closed'&&!isDef)?gateMissing(D.kind,D.form,next):[];
+  const meta=qd.meta, id=rec?(isDef?rec.DefectID:rec.CapaID):'';
+  const lots=batches.map(l=>l.lotNumber);
+  let body='';
+  if(isDef){
+    body=`<section class="dw-sec"><h3>Identification</h3><div class="fgrid">
+      ${fIn('Title','Defect title',{req:1,wide:1,max:200,ph:'e.g. Black dot on screen, centre area'})}
+      ${fIn('Severity','Severity',{sel:meta.severities,req:1})}${fIn('Category','Defect category',{sel:meta.categories,blank:'Choose…',req:1})}
+      ${fIn('Source','Detection stage',{sel:meta.sources})}${fIn('checkpoint','Checkpoint',{ph:'e.g. Screen, Black dot',max:80})}
+      ${fIn('Model','Model',{list:'dlModels',max:100})}${fIn('Batch','Batch',{list:'dlBatches',max:100})}
+      ${fIn('Lot','Production lot',{list:'dlLots',max:100})}${fIn('Serial','Serial number',{mono:1,max:40})}
+      ${fIn('productionDate','Production month',{ph:'MMYY',max:20})}
+      ${fIn('description','Detailed description',{ta:1,wide:1,rows:3})}</div></section>
+    <section class="dw-sec"><h3>Ownership</h3><div class="fgrid">${fIn('Owner','Responsible owner',{list:'dlOwners',max:100})}${fIn('TargetDate','Target closure date',{type:'date'})}</div></section>
+    <section class="dw-sec"><h3>Investigation and actions</h3><div class="fgrid">
+      ${fIn('containment','Containment action',{ta:1,wide:1,ph:'What was done straight away to stop affected units going further'})}
+      ${fIn('rootCause','Suspected root cause',{ta:1,wide:1})}
+      ${fIn('corrective','Corrective action',{ta:1,wide:1})}${fIn('preventive','Preventive action',{ta:1,wide:1})}</div></section>
+    <section class="dw-sec"><h3>Verification and effectiveness</h3><div class="fgrid">
+      ${fIn('verification','Verification',{ta:1,wide:1,ph:'How the corrective action was checked'})}${fIn('verificationResult','Verification result',{sel:['Verified','Not effective'],blank:'Not verified yet'})}
+      ${fIn('effectiveness','Effectiveness review',{ta:1,wide:1,ph:'Evidence that the problem has not come back'})}${fIn('effectivenessResult','Effectiveness result',{sel:['Effective','Not effective'],blank:'Not reviewed yet'})}</div></section>`;
+  } else {
+    const fb=[['man','Man (people)'],['machine','Machine'],['method','Method'],['material','Material'],['measurement','Measurement'],['environment','Environment']];
+    body=`<section class="dw-sec"><h3>Problem</h3><div class="fgrid">
+      ${fIn('Title','CAPA title',{req:1,wide:1})}${fIn('Severity','Severity',{sel:meta.severities})}${fIn('DefectIDs','Linked defects',{mono:1,ph:'DEF-0001, DEF-0004',max:600,hint:'Defect IDs, separated by commas'})}
+      ${fIn('problem','Problem statement',{ta:1,wide:1,ph:'What, where, when, how many'})}${fIn('containment','Immediate containment',{ta:1,wide:1})}</div></section>
+    <section class="dw-sec"><h3>Root cause analysis</h3>
+      <div class="whys">${[0,1,2,3,4].map(i=>`<div class="why"><span class="why-n">Why ${i+1}</span><input class="field" data-f="whys.${i}" value="${esc(D.form.whys[i])}" maxlength="500" ${D.ro?'readonly':''} aria-label="Why ${i+1}" placeholder="${i===0?'Why did the problem happen?':'Why?'}"></div>`).join('')}</div>
+      <div class="fish" aria-label="Fishbone analysis"><div class="fish-bones">${fb.map(([k,t])=>`<label class="bone"><span>${esc(t)}</span><textarea class="field" data-f="fishbone.${k}" rows="2" maxlength="1000" ${D.ro?'readonly':''}>${esc(D.form.fishbone[k])}</textarea></label>`).join('')}</div><div class="fish-head">${esc(D.form.Title||'Problem')}</div></div>
+      <div class="fgrid">${fIn('rootCause','Root cause',{ta:1,wide:1})}</div></section>
+    <section class="dw-sec"><h3>Actions</h3><div class="fgrid">
+      ${fIn('corrective','Corrective action',{ta:1,wide:1})}${fIn('preventive','Preventive action',{ta:1,wide:1})}
+      ${fIn('Owner','Action owner',{list:'dlOwners',max:100})}${fIn('DueDate','Due date',{type:'date'})}</div></section>
+    <section class="dw-sec"><h3>Verification and effectiveness</h3><div class="fgrid">
+      ${fIn('verificationEvidence','Verification evidence',{ta:1,wide:1})}${fIn('verificationResult','Verification result',{sel:['Verified','Not effective'],blank:'Not verified yet'})}
+      ${fIn('effectiveness','Effectiveness check',{ta:1,wide:1})}${fIn('effectivenessResult','Effectiveness result',{sel:['Effective','Not effective'],blank:'Not checked yet'})}</div></section>
+    ${rec&&(rec.ApprovedBy||(rec.data||{}).approvalNote)?`<section class="dw-sec"><h3>Approval</h3><p>${rec.ApprovedBy?`Approved by <b>${esc(rec.ApprovedBy)}</b> on ${esc(fmtDate(rec.ApprovedAt))}. `:''}${(rec.data||{}).approvalNote?esc(rec.data.approvalNote):''}</p></section>`:''}`;
+  }
+  body+=`<section class="dw-sec"><h3>Evidence</h3>${fIn('evidence','Links to photos or documents',{ta:1,wide:1,rows:2,max:30000,ph:'One https link per line (Google Drive, SharePoint…)',hint:'Files are not uploaded here: paste links to where they are stored. Google Drive photos show a preview.'})}<div id="dwEv">${evidenceHtml(D.form.evidence)}</div></section>`;
+  if(isDef&&rec&&rec.CapaID) body+=`<section class="dw-sec"><h3>CAPA</h3><button class="btn btn-ghost btn-sm dwOpenCapa" data-id="${esc(rec.CapaID)}">${ico('shield')}${esc(rec.CapaID)}</button></section>`;
+  if(!isDef&&rec&&rec.DefectIDs) body+=`<section class="dw-sec"><h3>Linked defects</h3><div class="chips">${rec.DefectIDs.split(', ').map(x=>{ const dd=qd.defects.find(y=>y.DefectID===x); return `<button class="chip dwOpenDef" data-id="${esc(x)}"><span class="mono">${esc(x)}</span>${dd?` ${esc(dd.Title)} · ${esc(dd.Status)}`:''}</button>`; }).join('')}</div></section>`;
+  if(rec) body+=`<section class="dw-sec"><h3>History</h3><div id="dwLog">${timelineHtml(D.log)}</div></section>`;
+  const gate=rec&&!closed&&canEdit?(isDef||next!=='Closed'?(next?`<div class="gate ${need.length?'':'ok'}">${need.length?`${ico('alert')}<span>Before <b>${esc(next)}</b>, enter: ${need.map(esc).join(', ')}.</span>`:`${ico('check')}<span>Ready for <b>${esc(next)}</b>.</span>`}</div>`:''):''):'';
+  const approve=!isDef&&rec&&st==='Awaiting Approval'?(isAdminUser()?`<div class="gate ok">${ico('shield')}<span>Verification and effectiveness are recorded. Approve to close this CAPA, or send it back.</span></div>`:`<div class="gate">${ico('clock')}<span>Waiting for an admin to approve and close.</span></div>`):'';
+  const backBox=D.back?`<div class="back-box"><label class="lbl" for="dwBackNote">Reason for ${D.back==='reopen'?'reopening':'moving back to '+esc(prev)}</label><textarea id="dwBackNote" class="field" rows="2" maxlength="1000"></textarea><div class="row-btns"><button class="btn btn-ghost btn-sm" id="dwBackCancel">Cancel</button><button class="btn btn-danger btn-sm" id="dwBackGo">${D.back==='reopen'?'Reopen':'Move back'}</button></div></div>`:'';
+  const actions=[];
+  if(canEdit&&!closed) actions.push(`<button class="btn btn-ghost" id="dwSave" ${D.busy?'disabled':''}>${D.busy==='save'?'Saving…':rec?'Save changes':isDef?'Create defect':'Create CAPA'}</button>`);
+  if(canEdit&&rec&&!closed&&next&&!(next==='Closed'&&!isDef)) actions.push(`<button class="btn btn-primary" id="dwNext" ${need.length||D.busy?'disabled':''}>${D.busy==='next'?'Moving…':(D.dirty?'Save and move to ':'Move to ')+esc(next)}</button>`);
+  if(!isDef&&rec&&st==='Awaiting Approval'&&isAdminUser()) actions.push(`<button class="btn btn-ghost" id="dwSendBack">Send back</button><button class="btn btn-primary" id="dwApprove">${ico('check')}Approve and close</button>`);
+  const more=[];
+  if(canEdit&&rec&&!closed&&prev&&!D.back) more.push(`<button class="btn btn-ghost btn-sm" id="dwBack">Move back to ${esc(prev)}</button>`);
+  if(canEdit&&rec&&closed&&isDef&&!D.back) more.push(`<button class="btn btn-ghost btn-sm" id="dwReopen">Reopen</button>`);
+  if(isDef&&rec&&!rec.CapaID&&canEdit&&!closed) more.push(`<button class="btn btn-ghost btn-sm" id="dwRaiseCapa">${ico('shield')}Raise CAPA</button>`);
+  return `<div class="dw-wrap ${qui.anim?'dw-anim':''}" id="dwWrap"><div class="dw-scrim" id="dwScrim"></div>
+  <aside class="dw" role="dialog" aria-modal="true" aria-labelledby="dwTitle">
+    <header class="dw-h"><div class="dw-id">${rec?`<span class="mono">${esc(id)}</span>${sevBadge(rec.Severity)}${stageBadge(st)}`:`<span>${isDef?'New defect':'New CAPA'}</span>`}${D.dirty?'<span class="dirty">Unsaved changes</span>':''}</div>
+      <h2 id="dwTitle">${esc(rec?rec.Title:isDef?'Record a defect':'Raise a CAPA')}</h2>
+      <button class="btn-icon dw-x" id="dwClose" aria-label="Close">${ico('x')}</button>
+      ${rec?stepperHtml(S,st):''}</header>
+    <div class="dw-b">${D.ro&&!closed?'<div class="gate">'+ico('alert')+'<span>View only. Ask an admin for the Defects and CAPA module to make changes.</span></div>':''}${closed?`<div class="gate ok">${ico('check')}<span>Closed ${rec.ClosedAt?esc(fmtDate(rec.ClosedAt)):''}. The record and its history are kept.</span></div>`:''}${body}</div>
+    <footer class="dw-f">${gate}${approve}${backBox}${D.err?`<div class="err" role="alert">${esc(D.err)}</div>`:''}<div class="row-btns"><div class="more">${more.join('')}</div><div class="main-btns">${actions.join('')}</div></div></footer>
+  </aside>
+  <datalist id="dlModels">${uniq(models.map(m=>m.lumioModel||m.name)).map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+  <datalist id="dlBatches">${uniq(batches.map(b=>b.batchName)).map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+  <datalist id="dlLots">${lots.slice(0,500).map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+  <datalist id="dlOwners">${uniq(qd.defects.map(x=>x.Owner).concat(qd.capa.map(x=>x.Owner))).map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+  </div>`;
+}
+function drawerFields(){ const f={...qui.drawer.form}; if(qui.drawer.kind==='capa'){ f.whys=f.whys.slice(); f.fishbone={...f.fishbone}; } return f; }
+async function drawerSave(){
+  const D=qui.drawer; if(!D) return false;
+  if(!String(D.form.Title||'').trim()){ D.err='Enter a title.'; render(); return false; }
+  if(D.kind==='defect'&&!D.form.Category){ D.err='Choose a defect category.'; render(); return false; }
+  const bad=String(D.form.evidence||'').split('\n').map(x=>x.trim()).filter(x=>x&&!/^https:\/\//.test(x));
+  if(bad.length){ D.err='Evidence links must start with https://'; render(); return false; }
+  if(!D.dirty&&D.rec) return true;
+  D.busy='save'; D.err=''; render();
+  const r=await api(D.kind==='defect'?'qSaveDefect':'qSaveCapa',{id:D.id||'',fields:drawerFields(),baseUpdatedAt:D.rec?D.rec.UpdatedAt:''});
+  D.busy='';
+  if(!r.ok){ D.err=r.error||'Could not save'; render(); return false; }
+  await loadQuality(true);
+  const list=D.kind==='defect'?qd.defects:qd.capa, rec=list.find(x=>(D.kind==='defect'?x.DefectID:x.CapaID)===r.id);
+  if(qui.drawer===D){ D.id=r.id; D.rec=rec; D.form=drawerForm(D.kind,rec); D.dirty=false; D.log=null; api('qLogFor',{id:r.id}).then(x=>{ if(qui.drawer===D){ D.log=x.ok?x.log:[]; const el=document.getElementById('dwLog'); if(el) el.innerHTML=timelineHtml(D.log); } }); }
+  if(!r.unchanged) toast(`${r.id} saved`);
+  render(); return true;
+}
+async function drawerMove(to,note){
+  const D=qui.drawer; D.busy='next'; D.err=''; render();
+  const r=await api(D.kind==='defect'?'qMoveDefect':'qMoveCapa',{id:D.id,to,note:note||''});
+  D.busy='';
+  if(!r.ok){ D.err=r.error||'Could not move'; render(); return; }
+  toast(`${D.id} is now in ${to}`);
+  pulseStage=D.id;
+  await loadQuality(true);
+  const list=D.kind==='defect'?qd.defects:qd.capa; D.rec=list.find(x=>(D.kind==='defect'?x.DefectID:x.CapaID)===D.id); D.form=drawerForm(D.kind,D.rec); D.dirty=false; D.back=false; D.log=null;
+  render();
+  api('qLogFor',{id:D.id}).then(x=>{ if(qui.drawer===D){ D.log=x.ok?x.log:[]; const el=document.getElementById('dwLog'); if(el) el.innerHTML=timelineHtml(D.log); } });
+}
+let pulseStage='';
+function bindQuality(){
+  dtBind();
+  document.querySelectorAll('.stageF').forEach(b=>{ b.onclick=()=>{ const s=dtState(b.dataset.dt,{}); s.stage=b.dataset.k; s.page=0; render(); }; });
+  document.querySelectorAll('.stageJump').forEach(b=>{ b.onclick=()=>{ const s=dtState(b.dataset.dt,{}); s.stage=b.dataset.k; s.page=0; render(); }; });
+  document.querySelectorAll('.qJump').forEach(b=>{ b.onclick=()=>{ const s=dtState(b.dataset.dt,{}); s.f[b.dataset.f]=b.dataset.v; s.stage='open'; s.page=0; render(); }; });
+  document.querySelectorAll('.qLate').forEach(b=>{ b.onclick=()=>{ const s=dtState(b.dataset.dt,{}); s.stage='open'; s.sort={k:'target',dir:1}; s.page=0; render(); }; });
+  const qr=document.getElementById('qRetry'); if(qr) qr.onclick=()=>{ qd.error=''; render(); loadQuality(true); };
+  const nd=document.getElementById('btnNewDefect'); if(nd) nd.onclick=()=>openDrawer('defect',null);
+  const nc=document.getElementById('btnNewCapa'); if(nc) nc.onclick=()=>openDrawer('capa',null);
+  const D=qui.drawer; if(!D) return;
+  if(qui.anim) setTimeout(()=>{ qui.anim=false; document.getElementById('dwWrap')?.classList.remove('dw-anim'); },400);
+  document.getElementById('dwClose').onclick=()=>closeDrawer();
+  document.getElementById('dwScrim').onclick=()=>closeDrawer();
+  document.querySelectorAll('.dw [data-f]').forEach(el=>{
+    const upd=()=>{ const k=el.dataset.f; if(k.includes('.')){ const [a,b]=k.split('.'); D.form[a][b]=el.value; } else D.form[k]=el.value; if(!D.dirty){ D.dirty=true; const h=document.querySelector('.dw-id'); if(h&&!h.querySelector('.dirty')) h.insertAdjacentHTML('beforeend','<span class="dirty">Unsaved changes</span>'); }
+      if(k==='evidence'){ const ev=document.getElementById('dwEv'); if(ev) ev.innerHTML=evidenceHtml(el.value); }
+      refreshGate(); };
+    el.oninput=upd; el.onchange=upd;
+  });
+  const sv=document.getElementById('dwSave'); if(sv) sv.onclick=()=>drawerSave();
+  const nx=document.getElementById('dwNext'); if(nx) nx.onclick=async()=>{ const S=D.kind==='defect'?qd.meta.defectStages:qd.meta.capaStages, next=S[S.indexOf(D.rec.Status)+1]; if(D.dirty&&!(await drawerSave())) return; drawerMove(next); };
+  const bk=document.getElementById('dwBack'); if(bk) bk.onclick=()=>{ D.back='back'; render(); document.getElementById('dwBackNote')?.focus(); };
+  const ro=document.getElementById('dwReopen'); if(ro) ro.onclick=()=>{ D.back='reopen'; render(); document.getElementById('dwBackNote')?.focus(); };
+  const bc=document.getElementById('dwBackCancel'); if(bc) bc.onclick=()=>{ D.back=false; render(); };
+  const bg=document.getElementById('dwBackGo'); if(bg) bg.onclick=()=>{ const note=document.getElementById('dwBackNote').value.trim(); if(!note){ toast('Give the reason first','err'); return; } const S=D.kind==='defect'?qd.meta.defectStages:qd.meta.capaStages; drawerMove(D.back==='reopen'?S[S.length-2]:S[S.indexOf(D.rec.Status)-1],note); };
+  const rc=document.getElementById('dwRaiseCapa'); if(rc) rc.onclick=()=>{ const r=D.rec; D.dirty=false; openDrawer('capa',null,{Title:r.Title,Severity:r.Severity,DefectIDs:r.DefectID,problem:(r.data||{}).description||'',containment:(r.data||{}).containment||''}); };
+  document.querySelectorAll('.dwOpenCapa').forEach(b=>{ b.onclick=()=>{ if(D.dirty&&!confirm('Discard the changes you have not saved?')) return; D.dirty=false; go('capa'); openDrawer('capa',b.dataset.id); }; });
+  document.querySelectorAll('.dwOpenDef').forEach(b=>{ b.onclick=()=>{ if(D.dirty&&!confirm('Discard the changes you have not saved?')) return; D.dirty=false; go('defects'); openDrawer('defect',b.dataset.id); }; });
+  const ap=document.getElementById('dwApprove'); if(ap) ap.onclick=async()=>{ if(!confirm(`Approve and close ${D.id}?`)) return; D.busy='next'; render(); const r=await api('qApproveCapa',{id:D.id,approve:true,note:''}); D.busy=''; if(!r.ok){ D.err=r.error; render(); return; } toast(`${D.id} approved and closed`); await loadQuality(true); D.rec=qd.capa.find(x=>x.CapaID===D.id); D.form=drawerForm('capa',D.rec); D.log=null; render(); api('qLogFor',{id:D.id}).then(x=>{ if(qui.drawer===D){ D.log=x.ok?x.log:[]; const el=document.getElementById('dwLog'); if(el) el.innerHTML=timelineHtml(D.log); } }); };
+  const sb=document.getElementById('dwSendBack'); if(sb) sb.onclick=async()=>{ const note=(prompt('Why is it sent back? (required)')||'').trim(); if(!note) return; const r=await api('qApproveCapa',{id:D.id,approve:false,note}); if(!r.ok){ D.err=r.error; render(); return; } toast(`${D.id} sent back to the effectiveness check`); await loadQuality(true); D.rec=qd.capa.find(x=>x.CapaID===D.id); D.form=drawerForm('capa',D.rec); D.log=null; render(); };
+}
+function refreshGate(){
+  const D=qui.drawer; if(!D||!D.rec) return;
+  const S=D.kind==='defect'?qd.meta.defectStages:qd.meta.capaStages, next=S[S.indexOf(D.rec.Status)+1]; if(!next||(next==='Closed'&&D.kind!=='defect')) return;
+  const need=gateMissing(D.kind,D.form,next), g=document.querySelector('.dw-f .gate'), nx=document.getElementById('dwNext');
+  if(g&&!g.querySelector('.ico + span b')?.textContent.includes('approve')){ g.className='gate '+(need.length?'':'ok'); g.innerHTML=need.length?`${ico('alert')}<span>Before <b>${esc(next)}</b>, enter: ${need.map(esc).join(', ')}.</span>`:`${ico('check')}<span>Ready for <b>${esc(next)}</b>.</span>`; }
+  if(nx){ nx.disabled=!!need.length; nx.textContent='Save and move to '+next; }
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&qui.drawer&&!kp&&!qui.drawer.busy){ e.preventDefault(); closeDrawer(); } });
+window.addEventListener('beforeunload',e=>{ if(qui.drawer&&qui.drawer.dirty){ e.preventDefault(); e.returnValue=''; } });
+
+/* ── after a lot goes on hold: offer one defect record per defective sample ── */
+const CHECK_CAT={Aesthetic:'Cosmetic Defect',General:'Functional Failure',Functional:'Functional Failure',Screen:'Functional Failure','Black dot':'Defective Part / Component Failure'};
+function offerHoldDefects(lot,units){
+  if(!can('quality')) return;
+  const items=units.filter(u=>u.sampleResult==='Fail').map(u=>{
+    const fails=[]; if(u.aes==='Fail') fails.push('Aesthetic'); if(u.general==='Fail') fails.push('General'); if(u.func==='Fail') fails.push('Functional'); if(u.screen==='Fail') fails.push('Screen'); if(/FAIL/i.test(u.bd||'')) fails.push('Black dot');
+    const major=fails.some(f=>f!=='Aesthetic');
+    return {on:true,Title:`${fails.join(' and ')||'Inspection'} failure, ${lot.lotNumber}`,Severity:major?'Major':'Minor',Category:CHECK_CAT[fails.find(f=>f!=='Aesthetic')||fails[0]]||'Other',
+      Source:'Sampling inspection',Model:(getModel(lot.model)||{}).lumioModel||lot.model,Batch:lot.batchName,Lot:lot.lotNumber,Serial:u.serial,checkpoint:fails.join(', '),
+      productionDate:lot.prodMonthCode||'',description:u.remark||''};
+  });
+  if(!items.length) return;
+  qui.dlg={kind:'holdDefects',items,busy:false}; render();
+}
+function buildDialog(){
+  const g=qui.dlg; if(!g) return '';
+  if(g.kind==='holdDefects') return `<div class="dlg-wrap"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    <h2 id="dlgT">Record defects for this hold?</h2>
+    <p class="muted">${g.items.length} defective sample${g.items.length===1?'':'s'} found. Each becomes a defect record in Open stage, linked to its lot and serial number, so containment and root cause can be tracked.</p>
+    <div class="dlg-list">${g.items.map((it,i)=>`<label class="dlg-it"><input type="checkbox" class="dlgOn" data-i="${i}" ${it.on?'checked':''}><span class="mono">${esc(it.Serial)}</span><input class="field dlgTitle" data-i="${i}" value="${esc(it.Title)}" aria-label="Defect title for ${esc(it.Serial)}"><select class="field dlgSev" data-i="${i}" aria-label="Severity">${['Critical','Major','Minor'].map(x=>`<option ${x===it.Severity?'selected':''}>${x}</option>`).join('')}</select></label>`).join('')}</div>
+    <div class="row-btns"><button class="btn btn-ghost" id="dlgSkip">Not now</button><button class="btn btn-primary" id="dlgGo" ${g.busy?'disabled':''}>${g.busy?'Creating…':'Create defect records'}</button></div></div></div>`;
+  return '';
+}
+function bindDialog(){
+  const g=qui.dlg; if(!g) return;
+  document.querySelectorAll('.dlgOn').forEach(el=>{ el.onchange=()=>{ g.items[+el.dataset.i].on=el.checked; }; });
+  document.querySelectorAll('.dlgTitle').forEach(el=>{ el.oninput=()=>{ g.items[+el.dataset.i].Title=el.value; }; });
+  document.querySelectorAll('.dlgSev').forEach(el=>{ el.onchange=()=>{ g.items[+el.dataset.i].Severity=el.value; }; });
+  document.getElementById('dlgSkip').onclick=()=>{ qui.dlg=null; render(); };
+  document.getElementById('dlgGo').onclick=async()=>{
+    const items=g.items.filter(x=>x.on).map(({on,...x})=>x); if(!items.length){ qui.dlg=null; render(); return; }
+    g.busy=true; render();
+    const r=await api('qCreateDefects',{items});
+    if(r.ok){ qui.dlg=null; toast(`${r.ids.length} defect${r.ids.length===1?'':'s'} recorded: ${r.ids.join(', ')}`); await loadQuality(true); render(); }
+    else { g.busy=false; render(); toast(r.error||'Could not create the defects','err'); }
+  };
+  setTimeout(()=>document.getElementById('dlgGo')?.focus(),30);
+}
+
 function buildDashboard(){
   const isAdmin=user.role==='admin';
   if(page==='batches') return shell(pageHead('batches')+buildBatchesBody(isAdmin));
@@ -1586,6 +2264,8 @@ function buildDashboard(){
   if(page==='account') return shell(pageHead('account')+buildAccountCard());
   if(page==='faispec'&&can('models')) return shell(pageHead('faispec')+buildFaiSpecPage());
   if(page==='reports'&&can('reports')) return shell(pageHead('reports')+buildReportsCard());
+  if(page==='defects') return shell(buildDefectsPage());
+  if(page==='capa') return shell(buildCapaPage());
   return shell(buildOverview(isAdmin));
 }
 
@@ -4208,7 +4888,7 @@ function bindEvents(){
       toast(lotResult==='HOLD'?`${done.lotNumber} is on hold. Record the rework to reoffer it.`:`${done.lotNumber}: PASS | FG released: ${fgPassQty}`, lotResult==='HOLD'?'err':'ok');
       activeLot=null; activeSpec=null; samples=[]; expandedSample=null; lotUnits={};
       await loadBatches();
-      if(lotResult==='HOLD'){ view.batch=done.batchName; view.status='all'; view.q=''; selLot=done.batchName+'||'+done.lotNumber; const nl=batches.find(l=>l.batchName===done.batchName&&l.lotNumber===done.lotNumber); if(nl) loadLotUnits(nl); go('batches',()=>document.querySelector('.lot-detail')?.scrollIntoView({block:'center'})); }
+      if(lotResult==='HOLD'){ view.batch=done.batchName; view.status='all'; view.q=''; selLot=done.batchName+'||'+done.lotNumber; const nl=batches.find(l=>l.batchName===done.batchName&&l.lotNumber===done.lotNumber); if(nl) loadLotUnits(nl); go('batches',()=>document.querySelector('.lot-detail')?.scrollIntoView({block:'center'})); offerHoldDefects(done,units); }
       else render();
     } else { saveDraft(); toast(r.error||'Save failed — draft kept locally','err'); }
   };
