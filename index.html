@@ -2550,6 +2550,7 @@ function buildExecDashboard(){
   if(!qd.loaded) loadQuality();
   const hello=new Date().toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'});
   const head=`<div class="pg-head rv" style="--i:0"><div><p class="eyebrow">${esc(hello)}</p><h1 class="pg-title">Quality overview</h1><p class="pg-sub">Calculated live from inspection records, lot history, defects and CAPA in the portal's sheet.</p></div>${an.loaded?anFiltersHtml(true):''}</div>`;
+  if(/unknown action/i.test(an.error||'')) return `<div class="ins-banner rv">${ico('clock')}<span><b>The new dashboard is waiting for a backend update.</b> Until the Apps Script is redeployed, the previous overview is shown.</span></div>`+buildOverview(isAdminUser());
   if(!an.loaded||!qd.loaded) return head+(qd.error&&!an.error?`<div class="card err" role="alert">${esc(qd.error)} <button class="btn btn-ghost btn-sm" id="qRetry">Try again</button></div>`:anLoadingHtml());
   const w=anWindow(anF.range,0), M=anMetrics(w), P=anF.range==='all'?null:anMetrics(anWindow(anF.range,1));
   const per=anF.range==='all'?'all time':`last ${anF.range} days`;
@@ -2652,6 +2653,7 @@ function sampTable(){
 }
 DT_CFG.insp=inspTable; DT_CFG.samp=sampTable;
 function buildInspectionsPage(){
+  if(/unknown action/i.test(an.error||'')) return pageHead('inspections')+`<div class="ins-banner">${ico('clock')}<span><b>This page is waiting for a backend update.</b> Until the Apps Script is redeployed, see each lot's samples under Batches and lots.</span></div>`;
   if(!an.loaded){ loadAnalytics(); return pageHead('inspections')+anLoadingHtml(); }
   if(an.stale){ an.stale=false; loadAnalytics(true); }
   const x=inspView==='lots'?inspTable():sampTable(); dtState(x.cfg.id,x.cfg);
@@ -2676,6 +2678,7 @@ function buildInspDrawer(){
 }
 /* ── insights page ── */
 function buildInsightsPage(){
+  if(/unknown action/i.test(an.error||'')) return pageHead('insights')+`<div class="ins-banner">${ico('clock')}<span><b>Insights are waiting for a backend update.</b> They appear once the Apps Script is redeployed.</span></div>`;
   if(!an.loaded||!qd.loaded){ loadAnalytics(); loadQuality(); return pageHead('insights')+anLoadingHtml(); }
   const ins=anInsights();
   return pageHead('insights',anFiltersHtml(false))+`<div class="ins-banner rv" style="--i:1">${ico('pulse')}<span><b>Calculated insights.</b> Each one comes from a fixed rule applied to the records in the portal. They point to patterns worth a look; they are not predictions or AI analysis.</span></div>
