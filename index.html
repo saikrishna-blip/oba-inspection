@@ -513,6 +513,22 @@ button.logo{background:none;border:0;border-right:1px solid var(--line);cursor:p
 .bom-act .btn.on-match{background:var(--lime);border-color:var(--lime-deep);color:var(--color-on-brand)}
 .bom-act .btn.on-diff{background:var(--color-danger-solid);border-color:var(--color-danger-solid);color:#fff}
 .bom-diff{grid-column:2 / -1;display:grid;grid-template-columns:1fr 120px 2fr;gap:8px}
+.bom-row.r-open{background:color-mix(in srgb,var(--color-warn-bg,#f9eeda) 55%,var(--color-surface))}
+.bom-st{display:inline-block;margin-top:6px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--panel-2,var(--panel));border:1px solid var(--line);color:var(--ink-2)}
+.bom-st.st-match{background:var(--lime);border-color:var(--lime-deep);color:var(--color-on-brand)}
+.bom-st.st-dev{background:var(--color-danger-solid);border-color:var(--color-danger-solid);color:#fff}
+.bom-st.st-open{background:#f9eeda;border-color:#e8c98a;color:#6b4a07}
+.bom-det{grid-column:2 / -1;display:grid;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--color-surface)}
+.bom-det-top{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,2fr);gap:10px}
+.bom-lines{width:100%;border-collapse:collapse;font-size:13.5px}
+.bom-lines th{text-align:left;font-size:12px;font-weight:600;color:var(--ink-3);padding:0 6px 4px}
+.bom-lines td{padding:3px 6px;vertical-align:middle}
+.bom-lines td.q{width:110px}.bom-lines td.x{width:36px;text-align:right}
+.bom-lines tfoot td{padding-top:8px;font-weight:600}
+.bom-ecn{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.bom-orph{margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:13.5px}
+.save-st{font-size:12.5px;color:var(--ink-3)}
+.save-st.bad{color:var(--fail)}
 @media (max-width:760px){
   .flow{grid-template-columns:1fr}
   .step{border-right:none;border-bottom:1px solid var(--line)}
@@ -521,6 +537,7 @@ button.logo{background:none;border:0;border-right:1px solid var(--line);cursor:p
   .bom-qps{grid-column:1;text-align:left}
   .bom-act{grid-column:2;justify-content:flex-start}
   .bom-diff{grid-column:1 / -1;grid-template-columns:1fr}
+  .bom-det{grid-column:1 / -1}.bom-det-top{grid-template-columns:1fr}
 }
 
 /* ── Inspection: sample tray (signature) ──────────────── */
@@ -1865,7 +1882,7 @@ function buildFlow(g,isAdmin){
   const s=g.bomStatus, bm=bomFor(g.model);
   let cls='s-na', txt='', act='';
   const verRef=g.bomVerId&&/^VER-/.test(g.bomVerId)?g.bomVerId:'';
-  const draft=loadBomDraft(g.name);
+  const sd=(g.lots.find(l=>l.bomDraft)||{}).bomDraft||null, draft=sd||loadBomDraft(g.name);
   const canVerify=!!bm;
   const startLbl=draft?'Resume BOM verification':(s==='Failed'?'Verify again':'Start BOM verification');
   if(s==='Passed'){ cls='s-pass'; txt=`Passed, all parts matched${verRef?` (${esc(verRef)})`:''}`; }
@@ -1873,6 +1890,7 @@ function buildFlow(g,isAdmin){
   else if(s==='Pending'){ cls='s-wait'; txt=canVerify?`Check all ${bm.parts} BOM parts of ${esc(bm.model)} for this batch`:`No BOM found for ${esc(modelLabel(g.model))}. Set its Lumio model number to a BOM tab name.`; }
   else if(s==='Waived'){ cls='s-na'; txt='Not required (waived by admin)'; }
   else { cls='s-na'; txt='Not required (batch created before the BOM step)'; }
+  if(sd&&(s==='Pending'||s==='Failed')) txt+=`<br><span class="text-muted">Draft: ${sd.checked} of ${sd.total} parts checked${sd.open?`, ${sd.open} in progress`:''}${sd.deviations?`, ${sd.deviations} deviation${sd.deviations===1?'':'s'}${sd.ecn?` (${sd.ecn} ECN pending)`:''}`:''}. Saved ${esc(fmtDate(sd.at))} by ${esc(sd.by)}.</span>`;
   if((s==='Pending'||s==='Failed')&&canVerify&&can('bomverify')) act+=`<button class="btn btn-primary btn-sm bomStartBtn" data-batch="${esc(g.name)}">${startLbl}</button>`;
   if(bm) act+=`<button class="btn btn-ghost btn-sm" data-bxg="dlBom" data-m="${esc(bm.model)}">BOM ${esc(bm.model)} Rev ${esc(bm.rev)}</button>`;
   if(verRef) act+=`<button class="btn btn-ghost btn-sm" data-bxg="dlVer" data-v="${esc(verRef)}">Verified BOM</button>`;
@@ -1903,52 +1921,116 @@ function buildBomResult(){
   return `<div class="bom-result">
     <div class="ld-head"><div><div class="ld-title">${esc(v.verId)}: ${esc(v.result)}</div><div class="text-muted" style="margin-top:4px">${esc(v.model)}, BOM revision ${esc(v.rev)} (${esc(v.bomStatus)}), ${esc(v.partsChecked)} parts, verified by ${esc(v.by)} on ${esc(v.time)}${v.remarks?`. Remarks: ${esc(v.remarks)}`:''}</div></div>
       <button class="btn btn-ghost btn-sm bomViewClose">Close</button></div>
-    <div class="res-wrap"><div style="overflow-x:auto"><table class="res-table"><thead><tr><th>Part</th><th>Description</th><th>BOM QPS</th><th>Found part</th><th>Found QPS</th><th>Result</th><th>Remark</th></tr></thead><tbody>
-    ${items.map(i=>`<tr class="${i.result==='Matched'?'':'row-bad'}"><td style="font-family:var(--code);white-space:nowrap">${esc(i.partNo)}</td><td>${esc(i.description)}</td><td>${esc(i.bomQps)}</td><td style="font-family:var(--code);white-space:nowrap" class="${i.lotPartNo!==i.partNo?'bad':''}">${esc(i.lotPartNo)}</td><td class="${String(i.lotQps)!==String(i.bomQps)?'bad':''}">${esc(i.lotQps)}</td><td class="${i.result==='Matched'?'':'bad'}">${esc(i.result)}</td><td>${esc(i.remark)}</td></tr>`).join('')}
+    <div class="res-wrap"><div style="overflow-x:auto"><table class="res-table"><thead><tr><th>Part</th><th>Description</th><th>BOM QPS</th><th>Found part</th><th>Found QPS</th><th>Locations</th><th>Result</th><th>Remark</th></tr></thead><tbody>
+    ${items.map(i=>`<tr class="${i.result==='Matched'?'':'row-bad'}"><td style="font-family:var(--code);white-space:nowrap">${esc(i.partNo)}</td><td>${esc(i.description)}</td><td>${esc(i.bomQps)}</td><td style="font-family:var(--code);white-space:nowrap" class="${i.lotPartNo!==i.partNo?'bad':''}">${esc(i.lotPartNo)}</td><td class="${String(i.lotQps)!==String(i.bomQps)?'bad':''}">${esc(i.lotQps)}</td><td style="font-size:12.5px">${esc(i.locations||'')}</td><td class="${i.result==='Matched'?'':'bad'}">${esc(i.result)}</td><td>${esc(i.remark)}</td></tr>`).join('')}
     </tbody></table></div></div></div>`;
 }
 
 // ─── BOM VERIFICATION SCREEN ──────────────────────────────
+/* Drafts live on the server (shared, survive days and devices); the browser keeps a backup copy */
 function bomDraftKey(batch){ return 'oba_bomdraft_'+(user?user.username:'anon')+'_'+batch; }
 function loadBomDraft(batch){ try{ const r=localStorage.getItem(bomDraftKey(batch)); return r?JSON.parse(r):null; }catch(e){ return null; } }
-function saveBomDraft(){ if(!activeBom) return; try{ localStorage.setItem(bomDraftKey(activeBom.batch),JSON.stringify({model:activeBom.model,items:activeBom.items,remarks:activeBom.remarks,savedAt:new Date().toISOString()})); }catch(e){} }
+function saveBomDraft(){ if(!activeBom) return; try{ localStorage.setItem(bomDraftKey(activeBom.batch),JSON.stringify({model:activeBom.model,items:activeBom.items,remarks:activeBom.remarks,savedAt:new Date().toISOString(),v:2})); }catch(e){} scheduleBomSave(); }
 function clearBomDraft(batch){ try{ localStorage.removeItem(bomDraftKey(batch)); }catch(e){} }
-function bomCounts(){
-  const a=activeBom; let match=0,diff=0;
-  a.parts.forEach(p=>{ const it=a.items[p.partNo]; if(it&&it.state==='match') match++; else if(it&&it.state==='diff') diff++; });
-  return {match,diff,todo:a.parts.length-match-diff,total:a.parts.length};
+/* older browser drafts: {state, lotPartNo, lotQps, remark} */
+function bomItemFromOld(p,it){
+  if(!it) return null;
+  if(Array.isArray(it.lines)) return it;
+  if(it.state==='match') return {found:'',lines:[{loc:'',qty:p.qps,note:''}],remark:'',ecn:false};
+  return {found:String(it.lotPartNo||'')===p.partNo?'':String(it.lotPartNo||''),lines:[{loc:'',qty:it.lotQps??'',note:''}],remark:it.remark||'',ecn:false};
 }
-function bomItemValid(p,it){ return it&&it.state==='diff'?String(it.lotPartNo||'').trim()!==''&&String(it.lotQps??'').trim()!==''&&String(it.remark||'').trim()!=='':!!(it&&it.state==='match'); }
-function bomInvalid(){ return activeBom.parts.filter(p=>activeBom.items[p.partNo]&&activeBom.items[p.partNo].state==='diff'&&!bomItemValid(p,activeBom.items[p.partNo])).length; }
+/* Same rules as the server (judgeBomItem_) */
+function bomJudge(p,it){
+  if(!it) return {state:'todo'};
+  const found=String(it.found||'').trim()||p.partNo;
+  const okPn=found===p.partNo||(p.alternates||[]).includes(found);
+  let total=0, blank=0;
+  (it.lines||[]).forEach(l=>{ const q=String(l.qty??'').trim(); if(q===''||isNaN(Number(q))||Number(q)<0) blank++; else total+=Number(q); });
+  total=Math.round(total*1e6)/1e6;
+  const qps=Number(p.qps);
+  if(!(it.lines||[]).length||blank) return {state:'open',why:'Enter the quantity',found,total,okPn};
+  if(it.lines.length>1&&it.lines.some(l=>!String(l.loc||'').trim())) return {state:'open',why:'Enter the location of each quantity',found,total,okPn};
+  if(okPn&&Math.abs(total-qps)<1e-9) return {state:'match',result:'Matched',found,total,okPn};
+  if(okPn&&total<qps&&!it.ecn) return {state:'open',why:`${total} of ${qps} entered`,found,total,okPn};
+  return {state:'dev',found,total,okPn,result:total===0?'Not used in lot':!okPn?'Part changed':'QPS changed'};
+}
+function bomCounts(){
+  const a=activeBom; let match=0,dev=0,open=0,ecn=0,noRemark=0;
+  a.parts.forEach(p=>{ const it=a.items[p.partNo], j=bomJudge(p,it);
+    if(j.state==='match') match++; else if(j.state==='dev'){ dev++; if(it.ecn) ecn++; if(!String(it.remark||'').trim()) noRemark++; } else if(j.state==='open') open++; });
+  return {match,dev,open,ecn,noRemark,todo:a.parts.length-match-dev-open,total:a.parts.length};
+}
 function bomTallyHtml(){
-  const c=bomCounts(), invalid=bomInvalid();
-  return `<div>Checked: <b class="${c.todo?'t-warn':'t-ok'}">${c.total-c.todo}/${c.total}</b></div>
-      <div>Deviations: <b class="${c.diff?'t-fail':'t-ok'}">${c.diff}</b></div>
-      ${invalid?`<div class="t-fail">${invalid} deviation${invalid===1?'':'s'} missing part number, QPS or remark</div>`:''}`;
+  const c=bomCounts();
+  return `<div>Checked: <b class="${c.todo+c.open?'t-warn':'t-ok'}">${c.match+c.dev}/${c.total}</b>${c.open?` <span class="text-muted">(${c.open} in progress)</span>`:''}</div>
+      <div>Deviations: <b class="${c.dev?'t-fail':'t-ok'}">${c.dev}</b>${c.ecn?` <span class="text-muted">(${c.ecn} ECN pending)</span>`:''}</div>
+      ${c.noRemark?`<div class="t-fail">${c.noRemark} deviation${c.noRemark===1?'':'s'} without a remark</div>`:''}
+      <div class="save-st ${activeBom.saveErr?'bad':''}" id="bomSaveSt">${bomSaveText()}</div>`;
+}
+function bomSaveText(){
+  const a=activeBom;
+  if(a.saveErr) return 'Draft not saved: '+esc(a.saveErr);
+  if(a.saveTimer||a.saveBusy) return 'Saving draft…';
+  if(a.savedAt) return `Draft saved ${new Date(a.savedAt).toLocaleString([], {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${a.savedBy&&a.savedBy!==user.name?' by '+esc(a.savedBy):''}`;
+  return 'Draft is saved on the server as you work';
 }
 function updateBomFooter(){
-  const btn=document.getElementById('btnBomSubmit'), tally=document.getElementById('bomTally');
-  if(!btn||!activeBom) return;
-  const c=bomCounts(), ready=c.todo===0&&bomInvalid()===0, a=activeBom;
+  const a=activeBom; if(!a) return;
+  const c=bomCounts(), tally=document.getElementById('bomTally'), pass=document.getElementById('btnBomPass'), fail=document.getElementById('btnBomFail'), ecn=document.getElementById('btnBomEcn');
   if(tally) tally.innerHTML=bomTallyHtml();
-  btn.className='btn '+(ready?(c.diff?'btn-danger':'btn-primary'):'');
-  btn.disabled=!(ready&&!a.saving);
-  btn.textContent=a.saving?'Saving…':ready?(c.diff?`Submit with ${c.diff} deviation${c.diff===1?'':'s'}`:'Submit, all parts matched'):(c.todo?`Check all ${c.total} parts to submit`:'Complete the deviation details');
+  const allMatch=c.match===c.total;
+  if(pass){ pass.disabled=!allMatch||a.saving; pass.className='btn '+(allMatch?'btn-primary':''); pass.textContent=a.saving?'Saving…':allMatch?'Pass BOM verification':c.dev?`${c.dev} deviation${c.dev===1?'':'s'}: raise the ECN, then pass`:`Check all ${c.total} parts to pass`; }
+  if(fail){ const can=c.dev>0&&c.todo===0&&c.open===0&&c.noRemark===0; fail.disabled=!can||a.saving; fail.classList.toggle('hidden',!c.dev); }
+  if(ecn) ecn.classList.toggle('hidden',!c.dev);
+}
+function refreshBomRow(pn){
+  const a=activeBom, p=a.parts.find(x=>x.partNo===pn); if(!p) return;
+  const j=bomJudge(p,a.items[pn]);
+  const row=document.querySelector(`.bom-row[data-pn="${CSS.escape(pn)}"]`);
+  if(row){ row.classList.toggle('r-match',j.state==='match'); row.classList.toggle('r-diff',j.state==='dev'); row.classList.toggle('r-open',j.state==='open'); }
+  const st=document.querySelector(`.bom-st[data-pn="${CSS.escape(pn)}"]`); if(st){ st.outerHTML=bomStatusPill(p,a.items[pn]); }
+  const tot=document.querySelector(`.bomTot[data-pn="${CSS.escape(pn)}"]`); if(tot) tot.innerHTML=bomTotalHtml(p,j);
+  updateBomFooter();
+}
+function bomStatusPill(p,it){
+  const j=bomJudge(p,it);
+  const t=j.state==='match'?'Matched':j.state==='dev'?(j.result+(it&&it.ecn?', ECN pending':'')):j.state==='open'?('In progress: '+j.why):'Not checked';
+  return `<span class="bom-st ${j.state==='match'?'st-match':j.state==='dev'?'st-dev':j.state==='open'?'st-open':''}" data-pn="${esc(p.partNo)}">${esc(t)}</span>`;
+}
+function bomTotalHtml(p,j){
+  const ok=j.total!==undefined&&Math.abs(j.total-Number(p.qps))<1e-9;
+  return `Total <span class="${ok?'text-pass':'text-fail'}">${esc(j.total??0)}</span> of BOM QPS ${esc(p.qps)}`;
+}
+function bomDetailHtml(p,it){
+  const pn=esc(p.partNo), j=bomJudge(p,it);
+  const lines=(it.lines&&it.lines.length?it.lines:[{loc:'',qty:'',note:''}]);
+  return `<div class="bom-det">
+    <div class="bom-det-top">
+      <div><label class="lbl">Part number found</label><input class="field mono bomF" data-pn="${pn}" data-f="found" value="${esc(it.found||'')}" placeholder="${pn} (as in BOM)"></div>
+      <div><label class="lbl">Remark ${j.state==='dev'?'(required)':''}</label><input class="field bomF" data-pn="${pn}" data-f="remark" value="${esc(it.remark||'')}" placeholder="What is different, supplier reply, etc."></div>
+    </div>
+    <table class="bom-lines"><thead><tr><th>Location / stage</th><th>Qty</th><th>Note</th><th></th></tr></thead><tbody>
+      ${lines.map((l,i)=>`<tr><td><input class="field bomL" data-pn="${pn}" data-i="${i}" data-f="loc" value="${esc(l.loc||'')}" placeholder="${lines.length>1?'e.g. Main board, Bottom cover':'Optional for one location'}" aria-label="Location ${i+1}"></td>
+        <td class="q"><input class="field mono bomL" data-pn="${pn}" data-i="${i}" data-f="qty" type="number" step="any" min="0" value="${esc(l.qty??'')}" aria-label="Quantity ${i+1}"></td>
+        <td><input class="field bomL" data-pn="${pn}" data-i="${i}" data-f="note" value="${esc(l.note||'')}" placeholder="Optional" aria-label="Note ${i+1}"></td>
+        <td class="x">${lines.length>1?`<button class="btn btn-ghost btn-sm bomLDel" data-pn="${pn}" data-i="${i}" title="Remove this location" aria-label="Remove location ${i+1}">✕</button>`:''}</td></tr>`).join('')}
+    </tbody><tfoot><tr><td><button class="btn btn-ghost btn-sm bomLAdd" data-pn="${pn}">+ Add location</button></td><td colspan="3" class="bomTot" data-pn="${pn}">${bomTotalHtml(p,j)}</td></tr></tfoot></table>
+    <label class="bom-ecn"><input type="checkbox" class="bomEcnChk" data-pn="${pn}" ${it.ecn?'checked':''}> Deviation confirmed: an ECN is to be raised (use this for a shortage too)</label>
+  </div>`;
 }
 function buildBomVerify(){
   const a=activeBom, c=bomCounts(), g=groupBatches().find(x=>x.name===a.batch)||{};
   const logo=`<div class="logo"><img src="${LOGO_SRC}" alt="Lumio"></div>`;
-  const invalid=a.parts.filter(p=>a.items[p.partNo]&&a.items[p.partNo].state==='diff'&&!bomItemValid(p,a.items[p.partNo])).length;
-  const ready=c.todo===0&&invalid===0;
   const q=a.q.trim().toLowerCase();
   const shown=a.parts.filter(p=>{
-    const it=a.items[p.partNo]||{}; const st=it.state||'';
-    if(a.filter==='todo'&&st) return false;
+    const st=bomJudge(p,a.items[p.partNo]).state;
+    if(a.filter==='todo'&&!(st==='todo'||st==='open')) return false;
     if(a.filter==='match'&&st!=='match') return false;
-    if(a.filter==='diff'&&st!=='diff') return false;
-    return !q||p.partNo.toLowerCase().includes(q)||p.description.toLowerCase().includes(q);
+    if(a.filter==='diff'&&st!=='dev') return false;
+    return !q||p.partNo.toLowerCase().includes(q)||p.description.toLowerCase().includes(q)||String((a.items[p.partNo]||{}).found||'').toLowerCase().includes(q);
   });
   const pct=k=>c.total?(k/c.total*100).toFixed(2):0;
+  const canEcn=can('bommgmt');
   let h=`<div class="page">
   <header class="hdr">
     <div class="hdr-left">${logo}
@@ -1960,45 +2042,46 @@ function buildBomVerify(){
   <section class="bench fade" style="grid-template-columns:1fr">
     <div>
       <div class="bench-title">${esc(a.batch)}</div>
-      <div class="bench-sub">${esc(modelLabel(g.model))}, BOM ${esc(a.model)} revision ${esc(a.control.rev)} (${esc(a.control.status||'status unknown')}), batch of ${g.batchQty||'?'} units in ${g.totalLots||'?'} lots.<br>Check every part in the BOM against the material for this batch. A part matches when the part number (or an approved alternate) and quantity per set agree.</div>
+      <div class="bench-sub">${esc(modelLabel(g.model))}, BOM ${esc(a.model)} revision ${esc(a.control.rev)} (${esc(a.control.status||'status unknown')}), batch of ${g.batchQty||'?'} units in ${g.totalLots||'?'} lots.<br>Check each part as assembly goes on; the draft is saved on the server, so you can continue over several days or from another PC. A part matches when the part number (or an approved alternate) agrees and the quantities of all its locations add up to the BOM QPS. For a mismatch, enter the part number found, confirm it, and raise an ECN; when the BOM is updated, reopen this draft and the part is checked against the new revision.</div>
       <div class="verdict">
-        <div><b>${c.total-c.todo}/${c.total}</b>Checked</div>
+        <div><b>${c.match+c.dev}/${c.total}</b>Checked</div>
         <div><b class="${c.match?'v-ok':''}">${c.match}</b>Matched</div>
-        <div><b class="${c.diff?'v-bad':''}">${c.diff}</b>Deviations</div>
-        <div><b class="${c.todo?'':(c.diff?'v-bad':'v-ok')}">${c.todo?'In progress':(c.diff?'Fails':'Passes')}</b>BOM result</div>
+        <div><b class="${c.dev?'v-bad':''}">${c.dev}</b>Deviations</div>
+        <div><b class="${c.match===c.total?'v-ok':''}">${c.match===c.total?'Passes':c.dev?'ECN needed':'In progress'}</b>BOM result</div>
       </div>
-      <div class="bom-meter" aria-hidden="true"><i style="width:${pct(c.match)}%;background:var(--lime)"></i><i style="width:${pct(c.diff)}%;background:var(--color-slot-major)"></i></div>
+      <div class="bom-meter" aria-hidden="true"><i style="width:${pct(c.match)}%;background:var(--lime)"></i><i style="width:${pct(c.dev)}%;background:var(--color-slot-major)"></i></div>
     </div>
   </section>
+  ${a.notes&&a.notes.length?`<div class="bom-orph"><b>BOM changed since the draft was saved (Rev ${esc(a.draftRev||'?')} → Rev ${esc(a.control.rev)}).</b> ${a.notes.map(esc).join(' ')}</div>`:''}
   <div class="lot-toolbar" style="grid-template-columns:auto minmax(200px,1fr) auto">
-    <div><span class="lbl">Show parts</span><div class="seg" role="group" aria-label="Filter parts">${[['all','All',c.total],['todo','To check',c.todo],['match','Matched',c.match],['diff','Deviations',c.diff]].map(([k,l,n])=>`<button class="seg-btn bomFilter ${a.filter===k?'on':''}" data-k="${k}" aria-pressed="${a.filter===k}">${l}<span>${n}</span></button>`).join('')}</div></div>
+    <div><span class="lbl">Show parts</span><div class="seg" role="group" aria-label="Filter parts">${[['all','All',c.total],['todo','To check',c.todo+c.open],['match','Matched',c.match],['diff','Deviations',c.dev]].map(([k,l,n])=>`<button class="seg-btn bomFilter ${a.filter===k?'on':''}" data-k="${k}" aria-pressed="${a.filter===k}">${l}<span>${n}</span></button>`).join('')}</div></div>
     <div><label class="lbl" for="bomQ">Find a part</label><input id="bomQ" class="field" type="search" value="${esc(a.q)}" placeholder="Part number or description"></div>
-    <div>${c.todo?`<button id="bomAllMatch" class="btn btn-ghost">Mark ${c.todo} unchecked as matching</button>`:''}</div>
+    <div></div>
   </div>
   <div class="bom-list">
   ${shown.length?shown.map(p=>{
-    const it=a.items[p.partNo]||{}; const st=it.state||'';
+    const it=a.items[p.partNo], j=bomJudge(p,it), st=j.state;
+    const simple=it&&st==='match'&&!String(it.found||'').trim()&&it.lines.length===1&&!String(it.lines[0].loc||'').trim()&&!String(it.lines[0].note||'').trim()&&!String(it.remark||'').trim();
+    const showDet=it&&(!simple||a.open[p.partNo]);
     const img=p.imageUrl?`<img src="${esc(p.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='No image'">`:'No image';
-    return `<div class="bom-row ${st==='match'?'r-match':st==='diff'?'r-diff':''}">
+    return `<div class="bom-row ${st==='match'?'r-match':st==='dev'?'r-diff':st==='open'?'r-open':''}" data-pn="${esc(p.partNo)}">
       <div class="bom-img">${img}</div>
-      <div><div class="bom-pn">${esc(p.partNo)}</div><div class="bom-desc">${esc(p.description)}</div><div class="bom-meta">${esc(p.supplier||'')}${p.uom?', '+esc(p.uom):''}${p.alternates.length?`. Alternates: <span style="font-family:var(--code)">${p.alternates.map(esc).join(', ')}</span>`:''}</div></div>
+      <div><div class="bom-pn">${esc(p.partNo)}</div><div class="bom-desc">${esc(p.description)}</div><div class="bom-meta">${esc(p.supplier||'')}${p.uom?', '+esc(p.uom):''}${p.alternates.length?`. Alternates: <span style="font-family:var(--code)">${p.alternates.map(esc).join(', ')}</span>`:''}</div>${bomStatusPill(p,it)}</div>
       <div class="bom-qps"><b>${esc(p.qps)}</b><span>QPS</span></div>
       <div class="bom-act">
-        <button class="btn btn-sm btn-ghost bomMark ${st==='match'?'on-match':''}" data-pn="${esc(p.partNo)}" data-st="match" aria-pressed="${st==='match'}">Matches BOM</button>
-        <button class="btn btn-sm btn-ghost bomMark ${st==='diff'?'on-diff':''}" data-pn="${esc(p.partNo)}" data-st="diff" aria-pressed="${st==='diff'}">Different</button>
+        <button class="btn btn-sm btn-ghost bomQuick ${simple?'on-match':''}" data-pn="${esc(p.partNo)}" aria-pressed="${simple}" title="Same part, full BOM quantity in one place">Matches BOM</button>
+        <button class="btn btn-sm btn-ghost bomOpen" data-pn="${esc(p.partNo)}" aria-expanded="${!!showDet}" title="Quantity by location, a different part, or a remark">${showDet?'Hide details':'Enter details'}</button>
       </div>
-      ${st==='diff'?`<div class="bom-diff">
-        <div><label class="lbl">Part number found</label><input class="field bomF" data-pn="${esc(p.partNo)}" data-f="lotPartNo" value="${esc(it.lotPartNo||'')}" placeholder="As found on the part"></div>
-        <div><label class="lbl">QPS found</label><input class="field bomF mono" data-pn="${esc(p.partNo)}" data-f="lotQps" type="number" step="any" min="0" value="${esc(it.lotQps??'')}"></div>
-        <div><label class="lbl">Remark (required)</label><input class="field bomF" data-pn="${esc(p.partNo)}" data-f="remark" value="${esc(it.remark||'')}" placeholder="What is different"></div>
-      </div>`:''}
+      ${showDet?bomDetailHtml(p,it):''}
     </div>`;}).join(''):`<div class="lot-empty">No parts match this filter.</div>`}
   </div>
   <div class="insp-footer">
     <div class="insp-tally" id="bomTally">${bomTallyHtml()}</div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <input id="bomRemarks" class="field" type="text" style="width:260px" value="${esc(a.remarks||'')}" placeholder="Remarks (optional)">
-      <button id="btnBomSubmit" class="btn" disabled style="min-width:220px"></button>
+      <input id="bomRemarks" class="field" type="text" style="width:240px" value="${esc(a.remarks||'')}" placeholder="Remarks (optional)">
+      <button id="btnBomEcn" class="btn btn-ghost ${c.dev?'':'hidden'}" ${canEcn?'':'disabled title="Ask an admin or a user with BOM management to raise the ECN"'}>Prepare ECN for deviations</button>
+      <button id="btnBomFail" class="btn btn-ghost ${c.dev?'':'hidden'}" style="color:var(--fail)" title="Records the verification as failed; sampling stays locked">Record as failed</button>
+      <button id="btnBomPass" class="btn" disabled style="min-width:220px"></button>
     </div>
   </div>
   </div>
@@ -2006,7 +2089,50 @@ function buildBomVerify(){
   </div>`;
   return h;
 }
-
+function scheduleBomSave(){
+  const a=activeBom; if(!a||a.conflict) return;
+  if(a.saveTimer) clearTimeout(a.saveTimer);
+  a.saveTimer=setTimeout(()=>{ a.saveTimer=null; flushBomSave(); },1200);
+  const el=document.getElementById('bomSaveSt'); if(el){ el.className='save-st'; el.textContent='Saving draft…'; }
+}
+async function flushBomSave(){
+  const a=activeBom; if(!a||a.conflict) return true;
+  if(a.saveTimer){ clearTimeout(a.saveTimer); a.saveTimer=null; }
+  if(a.saveBusy){ a.saveAgain=true; return true; }
+  a.saveBusy=true;
+  const c=bomCounts();
+  const r=await api('saveBomDraft',{batchName:a.batch,model:a.model,rev:a.control.rev||'',items:a.items,remarks:a.remarks||'',baseVersion:a.version,
+    summary:{checked:c.match+c.dev,total:c.total,deviations:c.dev,ecn:c.ecn,open:c.open}});
+  a.saveBusy=false;
+  if(r.ok){ a.version=r.version; a.savedAt=r.at; a.savedBy=user.name; a.saveErr=''; }
+  else { a.saveErr=r.error||'network error'; if(r.conflict){ a.conflict=true; toast(r.error,'err'); } }
+  if(activeBom===a){ const el=document.getElementById('bomSaveSt'); if(el){ el.className='save-st'+(a.saveErr?' bad':''); el.innerHTML=bomSaveText(); } }
+  if(a.saveAgain&&!a.conflict){ a.saveAgain=false; return flushBomSave(); }
+  return r.ok;
+}
+/* After an ECN the BOM changes: keep what was entered, matched to the parts of the new revision */
+function realignBomItems(parts,items){
+  const out={}, used=new Set(), notes=[], inBom=new Set(parts.map(p=>p.partNo));
+  parts.forEach(p=>{ const it=bomItemFromOld(p,items[p.partNo]); if(it){ out[p.partNo]=it; used.add(p.partNo); } });
+  parts.forEach(p=>{
+    if(out[p.partNo]) return;
+    const k=Object.keys(items).find(k=>!used.has(k)&&!inBom.has(k)&&items[k]&&(String(items[k].found||items[k].lotPartNo||'').trim()===p.partNo||(p.alternates||[]).includes(String(items[k].found||items[k].lotPartNo||'').trim())));
+    if(k){ const it=bomItemFromOld(p,items[k]); out[p.partNo]={...it,found:'',ecn:false}; used.add(k); notes.push(`${k} was replaced by ${p.partNo}; its quantities now check against ${p.partNo}.`); }
+  });
+  const gone=Object.keys(items).filter(k=>!used.has(k));
+  if(gone.length) notes.push(`No longer in the BOM: ${gone.join(', ')}.`);
+  return {items:out,notes};
+}
+function bomEcnPrefill(){
+  const a=activeBom, old=[], add=[], why=[];
+  a.parts.forEach(p=>{
+    const it=a.items[p.partNo], j=bomJudge(p,it); if(j.state!=='dev') return;
+    old.push(p.partNo);
+    if(j.total>0) add.push(`${j.okPn?p.partNo:j.found}  ${j.total}`);
+    if(String(it.remark||'').trim()) why.push(`${p.partNo}: ${String(it.remark).trim()}`);
+  });
+  return {old:old.join('\n'),add:add.join('\n'),reason:`BOM verification of ${a.batch}. `+why.join('; ')};
+}
 // ─── LOT DETAIL ───────────────────────────────────────────
 function fmtDate(v){ const d=new Date(v); return isNaN(d)?(v||'-'):d.toLocaleString([], {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 function lotBadge(lot){
@@ -3019,20 +3145,21 @@ function bindEvents(){
       const lot=batches.find(x=>x.batchName===batch); const bm=lot?bomFor(lot.model):null;
       if(!bm){ toast('No BOM linked to this model','err'); return; }
       b.disabled=true; b.textContent='Loading BOM…';
-      const r=await api('getBom',{model:bm.model});
+      const [r,dr]=await Promise.all([api('getBom',{model:bm.model}),api('getBomDraft',{batchName:batch})]);
       if(!r.ok){ toast(r.error||'Could not load the BOM','err'); b.disabled=false; render(); return; }
       if(r.control&&r.control.status&&r.control.status.toLowerCase()!=='locked'){ toast(`BOM ${bm.model} is ${r.control.status}. It must be locked before verification.`,'err'); render(); return; }
-      const d=loadBomDraft(batch);
-      let items={}, remarks='';
-      if(d&&d.model===bm.model&&d.items){
-        const n=Object.keys(d.items).length;
-        if(confirm(`A saved draft exists for this batch (${n} parts checked, saved ${new Date(d.savedAt).toLocaleString()}).\n\nResume it? (Cancel = start fresh)`)){ items=d.items; remarks=d.remarks||''; }
-        else clearBomDraft(batch);
-      }
-      // keep only parts that are still in the BOM
-      const valid={}; r.parts.forEach(p=>{ if(items[p.partNo]) valid[p.partNo]=items[p.partNo]; });
-      activeBom={batch, model:bm.model, control:r.control||{}, parts:r.parts, items:valid, remarks, filter:'all', q:''};
+      if(!dr.ok){ toast(dr.error||'Could not load the saved draft','err'); b.disabled=false; render(); return; }
+      let items={}, remarks='', version=0, savedAt='', savedBy='', draftRev='', fromLocal=false;
+      const sd=dr.draft;
+      if(sd&&sd.model===bm.model&&sd.data){ items=sd.data.items||{}; remarks=sd.data.remarks||''; version=sd.version; savedAt=sd.at; savedBy=sd.by; draftRev=sd.data.rev||''; }
+      else { const d=loadBomDraft(batch); if(d&&d.model===bm.model&&d.items){ items=d.items; remarks=d.remarks||''; fromLocal=true; } }
+      const al=realignBomItems(r.parts,items);
+      const revChanged=draftRev&&String(draftRev)!==String((r.control||{}).rev||'');
+      activeBom={batch, model:bm.model, control:r.control||{}, parts:r.parts, items:al.items, remarks, filter:'all', q:'', open:{},
+        version:sd?version:0, savedAt, savedBy, draftRev, notes:revChanged||al.notes.length?al.notes:[]};
       bomResult=null; render(); window.scrollTo(0,0);
+      if(savedAt) toast(`Draft resumed: saved ${new Date(savedAt).toLocaleString([], {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})} by ${savedBy}`);
+      if(fromLocal||revChanged) scheduleBomSave();
     };
   });
   document.querySelectorAll('.bomViewBtn').forEach(b=>{
@@ -3058,47 +3185,79 @@ function bindEvents(){
   });
   // BOM verification screen
   const bbk=document.getElementById('btnBomBack');
-  if(bbk) bbk.onclick=()=>{ saveBomDraft(); toast('Draft saved, resume anytime from the batch'); activeBom=null; render(); };
+  if(bbk) bbk.onclick=async()=>{ const a=activeBom; bbk.disabled=true; const ok=await flushBomSave(); try{ localStorage.setItem(bomDraftKey(a.batch),JSON.stringify({model:a.model,items:a.items,remarks:a.remarks,savedAt:new Date().toISOString(),v:2})); }catch(e){}
+    toast(ok?'Draft saved on the server. Resume it any time, from any PC.':'Draft kept in this browser only: '+(a.saveErr||'not saved'), ok?'ok':'err'); activeBom=null; await loadBatches(); render(); };
   document.querySelectorAll('.bomFilter').forEach(b=>{ b.onclick=()=>{ activeBom.filter=b.getAttribute('data-k'); render(); }; });
   const bq=document.getElementById('bomQ');
   if(bq) bq.oninput=()=>{ const pos=bq.selectionStart; activeBom.q=bq.value; render(); const n=document.getElementById('bomQ'); if(n){ n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} } };
-  document.querySelectorAll('.bomMark').forEach(b=>{
+  document.querySelectorAll('.bomQuick').forEach(b=>{
     b.onclick=()=>{
-      const pn=b.getAttribute('data-pn'), st=b.getAttribute('data-st'), p=activeBom.parts.find(x=>x.partNo===pn);
-      const cur=activeBom.items[pn]||{};
-      if(cur.state===st){ delete activeBom.items[pn]; }
-      else if(st==='match'){ activeBom.items[pn]={state:'match',lotPartNo:p.partNo,lotQps:p.qps,remark:''}; }
-      else { activeBom.items[pn]={state:'diff',lotPartNo:cur.state==='diff'?cur.lotPartNo:'',lotQps:cur.state==='diff'?cur.lotQps:p.qps,remark:cur.remark||''}; }
+      const pn=b.getAttribute('data-pn'), p=activeBom.parts.find(x=>x.partNo===pn), it=activeBom.items[pn];
+      const simple=b.getAttribute('aria-pressed')==='true';
+      if(simple){ delete activeBom.items[pn]; delete activeBom.open[pn]; }
+      else {
+        if(it&&(it.lines.length>1||String(it.found||'').trim()||String(it.remark||'').trim())&&!confirm(`Replace what was entered for ${pn} with "matches BOM, ${p.qps} in one place"?`)) return;
+        activeBom.items[pn]={found:'',lines:[{loc:'',qty:p.qps,note:''}],remark:'',ecn:false}; delete activeBom.open[pn];
+      }
       saveBomDraft(); render();
-      if(st==='diff'&&activeBom.items[pn]) document.querySelector(`.bomF[data-pn="${CSS.escape(pn)}"][data-f="lotPartNo"]`)?.focus();
+    };
+  });
+  document.querySelectorAll('.bomOpen').forEach(b=>{
+    b.onclick=()=>{
+      const pn=b.getAttribute('data-pn'), it=activeBom.items[pn];
+      if(b.getAttribute('aria-expanded')==='true'){
+        // closing: an untouched new entry is removed again
+        if(it&&it.lines.length===1&&String(it.lines[0].qty??'')===''&&!it.found&&!it.remark&&!it.lines[0].loc){ delete activeBom.items[pn]; saveBomDraft(); }
+        delete activeBom.open[pn]; render(); return;
+      }
+      if(!it) activeBom.items[pn]={found:'',lines:[{loc:'',qty:'',note:''}],remark:'',ecn:false};
+      activeBom.open[pn]=true; render();
+      document.querySelector(`.bomL[data-pn="${CSS.escape(pn)}"][data-f="${it?'loc':'qty'}"]`)?.focus();
     };
   });
   document.querySelectorAll('.bomF').forEach(el=>{
-    el.oninput=()=>{ const it=activeBom.items[el.getAttribute('data-pn')]; if(it){ it[el.getAttribute('data-f')]=el.value; saveBomDraft(); updateBomFooter(); } };
+    el.oninput=()=>{ const pn=el.getAttribute('data-pn'), it=activeBom.items[pn]; if(it){ it[el.getAttribute('data-f')]=el.value.trim()===pn?'':el.value; saveBomDraft(); refreshBomRow(pn); } };
   });
-  const bam=document.getElementById('bomAllMatch');
-  if(bam) bam.onclick=()=>{
-    const todo=activeBom.parts.filter(p=>!activeBom.items[p.partNo]);
-    if(!confirm(`Mark ${todo.length} unchecked part${todo.length===1?'':'s'} as matching the BOM?\n\nOnly do this after you have physically checked them.`)) return;
-    todo.forEach(p=>{ activeBom.items[p.partNo]={state:'match',lotPartNo:p.partNo,lotQps:p.qps,remark:''}; });
-    saveBomDraft(); render();
-  };
+  document.querySelectorAll('.bomL').forEach(el=>{
+    el.oninput=()=>{ const pn=el.getAttribute('data-pn'), it=activeBom.items[pn]; if(!it) return; const i=+el.getAttribute('data-i'); it.lines[i]=it.lines[i]||{loc:'',qty:'',note:''}; it.lines[i][el.getAttribute('data-f')]=el.value; saveBomDraft(); refreshBomRow(pn); };
+    el.onkeydown=ev=>{ if(ev.key==='Enter'&&el.getAttribute('data-f')==='qty'){ ev.preventDefault(); const pn=el.getAttribute('data-pn'); document.querySelector(`.bomLAdd[data-pn="${CSS.escape(pn)}"]`)?.click(); } };
+  });
+  document.querySelectorAll('.bomLAdd').forEach(b=>{
+    b.onclick=()=>{ const pn=b.getAttribute('data-pn'), it=activeBom.items[pn]; if(!it) return; it.lines.push({loc:'',qty:'',note:''}); activeBom.open[pn]=true; saveBomDraft(); render();
+      const ins=document.querySelectorAll(`.bomL[data-pn="${CSS.escape(pn)}"][data-f="loc"]`); ins[ins.length-1]?.focus(); };
+  });
+  document.querySelectorAll('.bomLDel').forEach(b=>{
+    b.onclick=()=>{ const pn=b.getAttribute('data-pn'), it=activeBom.items[pn]; if(!it) return; it.lines.splice(+b.getAttribute('data-i'),1); activeBom.open[pn]=true; saveBomDraft(); render(); };
+  });
+  document.querySelectorAll('.bomEcnChk').forEach(el=>{
+    el.onchange=()=>{ const pn=el.getAttribute('data-pn'), it=activeBom.items[pn]; if(!it) return; it.ecn=el.checked; activeBom.open[pn]=true; saveBomDraft(); render(); };
+  });
   updateBomFooter();
   const brm=document.getElementById('bomRemarks');
   if(brm) brm.oninput=()=>{ activeBom.remarks=brm.value; saveBomDraft(); };
-  const bsb=document.getElementById('btnBomSubmit');
-  if(bsb) bsb.onclick=async()=>{
-    const c=bomCounts();
-    if(!confirm(c.diff?`Submit BOM verification with ${c.diff} deviation${c.diff===1?'':'s'}?\n\nThe batch will be marked as failed and sampling stays on hold.`:`Submit BOM verification for ${activeBom.batch}?\n\nAll ${c.total} parts matched. Sampling will be unlocked.`)) return;
-    activeBom.saving=true; render();
-    const items=activeBom.parts.map(p=>{ const it=activeBom.items[p.partNo]; return {partNo:p.partNo,lotPartNo:it.lotPartNo,lotQps:it.lotQps,remark:it.remark||''}; });
-    const r=await api('submitBomVerification',{batchName:activeBom.batch,model:activeBom.model,items,by:user.name,remarks:activeBom.remarks||''});
+  const becn=document.getElementById('btnBomEcn');
+  if(becn) becn.onclick=async()=>{
+    const pf=bomEcnPrefill(), a=activeBom;
+    if(!confirm(`Open a new ECN for ${a.model} with the ${pf.old.split('\n').filter(Boolean).length} deviating part(s) filled in?\n\nCheck the lists before generating it. The draft is kept; reopen the BOM verification after the ECN to pass it.`)) return;
+    await flushBomSave();
+    bx.model=a.model; bx.f.ecnOld=pf.old; bx.f.ecnNew=pf.add; bx.f.ecnReason=pf.reason.slice(0,1000); bx.ui.ecnTab='new'; bx.ui.ecnCheck=null;
+    activeBom=null; go('bom/ecn');
+  };
+  const submitBom=async(asFail)=>{
+    const a=activeBom, c=bomCounts();
+    if(!confirm(asFail?`Record the BOM verification of ${a.batch} as failed with ${c.dev} deviation${c.dev===1?'':'s'}?\n\nSampling stays locked, and the draft is closed. Usually it is better to raise the ECN and pass.`:`Pass the BOM verification of ${a.batch}?\n\nAll ${c.total} parts matched. Sampling will be unlocked.`)) return;
+    a.saving=true; render();
+    await flushBomSave();
+    const items=a.parts.map(p=>({partNo:p.partNo,...a.items[p.partNo]}));
+    const r=await api('submitBomVerification',{batchName:a.batch,model:a.model,items,remarks:a.remarks||''});
     if(r.ok){
-      clearBomDraft(activeBom.batch);
+      clearBomDraft(a.batch);
       toast(`${r.verId}: ${r.result}. ${r.status==='Passed'?'Sampling unlocked.':'Sampling on hold.'}`, r.status==='Passed'?'ok':'err');
       activeBom=null; await loadBatches(); render();
-    } else { activeBom.saving=false; saveBomDraft(); render(); toast(r.error||'Could not save, draft kept','err'); }
+    } else { a.saving=false; render(); toast(r.error||'Could not save, draft kept','err'); }
   };
+  const bps=document.getElementById('btnBomPass'); if(bps) bps.onclick=()=>submitBom(false);
+  const bfl=document.getElementById('btnBomFail'); if(bfl) bfl.onclick=()=>submitBom(true);
 
   // Lot browser filters + selection
   const fb=document.getElementById('fBatch');

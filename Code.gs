@@ -26,12 +26,12 @@ var MODULES        = ["bomverify","fai","sampling","reports","createbatch","mode
 var DEFAULT_ACCESS = ["bomverify","fai","sampling"];
 // Actions any signed-in user may call (reading, own password)
 // Actions that only read; every other successful action clears the cache
-var READ_ACTIONS = ["login","logout","whoami","bootstrap","getBatches","getModels","modelInsights","getBomList","getBom","getBomVerification",
+var READ_ACTIONS = ["login","logout","whoami","bootstrap","getBatches","getModels","modelInsights","getBomList","getBom","getBomVerification","getBomDraft",
                     "getLotUnits","checkSerial","getFaiSpec","getFai","listUsers","scanDuplicates","searchRecords"];
 var ALWAYS_ACTIONS = ["bootstrap","modelInsights","logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai","getBom"];
 // recordRework (rework data + reoffer) belongs to the sampling module
 // Actions unlocked by a module; everything not listed here or above is admin only
-var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify",
+var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify", getBomDraft:"bomverify", saveBomDraft:"bomverify",
                       checkSerial:"sampling", submitLot:"sampling", recordRework:"sampling", setOfferedQty:"sampling",
                       saveFai:"fai", saveFaiSpec:"models",
                       createBatch:"createbatch",
@@ -122,7 +122,7 @@ function doPost(e){
       data._session = sess;
       // record who did it from the session, not from what the browser sent
       if(action === "submitLot" || action === "recordRework" || action === "holdLot" || action === "setOfferedQty" || action === "saveFai" || action === "saveFaiSpec") data.inspector = sess.name;
-      if(action === "submitBomVerification") data.by = sess.name;
+      if(action === "submitBomVerification" || action === "saveBomDraft") data.by = sess.name;
       if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser","setUserAccess"].indexOf(action) > -1){
         data.createdBy = sess.username; data.updatedBy = sess.username; data.by = sess.username;
       }
@@ -238,6 +238,12 @@ function doPost(e){
     }
     if(action === "getBomVerification"){
       result = getBomVerification(data);
+    }
+    if(action === "getBomDraft"){
+      result = getBomDraft(data);
+    }
+    if(action === "saveBomDraft"){
+      result = saveBomDraft(data);
     }
     if(action === "setBatchStage"){
       result = setBatchStage(data);
@@ -636,6 +642,7 @@ function getBatches(){
   var sheet = getOrCreateSheet("Batches",[]);
   var rows  = sheet.getDataRange().getValues();
   var out   = [];
+  var drafts = bomDraftSummaries_();
   for(var i = 1; i < rows.length; i++){
     var r = rows[i];
     var rawPM = String(r[12]||"").replace(/^'/,'');
@@ -662,7 +669,8 @@ function getBatches(){
       bomVerId      : String(r[COL_BOM_VER-1]||""),
       faiStatus     : String(r[COL_FAI_STATUS-1]||""),
       round         : Number(r[COL_ROUND-1]) || 1,
-      reofferSerials: String(r[COL_REOFFER-1]||"").split(",").map(function(x){ return x.trim(); }).filter(String)
+      reofferSerials: String(r[COL_REOFFER-1]||"").split(",").map(function(x){ return x.trim(); }).filter(String),
+      bomDraft      : drafts[String(r[0]||"")] || null
     });
   }
   return {ok:true, batches:out};
@@ -1894,21 +1902,15 @@ function submitBomVerification(d){
     if(missing.length) return {ok:false, error:missing.length + " BOM parts were not checked (BOM may have changed). Reload the BOM and check again."};
 
     var rows = [], dev = 0;
-    parts.forEach(function(p){
-      var it = byPart[p.partNo];
-      var lotPn = String(it.lotPartNo||"").trim();
-      var lotQ = Number(it.lotQps);
-      var okPn = lotPn === p.partNo || p.alternates.indexOf(lotPn) > -1;
-      var okQ = !isNaN(lotQ) && Math.abs(lotQ - p.qps) < 1e-9;
-      // same result words as the Part DB lot-wise verification
-      var res = !lotPn ? "Not used in lot" : !okPn ? "Part changed" : !okQ ? "QPS changed" : "Matched";
-      if(res !== "Matched"){
-        dev++;
-        if(!String(it.remark||"").trim()) throw new Error("Remark is required for deviation on " + p.partNo);
-      }
-      rows.push({p:p, lotPn:safe_(lotPn, 80), lotQ:isNaN(lotQ) ? "" : lotQ, remark:safe_(it.remark||"", 500), res:res});
-    });
-
+    for(var pi = 0; pi < parts.length; pi++){
+      var p = parts[pi], it = cleanBomItem_(byPart[p.partNo]);
+      if(!it) return {ok:false, error:"Part " + p.partNo + ": enter the quantity found."};
+      var j = judgeBomItem_(p, it);
+      if(j.state === "open") return {ok:false, error:"Part " + p.partNo + " is not finished: " + j.why + "."};
+      if(j.state === "deviation") dev++;
+      if(j.state === "deviation" && !it.remark) return {ok:false, error:"Remark is required for the deviation on " + p.partNo + "."};
+      rows.push({p:p, lotPn:safe_(j.found, 80), lotQ:j.total, remark:safe_(it.remark, 500), res:j.result, locs:safe_(bomLocText_(it), 2000)});
+    }
     var log = ss.getSheetByName("BOM_VERIFY_LOG");
     var det = ss.getSheetByName("LOT_BOM_DETAIL");
     if(!log || !det) return {ok:false, error:"BOM_VERIFY_LOG or LOT_BOM_DETAIL tab missing in the BOM sheet"};
@@ -1917,14 +1919,16 @@ function submitBomVerification(d){
     var result = dev === 0 ? "All matched" : "Deviation";
     log.appendRow([verId, when, model, safe_(batchName, 80), ctl.rev, String(ctl.status).toLowerCase() === "locked" ? "Locked" : "Not locked", parts.length, dev, result,
                    safe_(d.by||"", 80), safe_(d.remarks||"", 1000)]);
+    if(det.getRange(1, 13).getValue() === "") det.getRange(1, 13).setValue("Locations (stage: qty)");
     var detail = rows.map(function(r){
       return [verId, model, safe_(batchName, 80), ctl.rev, safe_(r.p.partNo, 80), safe_(r.p.description, 500), safe_(r.p.imageUrl, 500), r.p.qps,
-              r.lotPn, r.lotQ, r.remark, r.res];
+              r.lotPn, r.lotQ, r.remark, r.res, r.locs];
     });
     det.getRange(det.getLastRow()+1, 1, detail.length, detail[0].length).setValues(detail);
 
     var status = dev === 0 ? "Passed" : "Failed";
     setBomStatus_(batchName, status, verId);
+    deleteBomDraft_(batchName);
     return {ok:true, verId:verId, status:status, partsChecked:parts.length, deviations:dev, result:result};
   }catch(e){
     var msg = String(e && e.message || e);
@@ -1957,12 +1961,117 @@ function getBomVerification(d){
     for(var j = 1; j < dv.length; j++){
       if(String(dv[j][0]) !== head.verId) continue;
       items.push({partNo:String(dv[j][4]), description:String(dv[j][5]), imageUrl:String(dv[j][6]),
-                  bomQps:dv[j][7], lotPartNo:String(dv[j][8]), lotQps:dv[j][9], remark:String(dv[j][10]||""), result:String(dv[j][11])});
+                  bomQps:dv[j][7], lotPartNo:String(dv[j][8]), lotQps:dv[j][9], remark:String(dv[j][10]||""), result:String(dv[j][11]),
+                  locations:String(dv[j][12]||"")});
     }
     return {ok:true, found:true, verification:head, items:items};
   }catch(e){
     console.error(e); return {ok:false, error:"Cannot open the BOM sheet. Ask an admin to check access to it."};
   }
+}
+
+/* ── BOM verification items and drafts ──────────────────────────────
+   An item is what was found for one BOM part:
+     found  = part number found on the material (blank = the BOM part)
+     lines  = stage-wise quantities [{loc, qty, note}]; their total is compared with the BOM QPS
+     remark = why it differs; ecn = deviation confirmed, an ECN is to be raised
+   Result: Matched when the part (or an approved alternate) and the total QPS agree.
+   A deviation is a different part, a total above the QPS, or a shortage confirmed with ecn;
+   a total still below the QPS (stages not all entered yet) stays open. */
+function cleanBomItem_(it){
+  if(!it || typeof it !== "object") return null;
+  var lines = Array.isArray(it.lines) ? it.lines.slice(0, 50) : [];
+  if(!lines.length && it.lotQps !== undefined && it.lotQps !== "") lines = [{loc:"", qty:it.lotQps}];   // older drafts
+  return {
+    found : cleanStr_(it.found !== undefined ? it.found : (it.lotPartNo || ""), 80).trim(),
+    lines : lines.map(function(l){ l = l || {}; return {loc:cleanStr_(l.loc, 80).trim(), qty:cleanNum_(l.qty), note:cleanStr_(l.note, 200).trim()}; }),
+    remark: cleanStr_(it.remark, 500).trim(),
+    ecn   : !!it.ecn
+  };
+}
+function judgeBomItem_(p, it){
+  var found = it.found || p.partNo;
+  var okPn = found === p.partNo || (p.alternates || []).indexOf(found) > -1;
+  var total = 0, blank = 0;
+  it.lines.forEach(function(l){ if(l.qty === "" || l.qty < 0) blank++; else total += Number(l.qty); });
+  total = Math.round(total * 1e6) / 1e6;
+  if(!it.lines.length || blank) return {state:"open", why:"a quantity is missing", found:found, total:total};
+  if(it.lines.length > 1 && it.lines.some(function(l){ return !l.loc; })) return {state:"open", why:"enter the location of each quantity", found:found, total:total};
+  var qps = Number(p.qps), okQ = Math.abs(total - qps) < 1e-9;
+  if(okPn && okQ) return {state:"match", result:"Matched", found:found, total:total};
+  if(okPn && total < qps && !it.ecn) return {state:"open", why:total + " of " + qps + " entered", found:found, total:total};
+  return {state:"deviation", found:found, total:total,
+          result: total === 0 ? "Not used in lot" : !okPn ? "Part changed" : "QPS changed"};
+}
+function bomLocText_(it){
+  return it.lines.map(function(l){ return (l.loc || "All") + ": " + l.qty + (l.note ? " (" + l.note + ")" : ""); }).join("; ");
+}
+var BOM_DRAFT_COLS = ["Batch","Model","Version","UpdatedBy","UpdatedAt","Checked","Total","Deviations","EcnPending","Open","Data1","Data2","Data3","Data4","Data5","Data6","Data7","Data8"];
+var BOM_DRAFT_CHUNK = 45000;
+function bomDraftSheet_(){ return getOrCreateSheet("BomDrafts", BOM_DRAFT_COLS); }
+function bomDraftRow_(v, batch){
+  for(var i = 1; i < v.length; i++) if(String(v[i][0]) === batch) return i;
+  return -1;
+}
+function bomDraftSummaries_(){
+  var sh = getSpreadsheet().getSheetByName("BomDrafts"), out = {};
+  if(!sh || sh.getLastRow() < 2) return out;
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, 10).getValues();
+  v.forEach(function(r){
+    if(!r[0]) return;
+    out[String(r[0])] = {model:String(r[1]), by:String(r[3]), at: r[4] instanceof Date ? r[4].toISOString() : String(r[4]),
+                         checked:Number(r[5])||0, total:Number(r[6])||0, deviations:Number(r[7])||0, ecn:Number(r[8])||0, open:Number(r[9])||0};
+  });
+  return out;
+}
+function getBomDraft(d){
+  var batch = String(d.batchName||"").trim();
+  var sh = bomDraftSheet_(), v = sh.getDataRange().getValues(), i = bomDraftRow_(v, batch);
+  if(i < 0) return {ok:true, draft:null};
+  var json = v[i].slice(10).map(function(x){ return String(x).replace(/^~/, ""); }).join("");
+  var data = {};
+  try{ data = JSON.parse(json || "{}"); }catch(e){ data = {}; }
+  return {ok:true, draft:{model:String(v[i][1]), version:Number(v[i][2])||0, by:String(v[i][3]),
+          at: v[i][4] instanceof Date ? v[i][4].toISOString() : String(v[i][4]), data:data}};
+}
+function saveBomDraft(d){
+  var batch = String(d.batchName||"").trim(), model = String(d.model||"").trim();
+  if(!batch || !model) return {ok:false, error:"Batch and BOM model are required"};
+  var src = d.items && typeof d.items === "object" && !Array.isArray(d.items) ? d.items : {};
+  var keys = Object.keys(src);
+  if(keys.length > 3000) return {ok:false, error:"Too many parts in the draft"};
+  var items = {};
+  keys.forEach(function(k){ var c = cleanBomItem_(src[k]); if(c) items[cleanStr_(k, 80)] = c; });
+  var data = {items:items, remarks:cleanStr_(d.remarks, 1000), rev:cleanStr_(d.rev, 20)};
+  var json = JSON.stringify(data);
+  if(json.length > BOM_DRAFT_CHUNK * 8) return {ok:false, error:"The draft is too large to save"};
+  var chunks = [];
+  // every piece starts with "~" so the sheet never reads it as a number or a formula
+  for(var c = 0; c < 8; c++){ var piece = json.substring(c * BOM_DRAFT_CHUNK, (c + 1) * BOM_DRAFT_CHUNK); chunks.push(piece ? "~" + piece : ""); }
+  var sum = d.summary || {}, n = function(x){ x = Number(x); return isFinite(x) && x >= 0 ? Math.round(x) : 0; };
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try{
+    var bv = getOrCreateSheet("Batches",[]).getDataRange().getValues(), cur = null;
+    for(var b = 1; b < bv.length; b++) if(String(bv[b][0]) === batch){ cur = String(bv[b][COL_BOM_STATUS-1]||""); break; }
+    if(cur === null) return {ok:false, error:"Batch " + batch + " not found"};
+    if(cur !== "Pending" && cur !== "Failed") return {ok:false, error:"BOM verification for this batch is " + (cur || "not required") + "; the draft was not saved."};
+    var sh = bomDraftSheet_(), v = sh.getDataRange().getValues(), i = bomDraftRow_(v, batch);
+    var ver = i < 0 ? 0 : (Number(v[i][2]) || 0);
+    if(d.baseVersion !== undefined && d.baseVersion !== null && Number(d.baseVersion) !== ver)
+      return {ok:false, conflict:true, error:"Someone else saved this draft (" + String(i < 0 ? "deleted" : v[i][3]) + "). Reopen the BOM verification to load the latest draft."};
+    var row = [safe_(batch, 80), safe_(model, 80), ver + 1, safe_(d.by||"", 80), new Date(),
+               n(sum.checked), n(sum.total), n(sum.deviations), n(sum.ecn), n(sum.open)].concat(chunks);
+    if(i < 0) sh.appendRow(row); else sh.getRange(i + 1, 1, 1, row.length).setValues([row]);
+    return {ok:true, version:ver + 1, at:new Date().toISOString()};
+  } finally { lock.releaseLock(); }
+}
+function deleteBomDraft_(batch){
+  var sh = getSpreadsheet().getSheetByName("BomDrafts");
+  if(!sh) return;
+  var v = sh.getDataRange().getValues(), i = bomDraftRow_(v, batch);
+  if(i > 0) sh.deleteRow(i + 1);
 }
 
 /* Admin: change a batch's BOM step (Waived = not required, Pending = require verification) */
