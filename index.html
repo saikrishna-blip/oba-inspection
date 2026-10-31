@@ -1212,6 +1212,12 @@ body{font-feature-settings:"cv11","ss01";letter-spacing:-.003em}
 @media (max-width:860px){ .an-grid{grid-template-columns:1fr} .kpis{grid-template-columns:repeat(2,minmax(0,1fr))} .facts2{grid-template-columns:1fr 1fr} .stk-leg{grid-template-columns:1fr} }
 @media (max-width:420px){ .kpis{grid-template-columns:1fr 1fr} .kpi-v{font-size:24px} }
 @media (prefers-reduced-motion:reduce){ .anim-line{stroke-dashoffset:0} }
+
+.f9{display:grid;grid-template-columns:repeat(3,52px);gap:3px;justify-content:center;margin-bottom:4px}
+.f9 .field{min-height:30px;height:30px;padding:0 4px;font-size:12px;text-align:center}
+.fcalc{font-size:12.5px;margin-bottom:3px}.fcalc b{font-variant-numeric:tabular-nums}
+.fai-table .fc:has(.f9){min-width:176px}
+.fs-table td:nth-child(6){min-width:290px}
 </style>
 </head>
 <body>
@@ -4099,17 +4105,34 @@ function faiJudge(it,val){
     if(has(it.min)||has(it.max)) return (!has(it.min)||x>=Number(it.min))&&(!has(it.max)||x<=Number(it.max))?'Pass':'Fail';
     return val&&(val.j==='Pass'||val.j==='Fail')?val.j:''; }
   if(it.type==='xy'){ const xs=val&&val.x!=null?String(val.x).trim():'', ys=val&&val.y!=null?String(val.y).trim():''; if(xs===''||ys==='') return ''; const X=Number(xs),Y=Number(ys); if(!isFinite(X)||!isFinite(Y)) return 'Fail';
-    if(has(it.x)&&has(it.y)&&has(it.tol)) return Math.abs(X-Number(it.x))<=Number(it.tol)+1e-9&&Math.abs(Y-Number(it.y))<=Number(it.tol)+1e-9?'Pass':'Fail';
+    const t=xyTol(it); if(t) return X>=Number(it.x)-t.xm-1e-9&&X<=Number(it.x)+t.xp+1e-9&&Y>=Number(it.y)-t.ym-1e-9&&Y<=Number(it.y)+t.yp+1e-9?'Pass':'Fail';
+    return val&&(val.j==='Pass'||val.j==='Fail')?val.j:''; }
+  if(it.type==='bright9'||it.type==='contrast'){ const c=faiCalc(it,val); if(c==='') return ''; if(isNaN(c)) return 'Fail';
+    if(has(it.gt)) return c>Number(it.gt)?'Pass':'Fail';
     return val&&(val.j==='Pass'||val.j==='Fail')?val.j:''; }
   return '';
 }
-function faiAuto(it){ const has=x=>x!==''&&x!=null; return it.type==='text'?!!it.expected:it.type==='number'?((has(it.nom)&&has(it.tol))||has(it.min)||has(it.max)):it.type==='xy'?(has(it.x)&&has(it.y)&&has(it.tol)):false; }
+const FAI_PTS=['Top left','Top centre','Top right','Middle left','Middle centre','Middle right','Bottom left','Bottom centre','Bottom right'];
+/* same calculation as the server (faiCalc_): brightness = average of 9 lux points ÷ screen area; contrast = white centre ÷ black centre */
+function faiCalc(it,val){
+  val=val||{}; const num=x=>{ const t=String(x==null?'':x).trim(); if(t==='') return null; const n=Number(t); return isFinite(n)?n:NaN; };
+  if(it.type==='bright9'){ const p=Array.isArray(val.p)?val.p:[]; let sum=0; for(let i=0;i<9;i++){ const n=num(p[i]); if(n===null) return ''; if(isNaN(n)||n<0) return NaN; sum+=n; } const area=Number(it.area)>0?Number(it.area):1; return Math.round(sum/9/area*100)/100; }
+  if(it.type==='contrast'){ const w=num(val.w), b=num(val.b); if(w===null||b===null) return ''; if(isNaN(w)||isNaN(b)||b<=0||w<0) return NaN; return Math.round(w/b*100)/100; }
+  return '';
+}
+/* x and y each have a plus and a minus tolerance; specs saved earlier have one tolerance for both */
+function xyTol(it){ const has=x=>x!==''&&x!=null; if(!has(it.x)||!has(it.y)) return null;
+  const g=(k)=>has(it[k])?Number(it[k]):has(it.tol)?Number(it.tol):null; const t={xp:g('xTolP'),xm:g('xTolM'),yp:g('yTolP'),ym:g('yTolM')};
+  return Object.values(t).every(v=>v!==null&&isFinite(v))?t:null; }
+function faiAuto(it){ const has=x=>x!==''&&x!=null; return it.type==='text'?!!it.expected:it.type==='number'?((has(it.nom)&&has(it.tol))||has(it.min)||has(it.max)):it.type==='xy'?!!xyTol(it):(it.type==='bright9'||it.type==='contrast')?has(it.gt):false; }
 function faiSpecText(it){
   const has=x=>x!==''&&x!=null, u=it.unit?' '+it.unit:'';
   if(it.na) return 'Not involved';
   if(it.type==='text') return it.expected?`= ${it.expected}`:'Record value';
   if(it.type==='number'){ if(has(it.nom)&&has(it.tol)) return `${it.nom} ± ${it.tol}${u}`; if(has(it.min)&&has(it.max)) return `${it.min} to ${it.max}${u}`; if(has(it.min)) return `≥ ${it.min}${u}`; if(has(it.max)) return `≤ ${it.max}${u}`; return 'No limit set'+(u?` (${u.trim()})`:''); }
-  if(it.type==='xy') return has(it.x)&&has(it.y)&&has(it.tol)?`x ${it.x}, y ${it.y} ± ${it.tol}`:'No limit set';
+  if(it.type==='xy'){ const t=xyTol(it); return t?`x ${it.x} (+${t.xp} / −${t.xm}), y ${it.y} (+${t.yp} / −${t.ym})`:'No limit set'; }
+  if(it.type==='bright9') return `${has(it.gt)?'> '+it.gt+u:'No limit set'} · average of 9 points ÷ ${it.area||'?'} m²`;
+  if(it.type==='contrast') return has(it.gt)?`> ${it.gt}${u||':1'}`:'No limit set';
   return 'Pass / Fail';
 }
 function faiDraftKey(lot){ return 'oba_fai_'+(user?user.username:'anon')+'_batch_'+lot.batchName; }
@@ -4148,6 +4171,12 @@ function buildFai(){
     if(it.na) return `<td class="fc">${chip('N/A')}</td>`;
     if(it.type==='check') return `<td class="fc"><button class="fbtn ${j==='Pass'?'on-p':j==='Fail'?'on-f':''} faiChk" data-id="${esc(it.id)}" data-s="${si}" ${dis} aria-label="${esc(it.name)}, sample ${si+1}: ${j||'not checked'}">${j==='Pass'?'Pass':j==='Fail'?'Fail':'—'}</button></td>`;
     const man=faiAuto(it)?'':ro?chip(j):`<div class="fpf"><button class="fbtn sm ${j==='Pass'?'on-p':''} faiJ" data-id="${esc(it.id)}" data-s="${si}" data-v="Pass" aria-label="Pass">Pass</button><button class="fbtn sm ${j==='Fail'?'on-f':''} faiJ" data-id="${esc(it.id)}" data-s="${si}" data-v="Fail" aria-label="Fail">Fail</button></div>`;
+    if(it.type==='bright9'){ const p=(v&&Array.isArray(v.p))?v.p:[], c=faiCalc(it,v);
+      return `<td class="fc"><div class="f9" role="group" aria-label="${esc(it.name)}, sample ${si+1}: lux at 9 points">${FAI_PTS.map((nm,q)=>`<input class="field mono faiV" data-id="${esc(it.id)}" data-s="${si}" data-k="p${q}" value="${esc(p[q]||'')}" inputmode="decimal" placeholder="${nm.split(' ').map(w=>w[0].toUpperCase()).join('')}" title="${nm} (lux)" aria-label="${nm} lux" ${dis}>`).join('')}</div>
+        <div class="fcalc">${c===''?'<span class="text-muted">9 points needed</span>':isNaN(c)?'<span class="text-fail">check the values</span>':`<b>${c}</b> ${esc(it.unit||'')}`}</div>${faiAuto(it)?chip(j):man}</td>`; }
+    if(it.type==='contrast'){ const c=faiCalc(it,v);
+      return `<td class="fc"><div class="fxy"><input class="field mono faiV" data-id="${esc(it.id)}" data-s="${si}" data-k="w" value="${esc(v&&v.w||'')}" placeholder="White" title="Centre, white pattern" aria-label="Centre brightness, white pattern" inputmode="decimal" ${dis}><input class="field mono faiV" data-id="${esc(it.id)}" data-s="${si}" data-k="b" value="${esc(v&&v.b||'')}" placeholder="Black" title="Centre, black pattern" aria-label="Centre brightness, black pattern" inputmode="decimal" ${dis}></div>
+        <div class="fcalc">${c===''?'<span class="text-muted">white ÷ black</span>':isNaN(c)?'<span class="text-fail">black must be above 0</span>':`<b>${c}</b>:1`}</div>${faiAuto(it)?chip(j):man}</td>`; }
     if(it.type==='xy') return `<td class="fc"><div class="fxy"><input class="field mono faiV" data-id="${esc(it.id)}" data-s="${si}" data-k="x" value="${esc(v&&v.x||'')}" placeholder="x" inputmode="decimal" ${dis}><input class="field mono faiV" data-id="${esc(it.id)}" data-s="${si}" data-k="y" value="${esc(v&&v.y||'')}" placeholder="y" inputmode="decimal" ${dis}></div>${faiAuto(it)?chip(j):man}</td>`;
     return `<td class="fc"><input class="field mono faiV" data-id="${esc(it.id)}" data-s="${si}" data-k="v" value="${esc(v&&v.v||'')}" ${it.type==='number'?'inputmode="decimal"':''} placeholder="${it.type==='number'?esc(it.unit||'value'):'value'}" ${dis}>${faiAuto(it)?chip(j):man}</td>`;
   };
@@ -4225,7 +4254,7 @@ function buildFai(){
 }
 
 // ─── FAI SPECIFICATION EDITOR ───────────────────────────
-const FAI_TYPE_LBL={check:'Pass / Fail',text:'Text value',number:'Number',xy:'x, y coordinates'};
+const FAI_TYPE_LBL={check:'Pass / Fail',text:'Text value',number:'Number',xy:'x, y coordinates',bright9:'Brightness, 9 points',contrast:'Contrast ratio'};
 async function loadFaiSpecEd(model){
   faiSpecEd={model,loading:true}; render();
   const r=await api('getFaiSpec',{model});
@@ -4243,7 +4272,10 @@ function buildFaiSpecPage(){
   const num=(i,k,ph)=>`<input class="field mono fsF" data-i="${i}" data-k="${k}" value="${esc(sp.items[i][k]==null?'':sp.items[i][k])}" placeholder="${ph}" inputmode="decimal">`;
   const lim=(it,i)=>it.type==='text'?`<input class="field fsF" data-i="${i}" data-k="expected" value="${esc(it.expected||'')}" placeholder="Expected value (blank = judge by hand)">`
     :it.type==='number'?`<div class="fs-lim">${num(i,'nom','Nominal')}${num(i,'tol','± Tol')}<span>or</span>${num(i,'min','Min')}${num(i,'max','Max')}<input class="field fsF" data-i="${i}" data-k="unit" value="${esc(it.unit||'')}" placeholder="Unit"><label class="fs-chk"><input type="checkbox" class="fsF" data-i="${i}" data-k="calcPending" ${it.calcPending?'checked':''}> Calculation inputs coming</label></div>`
-    :it.type==='xy'?`<div class="fs-lim">${num(i,'x','x')}${num(i,'y','y')}${num(i,'tol','± Tol')}</div>`:'<span class="text-muted">Pass / Fail per sample</span>';
+    :it.type==='xy'?`<div class="fs-lim"><span>x</span>${num(i,'x','x')}${num(i,'xTolP','+ tol')}${num(i,'xTolM','− tol')}<span style="width:100%"></span><span>y</span>${num(i,'y','y')}${num(i,'yTolP','+ tol')}${num(i,'yTolM','− tol')}</div>`
+    :it.type==='bright9'?`<div class="fs-lim"><span>Greater than</span>${num(i,'gt','e.g. 400')}<input class="field fsF" data-i="${i}" data-k="unit" value="${esc(it.unit||'lm')}" placeholder="Unit"><span>Screen area</span>${num(i,'area','0.992')}<span>m²</span></div><div class="text-muted" style="font-size:12px;margin-top:4px">Average of the 9 lux points ÷ screen area. Blank limit: judged by hand.</div>`
+    :it.type==='contrast'?`<div class="fs-lim"><span>Greater than</span>${num(i,'gt','e.g. 1000')}<span>: 1</span></div><div class="text-muted" style="font-size:12px;margin-top:4px">White centre ÷ black centre. Blank limit: judged by hand.</div>`
+    :'<span class="text-muted">Pass / Fail per sample</span>';
   return `<div class="card rv" style="--i:1">
     <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">${sel}
       <div class="fg"><label class="lbl" for="fsCust">Customer on report</label><input id="fsCust" class="field" value="${esc(sp.customer||'')}"></div></div>
@@ -5193,7 +5225,10 @@ function bindEvents(){
     const back=document.getElementById('btnFaiBack'); if(back) back.onclick=()=>{ saveFaiDraft(); activeFai=null; render(); };
     document.querySelectorAll('.faiChk').forEach(b=>{ b.onclick=()=>{ const r=res(+b.dataset.s), id=b.dataset.id; r[id]=r[id]==='Pass'?'Fail':'Pass'; rr(); }; });
     document.querySelectorAll('.faiJ').forEach(b=>{ b.onclick=()=>{ const r=res(+b.dataset.s), id=b.dataset.id; r[id]=r[id]||{}; r[id].j=b.dataset.v; rr(); }; });
-    document.querySelectorAll('.faiV').forEach(el=>{ el.onchange=()=>{ const r=res(+el.dataset.s), id=el.dataset.id; r[id]=r[id]||{}; r[id][el.dataset.k]=el.value.trim(); rr(); }; });
+    document.querySelectorAll('.faiV').forEach(el=>{ el.onchange=()=>{ const r=res(+el.dataset.s), id=el.dataset.id, k=el.dataset.k; r[id]=r[id]&&typeof r[id]==='object'?r[id]:{};
+      if(/^p\d$/.test(k)){ const p=Array.isArray(r[id].p)?r[id].p.slice():['','','','','','','','','']; p[+k.slice(1)]=el.value.trim(); r[id].p=p; } else r[id][k]=el.value.trim();
+      const nextId=document.activeElement&&document.activeElement.classList.contains('faiV')?[document.activeElement.dataset.id,document.activeElement.dataset.s,document.activeElement.dataset.k]:null;
+      rr(); if(nextId) document.querySelector(`.faiV[data-id="${CSS.escape(nextId[0])}"][data-s="${nextId[1]}"][data-k="${nextId[2]}"]`)?.focus(); }; });
     document.querySelectorAll('.faiSn').forEach(el=>{ el.onchange=()=>{ a.rep.samples[+el.dataset.s].serial=el.value.trim().toUpperCase(); rr(); }; });
     document.querySelectorAll('.faiRem').forEach(el=>{ el.oninput=()=>{ a.rep.remarks[el.dataset.id]=el.value; saveFaiDraft(); }; });
     document.querySelectorAll('.faiH').forEach(el=>{ el.onchange=()=>{ a.rep.header[el.dataset.k]=el.value; rr(); }; });
@@ -5229,7 +5264,10 @@ function bindEvents(){
       const sp=e.spec, dirty=()=>{ e.dirty=true; };
       const cu=document.getElementById('fsCust'); if(cu) cu.oninput=()=>{ sp.customer=cu.value; dirty(); };
       document.querySelectorAll('.fsF').forEach(el=>{ el.onchange=()=>{ const it=sp.items[+el.dataset.i], k=el.dataset.k;
-        it[k]=el.type==='checkbox'?el.checked:el.value; dirty(); if(k==='type'||k==='na'||k==='section') render(); }; });
+        it[k]=el.type==='checkbox'?el.checked:el.value;
+        if(k==='type'&&it.type==='bright9'){ if(!(Number(it.area)>0)) it.area=0.992; it.unit=it.unit||'lm'; }
+        if(k==='type'&&it.type==='contrast') it.unit=it.unit||':1';
+        dirty(); if(k==='type'||k==='na'||k==='section') render(); }; });
       document.querySelectorAll('.fsDel').forEach(b=>{ b.onclick=()=>{ const it=sp.items[+b.dataset.i]; if(!confirm(`Remove "${it.name}"?`)) return; sp.items.splice(+b.dataset.i,1); dirty(); render(); }; });
       document.querySelectorAll('.fsMv').forEach(b=>{ b.onclick=()=>{ const i=+b.dataset.i, j=i+(+b.dataset.d); if(j<0||j>=sp.items.length) return; const t=sp.items[i]; sp.items[i]=sp.items[j]; sp.items[j]=t; dirty(); render(); }; });
       const add=document.getElementById('btnFsAdd'); if(add) add.onclick=()=>{ sp.items.push({id:'item'+Date.now().toString(36),section:sp.items.length?sp.items[sp.items.length-1].section:'Others',name:'New item',content:'',type:'check',na:false}); dirty(); render(); };

@@ -1116,7 +1116,8 @@ function setOfferedQty(d){
  ****************************************************/
 var FAI_SAMPLES = 5;
 var FAI_RESULTS = ["Pass","Fail","Special procurement"];
-var FAI_TYPES   = ["check","text","number","xy"];
+var FAI_TYPES   = ["check","text","number","xy","bright9","contrast"];
+var FAI_POINTS  = ["Top left","Top centre","Top right","Middle left","Middle centre","Middle right","Bottom left","Bottom centre","Bottom right"];
 function faiItem_(id, section, name, content, type, extra){
   var o = {id:id, section:section, name:name, content:content||"", type:type||"check", na:false};
   for(var k in (extra||{})) o[k] = extra[k];
@@ -1151,9 +1152,9 @@ function defaultFaiSpec_(){
     faiItem_("otherAcc","Functional test","Other accessories"),
     faiItem_("pure","Picture inspection","Pure colour pattern (R/G/B/Y/W/B)"),
     faiItem_("zoom","Picture inspection","Picture zoom (max, min)"),
-    faiItem_("bright","Optical testing","Brightness","Calculation inputs to be added; enter the final value for now.","number",{unit:"lm", min:"", max:"", calcPending:true}),
-    faiItem_("contrast","Optical testing","Contrast ratio","Calculation inputs to be added; enter the final value for now.","number",{unit:":1", min:"", max:"", calcPending:true}),
-    faiItem_("color","Optical testing","Colour coordinates","x and y of white.","xy",{x:"", y:"", tol:""}),
+    faiItem_("bright","Optical testing","Brightness","9-point white pattern: lux at top left, top centre, top right, middle left, middle centre, middle right, bottom left, bottom centre, bottom right. Brightness = average of the 9 points ÷ screen area.","bright9",{unit:"lm", area:0.992, gt:""}),
+    faiItem_("contrast","Optical testing","Contrast ratio","Centre brightness on the white pattern ÷ centre brightness on the black pattern.","contrast",{unit:":1", gt:""}),
+    faiItem_("color","Optical testing","Colour coordinates","x and y on the white pattern.","xy",{x:"", y:"", xTolP:"", xTolM:"", yTolP:"", yTolM:""}),
     faiItem_("dimL","Finished product dimensions","L (length)","","number",{unit:"mm", nom:"", tol:"", min:"", max:""}),
     faiItem_("dimW","Finished product dimensions","W (width)","","number",{unit:"mm", nom:"", tol:"", min:"", max:""}),
     faiItem_("dimH","Finished product dimensions","H (height)","","number",{unit:"mm", nom:"", tol:"", min:"", max:""}),
@@ -1169,11 +1170,38 @@ function getFaiSpec(d){
   var v = faiSpecSheet_().getDataRange().getValues();
   for(var i = 1; i < v.length; i++){
     if(String(v[i][0]).trim() === model && model){
-      try { return {ok:true, model:model, spec:JSON.parse(String(v[i][1])), saved:true, updatedBy:String(v[i][2]||""),
+      try { return {ok:true, model:model, spec:upgradeFaiSpec_(JSON.parse(String(v[i][1]))), saved:true, updatedBy:String(v[i][2]||""),
                     updatedAt: v[i][3] instanceof Date ? v[i][3].toISOString() : String(v[i][3]||"")}; } catch(e){}
     }
   }
   return {ok:true, model:model, spec:defaultFaiSpec_(), saved:false};
+}
+/* specs saved before brightness and contrast were calculated: switch those two items to the calculated types */
+function upgradeFaiSpec_(sp){
+  (sp.items || []).forEach(function(it){
+    if(it.type === "number" && it.calcPending && it.id === "bright"){ it.type = "bright9"; it.area = 0.992; it.gt = it.min === "" || it.min == null ? "" : it.min; it.unit = it.unit || "lm"; delete it.calcPending; }
+    if(it.type === "number" && it.calcPending && it.id === "contrast"){ it.type = "contrast"; it.gt = it.min === "" || it.min == null ? "" : it.min; it.unit = it.unit || ":1"; delete it.calcPending; }
+    if(it.type === "xy" && it.tol !== "" && it.tol != null && it.xTolP === undefined){ it.xTolP = it.xTolM = it.yTolP = it.yTolM = it.tol; }
+  });
+  return sp;
+}
+/* value of a calculated FAI item from what was entered, or "" while inputs are missing */
+function faiCalc_(it, val){
+  val = val || {};
+  var num = function(x){ var t = String(x == null ? "" : x).trim(); if(t === "") return null; var n = Number(t); return isFinite(n) ? n : NaN; };
+  if(it.type === "bright9"){
+    var p = Array.isArray(val.p) ? val.p : [], sum = 0;
+    for(var i = 0; i < 9; i++){ var n = num(p[i]); if(n === null) return ""; if(isNaN(n) || n < 0) return NaN; sum += n; }
+    var area = Number(it.area) > 0 ? Number(it.area) : 1;
+    return Math.round(sum / 9 / area * 100) / 100;
+  }
+  if(it.type === "contrast"){
+    var w = num(val.w), b = num(val.b);
+    if(w === null || b === null) return "";
+    if(isNaN(w) || isNaN(b) || b <= 0 || w < 0) return NaN;
+    return Math.round(w / b * 100) / 100;
+  }
+  return "";
 }
 function cleanStr_(v, n){ return String(v == null ? "" : v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").substring(0, n || 200); }
 function cleanNum_(v){ if(v === "" || v == null) return ""; var x = Number(v); return isFinite(x) ? x : ""; }
@@ -1190,7 +1218,9 @@ function cleanFaiSpec_(sp){
     if(!o.name) throw new Error("Item " + (i + 1) + " needs a name");
     if(type === "text") o.expected = cleanStr_(it.expected, 120);
     if(type === "number"){ o.unit = cleanStr_(it.unit, 12); ["min","max","nom","tol"].forEach(function(k){ o[k] = cleanNum_(it[k]); }); o.calcPending = !!it.calcPending; }
-    if(type === "xy"){ ["x","y","tol"].forEach(function(k){ o[k] = cleanNum_(it[k]); }); }
+    if(type === "xy"){ ["x","y","xTolP","xTolM","yTolP","yTolM"].forEach(function(k){ o[k] = cleanNum_(it[k]); }); }
+    if(type === "bright9"){ o.unit = cleanStr_(it.unit || "lm", 12); o.area = cleanNum_(it.area); if(!(o.area > 0)) throw new Error(o.name + ": enter the screen area in square metres"); o.gt = cleanNum_(it.gt); }
+    if(type === "contrast"){ o.unit = cleanStr_(it.unit || ":1", 12); o.gt = cleanNum_(it.gt); }
     return o;
   })};
   return out;
@@ -1252,8 +1282,19 @@ function faiJudge_(it, val){
     var xs = val && val.x != null ? String(val.x).trim() : "", ys = val && val.y != null ? String(val.y).trim() : "";
     if(xs === "" || ys === "") return "";
     var X = Number(xs), Y = Number(ys); if(!isFinite(X) || !isFinite(Y)) return "Fail";
-    if(it.x !== "" && it.y !== "" && it.tol !== "" && it.x != null && it.y != null && it.tol != null)
-      return Math.abs(X - Number(it.x)) <= Number(it.tol) + 1e-9 && Math.abs(Y - Number(it.y)) <= Number(it.tol) + 1e-9 ? "Pass" : "Fail";
+    var has = function(k){ return it[k] !== "" && it[k] != null; };
+    // x and y each within their own minus and plus tolerance (older specs: one tolerance for both)
+    var xp = has("xTolP") ? Number(it.xTolP) : Number(it.tol), xm = has("xTolM") ? Number(it.xTolM) : Number(it.tol);
+    var yp = has("yTolP") ? Number(it.yTolP) : Number(it.tol), ym = has("yTolM") ? Number(it.yTolM) : Number(it.tol);
+    if(has("x") && has("y") && isFinite(xp) && isFinite(xm) && isFinite(yp) && isFinite(ym) && (has("xTolP") || has("tol")))
+      return X >= Number(it.x) - xm - 1e-9 && X <= Number(it.x) + xp + 1e-9 && Y >= Number(it.y) - ym - 1e-9 && Y <= Number(it.y) + yp + 1e-9 ? "Pass" : "Fail";
+    return val && (val.j === "Pass" || val.j === "Fail") ? val.j : "";
+  }
+  if(it.type === "bright9" || it.type === "contrast"){
+    var c = faiCalc_(it, val);
+    if(c === "") return "";
+    if(isNaN(c)) return "Fail";
+    if(it.gt !== "" && it.gt != null) return c > Number(it.gt) ? "Pass" : "Fail";   // specification is "greater than"
     return val && (val.j === "Pass" || val.j === "Fail") ? val.j : "";
   }
   return "";
@@ -1292,12 +1333,17 @@ function saveFai(d){
       var res = (samples[j] && samples[j].results) || {}, cs = {serial:samples[j].serial, results:{}}, bad = false;
       spec.items.forEach(function(it){
         var val = res[it.id], jd = faiJudge_(it, val);
-        var keep = it.type === "check" ? jd : it.type === "xy" ? {x:cleanStr_(val && val.x, 20), y:cleanStr_(val && val.y, 20), j:jd} : {v:cleanStr_(val && val.v, 60), j:jd};
+        var keep = it.type === "check" ? jd : it.type === "xy" ? {x:cleanStr_(val && val.x, 20), y:cleanStr_(val && val.y, 20), j:jd}
+          : it.type === "bright9" ? {p:[0,1,2,3,4,5,6,7,8].map(function(q){ return cleanStr_(val && Array.isArray(val.p) ? val.p[q] : "", 20); }), v:String(faiCalc_(it, val)), j:jd}
+          : it.type === "contrast" ? {w:cleanStr_(val && val.w, 20), b:cleanStr_(val && val.b, 20), v:String(faiCalc_(it, val)), j:jd}
+          : {v:cleanStr_(val && val.v, 60), j:jd};
         cs.results[it.id] = keep;
         if(jd === "") missing.push(it.name + " (sample " + (j+1) + ")");
         if(jd === "Fail") bad = true;
-        var shown = it.type === "check" ? "" : it.type === "xy" ? ("x " + keep.x + ", y " + keep.y) : keep.v;
-        detail.push(["", safe_(batch, 80), safe_(lot, 100), j + 1, "'" + samples[j].serial, safe_(it.section, 60), safe_(it.name, 120), safe_(shown, 80), jd]);
+        var shown = it.type === "check" ? "" : it.type === "xy" ? ("x " + keep.x + ", y " + keep.y)
+          : it.type === "bright9" ? (keep.v + " " + (it.unit || "") + " (9 points " + keep.p.join("/") + " lux, area " + it.area + " m²)")
+          : it.type === "contrast" ? (keep.v + ":1 (white " + keep.w + ", black " + keep.b + ")") : keep.v;
+        detail.push(["", safe_(batch, 80), safe_(lot, 100), j + 1, "'" + samples[j].serial, safe_(it.section, 60), safe_(it.name, 120), safe_(shown, 200), jd]);
       });
       if(bad) defective++;
       clean.samples.push(cs);
