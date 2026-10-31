@@ -1218,6 +1218,16 @@ body{font-feature-settings:"cv11","ss01";letter-spacing:-.003em}
 .fcalc{font-size:12.5px;margin-bottom:3px}.fcalc b{font-variant-numeric:tabular-nums}
 .fai-table .fc:has(.f9){min-width:176px}
 .fs-table td:nth-child(6){min-width:290px}
+
+.uh-btn{margin-top:4px;border:1px dashed var(--color-warn-border);background:transparent;color:var(--color-warn);font:inherit;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;cursor:pointer}
+.uh-btn:hover{background:var(--color-warn-bg)}
+.uh-note{margin-top:4px;font-size:12px;color:var(--color-warn);line-height:1.4}
+.uh-undo{border:0;background:none;color:var(--ink-2);text-decoration:underline;cursor:pointer;font:inherit;font-size:12px;padding:0 2px}
+.uh-box{margin-bottom:16px;padding:12px 14px;border:1px solid var(--color-warn-border);border-radius:10px;background:color-mix(in srgb,var(--color-warn-bg) 60%,transparent)}
+.res-table tr.row-hold td{background:transparent}
+.uh-form{display:grid;gap:10px;padding:6px 0}
+.uh-cks{display:flex;gap:10px;flex-wrap:wrap}
+.uh-ck{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink-2)}
 </style>
 </head>
 <body>
@@ -2573,6 +2583,7 @@ function buildExecDashboard(){
   const pend=[];
   qd.capa.filter(c=>c.Status==='Awaiting Approval').forEach(c=>pend.push({ic:'shield',t:`${c.CapaID} awaiting approval`,s:c.Title,go:{kind:'capa',id:c.CapaID}}));
   holds.forEach(l=>pend.push({ic:'alert',t:`${l.lotNumber} on hold`,s:'Rework to record, then reoffer',go:{kind:'lot',id:l.batchName+'||'+l.lotNumber}}));
+  batches.filter(l=>(l.unitHolds||[]).length).forEach(l=>pend.push({ic:'clock',t:`${l.unitHolds.length} unit${l.unitHolds.length===1?'':'s'} on hold in ${l.lotNumber}`,s:`${l.unitHolds.join(', ')}: inspect to release`,go:{kind:'lot',id:l.batchName+'||'+l.lotNumber}}));
   groupBatches().filter(g=>g.bomStatus==='Pending'||g.bomStatus==='Failed').forEach(g=>pend.push({ic:'layers',t:`${g.name}: BOM verification ${g.bomStatus==='Failed'?'failed':'not done'}`,s:(g.lots.find(l=>l.bomDraft)||{}).bomDraft?'Draft in progress':'Sampling locked until it passes',go:{kind:'batch',id:g.name}}));
   groupBatches().filter(g=>!g.lots.some(l=>l.faiStatus)&&g.completed>0).forEach(g=>pend.push({ic:'spec',t:`${g.name}: FAI not done`,s:`${g.completed} lots already inspected`,go:{kind:'batch',id:g.name}}));
   const ins=anInsights();
@@ -3748,6 +3759,7 @@ function lotBadge(lot){
     x==='hold'?'<span class="badge badge-hold">On hold, rework needed</span>':x==='reoffer'?`<span class="badge badge-open">Reoffered, round ${lot.round||2}</span>`:
     x==='open'?'<span class="badge badge-open">Open</span>':'<span class="badge badge-closed">Closed</span>';
 }
+function holdsBadge(lot){ const n=(lot.unitHolds||[]).length; return n?` <span class="badge badge-hold">${n} unit${n===1?'':'s'} on hold</span>`:''; }
 function buildLotDetail(lot,isAdmin){
   const ri=batches.indexOf(lot), key=lot.batchName+'||'+lot.lotNumber;
   const canInspect=!isAdmin&&can('sampling')&&inspectable(lot);
@@ -3755,7 +3767,7 @@ function buildLotDetail(lot,isAdmin){
   const round=lot.round||1;
   let h=`<section class="lot-detail" aria-label="${esc(lot.lotNumber)} details">
     <div class="ld-head">
-      <div><div class="ld-title">${esc(lot.lotNumber)}</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${lotBadge(lot)}${draft?`<span class="badge badge-open">Draft, ${draft.samples.filter(s=>s.serial).length} of ${draft.samples.length} samples</span>`:''}</div></div>
+      <div><div class="ld-title">${esc(lot.lotNumber)}</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${lotBadge(lot)}${holdsBadge(lot)}${draft?`<span class="badge badge-open">Draft, ${draft.samples.filter(s=>s.serial).length} of ${draft.samples.length} samples</span>`:''}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${canInspect&&samplingLocked(lot.batchName)?`<span class="text-muted">Sampling starts after BOM verification passes</span>`:''}
         ${canInspect&&!samplingLocked(lot.batchName)?`<button class="btn btn-primary btn-sm startBtn" data-ri="${ri}">${draft?'Resume inspection':lot.status==='Reoffered'?`Inspect reoffer (round ${round})`:'Start inspection'}</button>`:''}
@@ -3799,6 +3811,17 @@ function buildLotDetail(lot,isAdmin){
     else if(c.error) h+=`<div class="err">${esc(c.error)}</div>`;
     else {
       const rounds=[...new Set((c.units||[]).map(u=>u.round||1).concat((c.rework||[]).map(r=>r.round||1)))].sort((x,y)=>x-y);
+      if((c.holds||[]).length){
+        h+=`<div class="uh-box"><div style="font-weight:700;margin-bottom:8px">Units held out of the reoffer</div><div style="overflow-x:auto"><table class="res-table"><thead><tr><th>Serial</th><th>Why held</th><th>Alternate inspected</th><th>Status</th><th>Inspection</th><th></th></tr></thead><tbody>
+          ${c.holds.map(x=>`<tr class="${x.status==='On hold'?'row-hold':''}"><td class="mono">${esc(x.serial)}</td><td>${esc(x.reason)}<div class="text-muted" style="font-size:12px">${esc(x.by)}, ${esc(fmtDate(x.time))}, round ${esc(x.round)}</div></td><td class="mono">${esc(x.alternate||'—')}</td>
+            <td>${x.status==='On hold'?'<span class="badge badge-hold">On hold</span>':'<span class="badge badge-pass">Released</span>'}</td>
+            <td>${x.result?`<b class="${x.result==='Pass'?'text-pass':'text-fail'}">${esc(x.result)}</b> <span class="text-muted">${esc(x.checkpoints)}${x.remark?', '+esc(x.remark):''}<br>${esc(x.inspectedBy)}, ${esc(fmtDate(x.inspectedAt))}</span>`:'<span class="text-muted">Not inspected yet</span>'}</td>
+            <td>${x.status==='On hold'&&can('sampling')?`<button class="btn btn-primary btn-sm uhInspect" data-id="${esc(x.id)}">${x.result==='Fail'?'Inspect again':'Inspect unit'}</button>`:''}</td></tr>
+            ${uhForm&&uhForm.id===x.id?`<tr><td colspan="6"><div class="uh-form"><div class="uh-cks">${[['aes','Aesthetic'],['general','General'],['func','Functional'],['screen','Screen'],['bd','Black dot']].map(([k,l])=>`<div class="uh-ck"><span>${l}</span><div class="seg seg-sm"><button class="seg-btn uhCk ${uhForm.r[k]==='Pass'?'on':''}" data-k="${k}" data-v="Pass">Pass</button><button class="seg-btn uhCk ${uhForm.r[k]==='Fail'?'on':''}" data-k="${k}" data-v="Fail">Fail</button></div></div>`).join('')}</div>
+              <input id="uhRemark" class="field" maxlength="300" placeholder="Remark (required if any checkpoint fails)" value="${esc(uhForm.remark)}">
+              <div class="row-btns"><span class="text-muted" style="font-size:12.5px">All pass releases the unit${lot.status==='Closed'&&lot.result==='PASS'?' and adds it to the FG released quantity':''}. Any fail keeps it on hold for rework.</span><div class="main-btns"><button class="btn btn-ghost btn-sm" id="uhCancel">Cancel</button><button class="btn btn-primary btn-sm" id="uhSave" ${uhForm.busy?'disabled':''}>${uhForm.busy?'Saving…':'Save result'}</button></div></div></div></td></tr>`:''}`).join('')}
+        </tbody></table></div></div>`;
+      }
       if(c.history&&c.history.length){
         h+=`<div style="font-weight:700;margin-bottom:8px">Lot status history</div><ol class="timeline">${c.history.map(e=>`<li class="tl-${esc(e.event.toLowerCase())}"><b>${esc(e.event)}</b> <span class="text-muted">round ${esc(e.round)}, ${esc(fmtDate(e.time))}, ${esc(e.by)}</span><div>${esc(e.details)}</div></li>`).join('')}</ol>`;
       }
@@ -3828,11 +3851,29 @@ function buildLotDetail(lot,isAdmin){
   }
   return h+`</section>`;
 }
+let uhForm=null;
+document.addEventListener('click',async e=>{
+  const ins=e.target.closest('.uhInspect');
+  if(ins){ uhForm={id:ins.dataset.id,r:{aes:'Pass',general:'Pass',func:'Pass',screen:'Pass',bd:'Pass'},remark:''}; render(); return; }
+  const ck=e.target.closest('.uhCk');
+  if(ck&&uhForm){ const rem=document.getElementById('uhRemark'); if(rem) uhForm.remark=rem.value; uhForm.r[ck.dataset.k]=ck.dataset.v; render(); return; }
+  if(e.target.closest('#uhCancel')){ uhForm=null; render(); return; }
+  if(e.target.closest('#uhSave')&&uhForm&&!uhForm.busy){
+    uhForm.remark=(document.getElementById('uhRemark')||{}).value||'';
+    const fails=Object.values(uhForm.r).filter(v=>v==='Fail').length;
+    if(fails&&!uhForm.remark.trim()){ toast('Describe the defect in the remark','err'); return; }
+    uhForm.busy=true; render();
+    const r=await api('inspectHeldUnit',{holdId:uhForm.id,results:uhForm.r,remark:uhForm.remark});
+    if(r.ok){ uhForm=null; toast(r.result==='Pass'?`Unit released${r.fg!=null?', FG released now '+r.fg:''}`:'Unit failed: it stays on hold for rework', r.result==='Pass'?'ok':'err');
+      await loadBatches(); const l=batches.find(x=>selLot===x.batchName+'||'+x.lotNumber); if(l) await loadLotUnits(l); render(); }
+    else { uhForm.busy=false; render(); toast(r.error||'Could not save','err'); }
+  }
+});
 async function loadLotUnits(lot){
   const k=lot.batchName+'||'+lot.lotNumber;
   lotUnits[k]={loading:true};
   const r=await api('getLotUnits',{batchName:lot.batchName,lotNumber:lot.lotNumber});
-  lotUnits[k]=r.ok?{units:r.units||[],history:r.history||[],rework:r.rework||[]}:{error:(r.error||'').toLowerCase().includes('unknown')?'Sample results need the latest backend version.':(r.error||'Could not load sample results')};
+  lotUnits[k]=r.ok?{units:r.units||[],history:r.history||[],rework:r.rework||[],holds:r.holds||[]}:{error:(r.error||'').toLowerCase().includes('unknown')?'Sample results need the latest backend version.':(r.error||'Could not load sample results')};
   if(!activeLot && !activeRework && selLot===k) render();
 }
 
@@ -4459,7 +4500,7 @@ function buildInspection(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="btnBfGo" class="btn btn-primary btn-sm">Fill empty rows</button>
     <label class="btn btn-ghost btn-sm" for="bfFile">Upload Excel or CSV</label><input id="bfFile" type="file" accept=".xlsx,.csv,.txt" class="sr-only">
     <span class="text-muted" style="font-size:12.5px">Serials go into the empty rows in order and are checked like typed ones. The first column of the file is used (or a column headed Serial).</span></div></div></details>`;
-  if(round>1&&!defective) html+=`<div class="reoffer-banner">Reoffer inspection, round ${round}. Serial numbers marked with a lock were picked for you (defective units from the last round first, then random reworked units) and cannot be changed.${samples.some(s=>!s.locked)?' Scan fresh units from the lot into the empty rows.':''}</div>`;
+  if(round>1&&!defective) html+=`<div class="reoffer-banner">Reoffer inspection, round ${round}. Serial numbers marked with a lock were picked for you (defective units from the last round first, then random reworked units) and cannot be changed. If a picked unit is not available, press Not available: it is held until inspected on its own, and you inspect another unit in its place.${samples.some(s=>!s.locked)?' Scan fresh units from the lot into the empty rows.':''}</div>`;
   html+=`<div class="samp-table">
   <div class="samp-head" style="padding:10px 16px;display:flex;align-items:center;gap:12px;background:var(--sunk);border-bottom:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink-2)">
     <div style="width:30px;flex-shrink:0"></div>
@@ -4489,6 +4530,8 @@ function buildInspection(){
         <div class="serial-box"><input class="samp-serial-inp sSerial ${s.serialError?'err-field':''} ${s.locked?'locked':''}" data-i="${i}" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="${esc(s.serial)}" ${s.locked?'readonly title="Picked for the reoffer"':''} placeholder="Serial number" aria-label="Serial number of sample ${i+1}">
           ${s.locked?'<span class="serial-lock" aria-hidden="true">🔒</span>':`<span class="serial-count" data-c="${i}" aria-hidden="true">${s.serial?s.serial.length+'/15':''}</span>`}</div>
         ${s.serialError?`<div class="err" style="margin-top:3px">${esc(s.serialError)}</div>`:''}
+        ${s.locked?`<button class="uh-btn uhHold" data-i="${i}" title="The unit picked for the reoffer is not available: put it on hold and inspect another unit in its place">Not available</button>`:''}
+        ${s.heldSerial?`<div class="uh-note">Alternate for <b class="mono">${esc(s.heldSerial)}</b>, held: ${esc(s.heldReason)} <button class="uh-undo uhUndo" data-i="${i}">Undo</button></div>`:''}
       </div>
 
       <div class="samp-toggles">
@@ -5071,6 +5114,19 @@ function bindEvents(){
   };
 
   // Sample serial input
+  document.querySelectorAll('.uhHold').forEach(b=>{ b.onclick=()=>{
+    const i=+b.dataset.i, sm=samples[i];
+    const why=(prompt(`Unit ${sm.serial} is not available for this reoffer.\n\nIt will be put on hold until it is inspected on its own, and you inspect another unit from the lot in this row.\n\nReason (required):`)||'').trim();
+    if(!why) return;
+    Object.assign(sm,freshSamples(1)[0],{num:sm.num,heldSerial:sm.serial,heldReason:why.slice(0,300),serial:'',locked:false});
+    saveDraft(); render(); setTimeout(()=>document.querySelector(`.sSerial[data-i="${i}"]`)?.focus(),30);
+  }; });
+  document.querySelectorAll('.uhUndo').forEach(b=>{ b.onclick=()=>{
+    const i=+b.dataset.i, sm=samples[i];
+    if(sm.serial&&!confirm(`Put ${sm.heldSerial} back in this row? The alternate ${sm.serial} and its checks are cleared.`)) return;
+    Object.assign(sm,freshSamples(1)[0],{num:sm.num,serial:sm.heldSerial,locked:true,heldSerial:'',heldReason:''});
+    saveDraft(); render();
+  }; });
   document.querySelectorAll('.sSerial').forEach(el=>{
     const i0=parseInt(el.getAttribute('data-i')), pre=serialPrefix(activeLot);
     el.onfocus=()=>{ if(!samples[i0].locked&&!el.value&&pre){ el.value=pre; el.dataset.pre='1'; } requestAnimationFrame(()=>{ try{ el.setSelectionRange(el.value.length,el.value.length); }catch(e){} }); };
@@ -5368,7 +5424,7 @@ function bindEvents(){
     const {passed,defective}=tallyLot();
     const lotResult=defective?'HOLD':'PASS';
     if(lotResult==='HOLD'&&!confirm(`Put ${activeLot.lotNumber} on hold?\n\n${defective} defective sample${defective===1?'':'s'} found. The inspected samples are saved and the lot waits for rework.`)) return;
-    const fgPassQty=passed?Number(activeLot.lotSize):0;
+    const fgPassQty=passed?Math.max(0,Number(activeLot.lotSize)-samples.filter(s=>s.heldSerial).length):0;
     const lotRemarks=lotRemarksVal;
     const toSend=lotResult==='HOLD'?samples.filter(s=>sampleResult(s)!=='PENDING'):samples;
     const units=toSend.map(s=>{
@@ -5404,6 +5460,7 @@ function bindEvents(){
       totalLots:activeLot.totalLots,
       model:activeLot.model,
       prodMonthCode:activeLot.prodMonthCode,
+      heldUnits:samples.filter(s=>s.heldSerial).map(s=>({serial:s.heldSerial,reason:s.heldReason,alternate:s.serial})),
       units
     });
 

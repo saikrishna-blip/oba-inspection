@@ -32,7 +32,7 @@ var ALWAYS_ACTIONS = ["qListAll","qLogFor","qAnalytics","bootstrap","modelInsigh
 // recordRework (rework data + reoffer) belongs to the sampling module
 // Actions unlocked by a module; everything not listed here or above is admin only
 var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify", getBomDraft:"bomverify", saveBomDraft:"bomverify",
-                      checkSerial:"sampling", submitLot:"sampling", recordRework:"sampling", setOfferedQty:"sampling",
+                      checkSerial:"sampling", submitLot:"sampling", inspectHeldUnit:"sampling", recordRework:"sampling", setOfferedQty:"sampling",
                       saveFai:"fai", saveFaiSpec:"models",
                       createBatch:"createbatch",
                       saveModel:"models", deleteModel:"models",
@@ -122,7 +122,7 @@ function doPost(e){
         return json_({ok:false, error: ACTION_MODULE[action] ? "You do not have access to this. Ask an admin to give you the " + moduleName_(ACTION_MODULE[action]) + " module." : "Only an admin can do this."});
       data._session = sess;
       // record who did it from the session, not from what the browser sent
-      if(action === "submitLot" || action === "recordRework" || action === "holdLot" || action === "setOfferedQty" || action === "saveFai" || action === "saveFaiSpec") data.inspector = sess.name;
+      if(action === "submitLot" || action === "inspectHeldUnit" || action === "recordRework" || action === "holdLot" || action === "setOfferedQty" || action === "saveFai" || action === "saveFaiSpec") data.inspector = sess.name;
       if(action === "submitBomVerification" || action === "saveBomDraft") data.by = sess.name;
       if(/^q(Save|Create|Move|Bulk|Approve)/.test(action)) data.by = sess.name;
       if(["createBatch","saveModel","removeDuplicates","approveSerial","setBatchStage","resetPassword","deleteUser","setUserAccess"].indexOf(action) > -1){
@@ -241,6 +241,7 @@ function doPost(e){
     if(action === "getBomVerification"){
       result = getBomVerification(data);
     }
+    if(action === "inspectHeldUnit") result = inspectHeldUnit(data);
     if(action === "qListAll") result = qListAll(data);
     if(action === "qAnalytics") result = qAnalytics();
     if(action === "qLogFor") result = qLogFor(data);
@@ -655,6 +656,7 @@ function getBatches(){
   var rows  = sheet.getDataRange().getValues();
   var out   = [];
   var drafts = bomDraftSummaries_();
+  var openHolds = {}; unitHoldRows_().forEach(function(x){ if(x.status === "On hold"){ var k = x.batch + "||" + x.lot; (openHolds[k] = openHolds[k] || []).push(x.serial); } });
   for(var i = 1; i < rows.length; i++){
     var r = rows[i];
     var rawPM = String(r[12]||"").replace(/^'/,'');
@@ -682,7 +684,8 @@ function getBatches(){
       faiStatus     : String(r[COL_FAI_STATUS-1]||""),
       round         : Number(r[COL_ROUND-1]) || 1,
       reofferSerials: String(r[COL_REOFFER-1]||"").split(",").map(function(x){ return x.trim(); }).filter(String),
-      bomDraft      : drafts[String(r[0]||"")] || null
+      bomDraft      : drafts[String(r[0]||"")] || null,
+      unitHolds     : openHolds[String(r[0]||"") + "||" + String(r[1]||"")] || []
     });
   }
   return {ok:true, batches:out};
@@ -884,18 +887,28 @@ function submitLotLocked_(d){
     if(uq.bdIn.noDot) uq.bd = "No BD"; else if(!uq.bdIn.visible) uq.bd = "Not visible @2m"; else uq.bd = j.bdText;
   }
   var defective = units.filter(function(u){ return pf(u && u.sampleResult) === "Fail"; }).length;
+  // Reoffer: a picked unit that is not available is put on hold (with a reason) and an alternate unit is inspected in its place
+  var needAll = String(bRows[lotRow][COL_REOFFER-1]||"").split(",").map(function(x){ return normSerial_(x); }).filter(String);
+  var held = Array.isArray(d.heldUnits) ? d.heldUnits.slice(0, 13) : [], heldSet = {};
+  for(var hu = 0; hu < held.length; hu++){
+    var hs = normSerial_(held[hu] && held[hu].serial), why = cleanStr_(held[hu] && held[hu].reason, 300).trim();
+    if(needAll.indexOf(hs) < 0) return {ok:false, error:"Only units picked for this reoffer can be put on hold (" + hs + ")."};
+    if(!why) return {ok:false, error:"Give the reason why unit " + hs + " is not available."};
+    if(units.some(function(u){ return normSerial_(u && u.serial) === hs; })) return {ok:false, error:"Unit " + hs + " is inspected in this round, so it cannot also be on hold."};
+    heldSet[hs] = {reason:why, alternate:normSerial_(held[hu].alternate)};
+  }
   if(lotResult === "PASS"){
     if(units.length !== sampleSize) return {ok:false, error:"Expected " + sampleSize + " samples, got " + units.length};
     if(defective) return {ok:false, error:"A defective sample puts the lot on hold; it cannot pass."};
     var need = String(bRows[lotRow][COL_REOFFER-1]||"").split(",").map(function(x){ return normSerial_(x); }).filter(String);
     var got = {}; units.forEach(function(u){ got[normSerial_(u.serial)] = true; });
-    var missing = need.filter(function(x){ return !got[x]; });
-    if(missing.length) return {ok:false, error:"The reoffer must include these reworked units: " + missing.join(", ")};
+    var missing = need.filter(function(x){ return !got[x] && !heldSet[x]; });
+    if(missing.length) return {ok:false, error:"The reoffer must include these reworked units, or put them on hold with a reason: " + missing.join(", ")};
   } else {
     if(!defective) return {ok:false, error:"Hold needs at least one defective sample."};
     if(units.length < 1 || units.length > sampleSize) return {ok:false, error:"Between 1 and " + sampleSize + " samples expected"};
   }
-  var fgPassQty = lotResult === "PASS" ? lotSize : 0;
+  var fgPassQty = lotResult === "PASS" ? Math.max(0, lotSize - Object.keys(heldSet).length) : 0;
 
   var master = getOrCreateSheet("Master",[]);
   if(master.getRange(1, 19).getValue() === "") master.getRange(1, 19).setValue("BDSpec");
@@ -934,12 +947,21 @@ function submitLotLocked_(d){
   });
   master.getRange(master.getLastRow() + 1, 1, out.length, out[0].length).setValues(out);
 
+  var heldList = Object.keys(heldSet);
+  if(heldList.length){
+    var uh = unitHoldSheet_(), base = uh.getLastRow();
+    heldList.forEach(function(sn, k){
+      uh.appendRow(["UH-" + Utilities.formatDate(new Date(), TZ, "yyMMddHHmmss") + "-" + (k + 1), new Date(), thisBatch, thisLot, round, "'" + sn,
+                    safe_(heldSet[sn].reason, 300), "On hold", safe_(d.inspector, 80), "'" + heldSet[sn].alternate, "", "", "", "", ""]);
+      logLot_(thisBatch, thisLot, round, "Unit on hold", sn + " not available for the reoffer (" + heldSet[sn].reason + "); alternate " + (heldSet[sn].alternate || "-") + " inspected", d.inspector);
+    });
+  }
   if(lotResult === "PASS"){
     bsh.getRange(lotRow+1, 6).setValue("Closed");
     bsh.getRange(lotRow+1, 9).setValue("PASS");
     bsh.getRange(lotRow+1, 14).setValue(fgPassQty);
     bsh.getRange(lotRow+1, COL_REOFFER).setValue("");
-    logLot_(thisBatch, thisLot, round, "Passed", units.length + " samples, none defective" + (round > 1 ? " (reoffer)" : ""), d.inspector);
+    logLot_(thisBatch, thisLot, round, "Passed", units.length + " samples, none defective" + (round > 1 ? " (reoffer)" : "") + (heldList.length ? "; " + heldList.length + " unit(s) on hold, FG released " + fgPassQty : ""), d.inspector);
   } else {
     bsh.getRange(lotRow+1, 6).setValue("Hold");
     bsh.getRange(lotRow+1, 9).setValue("HOLD");
@@ -1587,6 +1609,43 @@ function deleteModel(d){
 /****************************************************
  * LOT RESULTS — sample rows from Master for one lot
  ****************************************************/
+/* Units held out of a reoffer until they are inspected on their own */
+var UH_COLS = ["HoldID","Time","Batch","Lot","Round","Serial","Reason","Status","HeldBy","Alternate","InspectedAt","InspectedBy","Result","Checkpoints","Remark"];
+function unitHoldSheet_(){ return getOrCreateSheet("UnitHolds", UH_COLS); }
+function unitHoldRows_(){
+  var sh = getSpreadsheet().getSheetByName("UnitHolds"); if(!sh || sh.getLastRow() < 2) return [];
+  var t = function(x){ return x instanceof Date ? x.toISOString() : String(x || ""); };
+  return sh.getRange(2, 1, sh.getLastRow() - 1, UH_COLS.length).getValues().map(function(r, i){
+    return {row:i + 2, id:String(r[0]), time:t(r[1]), batch:String(r[2]), lot:String(r[3]), round:Number(r[4]) || 1, serial:normSerial_(r[5]), reason:String(r[6]),
+            status:String(r[7]), by:String(r[8]), alternate:normSerial_(r[9]), inspectedAt:t(r[10]), inspectedBy:String(r[11]), result:String(r[12]), checkpoints:String(r[13]), remark:String(r[14])};
+  }).filter(function(x){ return x.id; });
+}
+/* Inspect a held unit: all checkpoints pass = released (and added to the FG released quantity of a passed lot); any fail = stays on hold */
+function inspectHeldUnit(d){
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    var list = unitHoldRows_(), h = list.filter(function(x){ return x.id === String(d.holdId || ""); })[0];
+    if(!h) return {ok:false, error:"Held unit not found. Refresh and try again."};
+    if(h.status !== "On hold") return {ok:false, error:"Unit " + h.serial + " is already " + h.status.toLowerCase() + "."};
+    var r = d.results || {}, names = {aes:"Aesthetic", general:"General", func:"Functional", screen:"Screen", bd:"Black dot"}, fails = [];
+    for(var k in names){ if(r[k] !== "Pass" && r[k] !== "Fail") return {ok:false, error:"Mark every checkpoint Pass or Fail."}; if(r[k] === "Fail") fails.push(names[k]); }
+    var remark = cleanStr_(d.remark, 300).trim();
+    if(fails.length && !remark) return {ok:false, error:"Describe the defect in the remark."};
+    var pass = !fails.length, sh = unitHoldSheet_(), now = new Date();
+    sh.getRange(h.row, 8).setValue(pass ? "Released" : "On hold");
+    sh.getRange(h.row, 11, 1, 5).setValues([[now, safe_(d.inspector, 80), pass ? "Pass" : "Fail", fails.length ? "Failed: " + fails.join(", ") : "All passed", safe_(remark, 300)]]);
+    var fg = null;
+    if(pass){
+      var bsh = getOrCreateSheet("Batches",[]), bv = bsh.getDataRange().getValues(), li = lotRowOf_(bv, h.batch, h.lot);
+      if(li > 0 && String(bv[li][5]) === "Closed" && String(bv[li][8]) === "PASS"){
+        fg = Math.min(Number(bv[li][2]) || FIXED_LOT, (Number(bv[li][13]) || 0) + 1);
+        bsh.getRange(li + 1, 14).setValue(fg);
+      }
+    }
+    logLot_(h.batch, h.lot, h.round, pass ? "Unit released" : "Unit failed", h.serial + (pass ? " passed its inspection" + (fg != null ? "; FG released now " + fg : "") : " failed (" + fails.join(", ") + "): " + remark + "; stays on hold"), d.inspector);
+    return {ok:true, status:pass ? "Released" : "On hold", result:pass ? "Pass" : "Fail", fg:fg};
+  } finally { lock.releaseLock(); }
+}
 function getLotUnits(d){
   var bn = String(d.batchName||""), ln = String(d.lotNumber||"");
   if(!bn || !ln) return {ok:false, error:"Batch and lot are required"};
@@ -1625,7 +1684,8 @@ function getLotUnits(d){
                remarks:String(rv[k][12]||""), by:String(rv[k][13]||"")});
     }
   }
-  return {ok:true, units:out, history:hist, rework:rw};
+  var holds = unitHoldRows_().filter(function(x){ return x.batch === bn && x.lot === ln; }).map(function(x){ delete x.row; return x; });
+  return {ok:true, units:out, history:hist, rework:rw, holds:holds};
 }
 
 /****************************************************
