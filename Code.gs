@@ -1152,7 +1152,7 @@ function defaultFaiSpec_(){
     faiItem_("otherAcc","Functional test","Other accessories"),
     faiItem_("pure","Picture inspection","Pure colour pattern (R/G/B/Y/W/B)"),
     faiItem_("zoom","Picture inspection","Picture zoom (max, min)"),
-    faiItem_("bright","Optical testing","Brightness","9-point white pattern: lux at top left, top centre, top right, middle left, middle centre, middle right, bottom left, bottom centre, bottom right. Brightness = average of the 9 points ÷ screen area.","bright9",{unit:"lm", area:0.992, gt:""}),
+    faiItem_("bright","Optical testing","Brightness","9-point white pattern: lux at top left, top centre, top right, middle left, middle centre, middle right, bottom left, bottom centre, bottom right. Brightness (ANSI lumens) = average of the 9 points × screen area.","bright9",{unit:"lm", area:0.992, gt:""}),
     faiItem_("contrast","Optical testing","Contrast ratio","Centre brightness on the white pattern ÷ centre brightness on the black pattern.","contrast",{unit:":1", gt:""}),
     faiItem_("color","Optical testing","Colour coordinates","x and y on the white pattern.","xy",{x:"", y:"", xTolP:"", xTolM:"", yTolP:"", yTolM:""}),
     faiItem_("dimL","Finished product dimensions","L (length)","","number",{unit:"mm", nom:"", tol:"", min:"", max:""}),
@@ -1193,7 +1193,7 @@ function faiCalc_(it, val){
     var p = Array.isArray(val.p) ? val.p : [], sum = 0;
     for(var i = 0; i < 9; i++){ var n = num(p[i]); if(n === null) return ""; if(isNaN(n) || n < 0) return NaN; sum += n; }
     var area = Number(it.area) > 0 ? Number(it.area) : 1;
-    return Math.round(sum / 9 / area * 100) / 100;
+    return Math.round(sum / 9 * area * 100) / 100;   // ANSI lumens = average illuminance (lux) × screen area (m²)
   }
   if(it.type === "contrast"){
     var w = num(val.w), b = num(val.b);
@@ -1341,7 +1341,7 @@ function saveFai(d){
         if(jd === "") missing.push(it.name + " (sample " + (j+1) + ")");
         if(jd === "Fail") bad = true;
         var shown = it.type === "check" ? "" : it.type === "xy" ? ("x " + keep.x + ", y " + keep.y)
-          : it.type === "bright9" ? (keep.v + " " + (it.unit || "") + " (9 points " + keep.p.join("/") + " lux, area " + it.area + " m²)")
+          : it.type === "bright9" ? (keep.v + " " + (it.unit || "") + " (9 points " + keep.p.join("/") + " lux × " + it.area + " m²)")
           : it.type === "contrast" ? (keep.v + ":1 (white " + keep.w + ", black " + keep.b + ")") : keep.v;
         detail.push(["", safe_(batch, 80), safe_(lot, 100), j + 1, "'" + samples[j].serial, safe_(it.section, 60), safe_(it.name, 120), safe_(shown, 200), jd]);
       });

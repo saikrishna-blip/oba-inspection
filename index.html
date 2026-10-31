@@ -4113,10 +4113,10 @@ function faiJudge(it,val){
   return '';
 }
 const FAI_PTS=['Top left','Top centre','Top right','Middle left','Middle centre','Middle right','Bottom left','Bottom centre','Bottom right'];
-/* same calculation as the server (faiCalc_): brightness = average of 9 lux points ÷ screen area; contrast = white centre ÷ black centre */
+/* same calculation as the server (faiCalc_): brightness (ANSI lumens) = average of 9 lux points × screen area; contrast = white centre ÷ black centre */
 function faiCalc(it,val){
   val=val||{}; const num=x=>{ const t=String(x==null?'':x).trim(); if(t==='') return null; const n=Number(t); return isFinite(n)?n:NaN; };
-  if(it.type==='bright9'){ const p=Array.isArray(val.p)?val.p:[]; let sum=0; for(let i=0;i<9;i++){ const n=num(p[i]); if(n===null) return ''; if(isNaN(n)||n<0) return NaN; sum+=n; } const area=Number(it.area)>0?Number(it.area):1; return Math.round(sum/9/area*100)/100; }
+  if(it.type==='bright9'){ const p=Array.isArray(val.p)?val.p:[]; let sum=0; for(let i=0;i<9;i++){ const n=num(p[i]); if(n===null) return ''; if(isNaN(n)||n<0) return NaN; sum+=n; } const area=Number(it.area)>0?Number(it.area):1; return Math.round(sum/9*area*100)/100; }
   if(it.type==='contrast'){ const w=num(val.w), b=num(val.b); if(w===null||b===null) return ''; if(isNaN(w)||isNaN(b)||b<=0||w<0) return NaN; return Math.round(w/b*100)/100; }
   return '';
 }
@@ -4131,7 +4131,7 @@ function faiSpecText(it){
   if(it.type==='text') return it.expected?`= ${it.expected}`:'Record value';
   if(it.type==='number'){ if(has(it.nom)&&has(it.tol)) return `${it.nom} ± ${it.tol}${u}`; if(has(it.min)&&has(it.max)) return `${it.min} to ${it.max}${u}`; if(has(it.min)) return `≥ ${it.min}${u}`; if(has(it.max)) return `≤ ${it.max}${u}`; return 'No limit set'+(u?` (${u.trim()})`:''); }
   if(it.type==='xy'){ const t=xyTol(it); return t?`x ${it.x} (+${t.xp} / −${t.xm}), y ${it.y} (+${t.yp} / −${t.ym})`:'No limit set'; }
-  if(it.type==='bright9') return `${has(it.gt)?'> '+it.gt+u:'No limit set'} · average of 9 points ÷ ${it.area||'?'} m²`;
+  if(it.type==='bright9') return `${has(it.gt)?'> '+it.gt+u:'No limit set'} · ANSI: average of 9 points × ${it.area||'?'} m²`;
   if(it.type==='contrast') return has(it.gt)?`> ${it.gt}${u||':1'}`:'No limit set';
   return 'Pass / Fail';
 }
@@ -4273,7 +4273,7 @@ function buildFaiSpecPage(){
   const lim=(it,i)=>it.type==='text'?`<input class="field fsF" data-i="${i}" data-k="expected" value="${esc(it.expected||'')}" placeholder="Expected value (blank = judge by hand)">`
     :it.type==='number'?`<div class="fs-lim">${num(i,'nom','Nominal')}${num(i,'tol','± Tol')}<span>or</span>${num(i,'min','Min')}${num(i,'max','Max')}<input class="field fsF" data-i="${i}" data-k="unit" value="${esc(it.unit||'')}" placeholder="Unit"><label class="fs-chk"><input type="checkbox" class="fsF" data-i="${i}" data-k="calcPending" ${it.calcPending?'checked':''}> Calculation inputs coming</label></div>`
     :it.type==='xy'?`<div class="fs-lim"><span>x</span>${num(i,'x','x')}${num(i,'xTolP','+ tol')}${num(i,'xTolM','− tol')}<span style="width:100%"></span><span>y</span>${num(i,'y','y')}${num(i,'yTolP','+ tol')}${num(i,'yTolM','− tol')}</div>`
-    :it.type==='bright9'?`<div class="fs-lim"><span>Greater than</span>${num(i,'gt','e.g. 400')}<input class="field fsF" data-i="${i}" data-k="unit" value="${esc(it.unit||'lm')}" placeholder="Unit"><span>Screen area</span>${num(i,'area','0.992')}<span>m²</span></div><div class="text-muted" style="font-size:12px;margin-top:4px">Average of the 9 lux points ÷ screen area. Blank limit: judged by hand.</div>`
+    :it.type==='bright9'?`<div class="fs-lim"><span>Greater than</span>${num(i,'gt','e.g. 400')}<input class="field fsF" data-i="${i}" data-k="unit" value="${esc(it.unit||'lm')}" placeholder="Unit"><span>Screen area</span>${num(i,'area','0.992')}<span>m²</span></div><div class="text-muted" style="font-size:12px;margin-top:4px">ANSI lumens: average of the 9 lux points × screen area. Blank limit: judged by hand.</div>`
     :it.type==='contrast'?`<div class="fs-lim"><span>Greater than</span>${num(i,'gt','e.g. 1000')}<span>: 1</span></div><div class="text-muted" style="font-size:12px;margin-top:4px">White centre ÷ black centre. Blank limit: judged by hand.</div>`
     :'<span class="text-muted">Pass / Fail per sample</span>';
   return `<div class="card rv" style="--i:1">
