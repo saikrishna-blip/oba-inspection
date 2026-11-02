@@ -1228,6 +1228,11 @@ body{font-feature-settings:"cv11","ss01";letter-spacing:-.003em}
 .uh-form{display:grid;gap:10px;padding:6px 0}
 .uh-cks{display:flex;gap:10px;flex-wrap:wrap}
 .uh-ck{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink-2)}
+
+.cat-chip{display:inline-block;font-size:11.5px;font-weight:600;padding:1px 7px;border-radius:5px;background:var(--color-brand-soft);color:var(--color-brand-strong);margin-right:4px}
+.theme-dark .cat-chip{color:#C7CEFF}
+.cat-tbl .field{min-height:34px;padding:5px 8px;font-size:13px}
+.req{color:var(--color-danger);margin-left:2px}
 </style>
 </head>
 <body>
@@ -3047,8 +3052,8 @@ async function dlModelBom(model){
   if(!r.ok){ toast(r.error||'Could not load the BOM.','err'); return; }
   const c=r.control||{};
   const pre=[['Model BOM',model],['BOM revision',String(c.rev??''),String(c.status||'')],['Last ECN',String(c.lastEcn||'-')],['Downloaded',new Date().toLocaleString(),user?user.name:''],[]];
-  const cols=[{h:'#',w:6},{h:'Part No',w:22,text:true},{h:'Description',w:60},{h:'QPS',w:8},{h:'Alternate part',w:20,text:true},{h:'Supplier',w:30},{h:'UOM',w:8},{h:'Image URL',w:40}];
-  const rows=r.parts.map((p,i)=>[i+1,p.partNo,p.description,p.qps,(p.alternates||[]).join(', '),p.supplier,p.uom,p.imageUrl]);
+  const cols=[{h:'#',w:6},{h:'Part No',w:22,text:true},{h:'Category',w:22},{h:'Sub Category',w:24},{h:'Description',w:60},{h:'QPS',w:8},{h:'Alternate part',w:20,text:true},{h:'Supplier',w:30},{h:'UOM',w:8},{h:'Image URL',w:40}];
+  const rows=r.parts.map((p,i)=>[i+1,p.partNo,p.category||'',p.subCategory||'',p.description,p.qps,(p.alternates||[]).join(', '),p.supplier,p.uom,p.imageUrl]);
   saveBlob(makeXlsx(cols,rows,'BOM',pre),`BOM_${bxFile(model)}_Rev${bxFile(c.rev)}_${bxToday()}.xlsx`);
 }
 async function dlVerifiedBom(verId){
@@ -3059,8 +3064,8 @@ async function dlVerifiedBom(verId){
   const v=r.verification;
   const pre=[['Verified BOM',v.verId],['Batch',v.lot],['Model BOM',v.model,'Revision '+v.rev+' ('+v.bomStatus+')'],['Result',v.result,v.deviations+' deviation(s) in '+v.partsChecked+' parts'],
              ['Verified by',v.by,v.time],['Remarks',v.remarks||'-'],[]];
-  const cols=[{h:'#',w:6},{h:'Part No (BOM)',w:22,text:true},{h:'Description',w:60},{h:'BOM QPS',w:9},{h:'Part found in lot',w:22,text:true},{h:'QPS found',w:9},{h:'Result',w:16},{h:'Remark',w:40}];
-  const rows=r.items.map((x,i)=>[i+1,x.partNo,x.description,x.bomQps,x.lotPartNo,x.lotQps,x.result,x.remark]);
+  const cols=[{h:'#',w:6},{h:'Part No (BOM)',w:22,text:true},{h:'Category',w:22},{h:'Sub Category',w:24},{h:'Description',w:60},{h:'BOM QPS',w:9},{h:'Part found in lot',w:22,text:true},{h:'QPS found',w:9},{h:'Locations',w:36},{h:'Result',w:16},{h:'Remark',w:40}];
+  const rows=r.items.map((x,i)=>[i+1,x.partNo,x.category||'',x.subCategory||'',x.description,x.bomQps,x.lotPartNo,x.lotQps,x.locations||'',x.result,x.remark]);
   saveBlob(makeXlsx(cols,rows,'Verified BOM',pre),`Verified_BOM_${bxFile(v.lot)}_${bxFile(v.verId)}.xlsx`);
 }
 
@@ -3091,37 +3096,80 @@ function bxView(){
   const b=r.data;
   return h+`<div class="bx-bar"><div class="bx-sum">${bxStatus(b.locked,b.rev)} <span class="text-muted">${b.parts.length} parts</span></div><span style="flex:1"></span>
     <input id="bxFilter" class="field bx-search" type="search" placeholder="Filter parts" aria-label="Filter parts"></div>
-    <div class="bx-tw"><table class="res-table bx-tbl"><thead><tr><th>#</th><th>Image</th><th>Part no</th><th>Description</th><th class="num">QPS</th></tr></thead><tbody>
-    ${b.parts.map((p,i)=>`<tr class="bxRow" data-s="${esc((p.partNo+' '+p.desc).toLowerCase())}"><td class="text-muted">${i+1}</td><td>${bxImg(p.img)}</td><td class="mono">${esc(p.partNo)}</td><td>${esc(p.desc)}</td><td class="num mono">${esc(p.qps)}</td></tr>`).join('')||'<tr><td colspan="5" class="text-muted">No parts in this BOM yet.</td></tr>'}
+    <div class="bx-tw"><table class="res-table bx-tbl"><thead><tr><th>#</th><th>Image</th><th>Part no</th><th>Category</th><th>Sub category</th><th>Description</th><th class="num">QPS</th></tr></thead><tbody>
+    ${b.parts.map((p,i)=>`<tr class="bxRow" data-s="${esc((p.partNo+' '+p.desc+' '+(p.cat||'')+' '+(p.sub||'')).toLowerCase())}"><td class="text-muted">${i+1}</td><td>${bxImg(p.img)}</td><td class="mono">${esc(p.partNo)}</td><td>${esc(p.cat||'—')}</td><td>${esc(p.sub||'')}</td><td>${esc(p.desc)}</td><td class="num mono">${esc(p.qps)}</td></tr>`).join('')||'<tr><td colspan="7" class="text-muted">No parts in this BOM yet.</td></tr>'}
     </tbody></table></div>`;
 }
 
 // ---- Parts (PART_MASTER) ----
 function bxParts(){
-  const r=bxGet('listParts');
-  const head=`<div class="bx-bar"><input id="bxFilter" class="field bx-search" type="search" placeholder="Filter by part number, description, supplier" aria-label="Filter parts" style="max-width:420px">
-    <span style="flex:1"></span><button class="btn btn-primary btn-sm" data-bx="partNew">New part</button></div>`;
+  const r=bxGet('listParts'), cr=bxGet('getPartCategories');
+  const head=`<div class="bx-bar"><input id="bxPartQ" class="field bx-search" type="search" value="${esc(bx.ui.partQ||'')}" placeholder="Filter by part number, description, supplier" aria-label="Filter parts" style="max-width:360px">
+    ${cr.data&&cr.data.cats.length?`<select class="field bx-sel" data-bxc="partCatF" aria-label="Category filter"><option value="">All categories</option>${cr.data.cats.map(c=>`<option ${bx.ui.partCat===c.name?'selected':''}>${esc(c.name)}</option>`).join('')}<option value="__none" ${bx.ui.partCat==='__none'?'selected':''}>Not classified</option></select>`:''}
+    ${cr.data&&bx.ui.partCat&&bx.ui.partCat!=='__none'?`<select class="field bx-sel" data-bxc="partSubF" aria-label="Sub category filter"><option value="">All sub categories</option>${((cr.data.cats.find(c=>c.name===bx.ui.partCat)||{}).subs||[]).map(x=>`<option ${bx.ui.partSub===x.name?'selected':''}>${esc(x.name)}</option>`).join('')}</select>`:''}
+    <span style="flex:1"></span>
+    <button class="btn btn-ghost btn-sm" data-bx="catEdit">${bx.ui.cats?'Close categories':'Categories'}</button>
+    <button class="btn btn-ghost btn-sm" data-bx="partsXlsx" ${r.data?'':'disabled'}>Download parts</button>
+    <button class="btn btn-primary btn-sm" data-bx="partNew">New part</button></div>`;
   if(!r.data) return head+bxWait(r,'parts');
-  const d=r.data, ed=bx.ui.part;
+  const d=r.data, ed=bx.ui.part, cats=(cr.data&&cr.data.cats)||[];
+  const ci=d.fields.indexOf(d.catField), si=d.fields.indexOf(d.subField);
   let form='';
   if(ed){
     const row=ed.isNew?null:d.rows.find(x=>x.partNo===ed.partNo);
     const val=(f,i)=>bxFval('pf_'+f,row?row.v[i]:'');
     const url=d.urlField?val(d.urlField,d.fields.indexOf(d.urlField)):'';
+    const curCat=d.catField?val(d.catField,ci):'', subs=((cats.find(c=>c.name===curCat)||{}).subs)||[];
+    const fieldHtml=(f,i)=>{
+      const lbl=esc(f.replace(/_/g,' '));
+      if(f===d.catField&&cats.length) return `<label class="bx-lbl">Category<span class="req">*</span><select class="field" data-bxc="pfCat" data-k="pf_${esc(f)}"><option value="">Choose…</option>${cats.map(c=>`<option ${c.name===curCat?'selected':''}>${esc(c.name)}</option>`).join('')}${curCat&&!cats.some(c=>c.name===curCat)?`<option selected>${esc(curCat)}</option>`:''}</select></label>`;
+      if(f===d.subField&&cats.length){ const cur=val(f,i); return `<label class="bx-lbl">Sub category<span class="req">*</span><select class="field" data-bxf="pf_${esc(f)}" ${curCat?'':'disabled'}><option value="">${curCat?'Choose…':'Choose the category first'}</option>${subs.map(x=>`<option ${x.name===cur?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>`; }
+      if(f===d.descField) return `<label class="bx-lbl" style="grid-column:1/-1">${lbl}<textarea class="field" rows="2" data-bxf="pf_${esc(f)}" maxlength="500">${esc(val(f,i))}</textarea></label>`;
+      return `<label class="bx-lbl">${lbl}${f===d.urlField?' (https link)':''}<input class="field" data-bxf="pf_${esc(f)}" value="${esc(val(f,i))}" maxlength="${f===d.urlField?600:200}"></label>`;
+    };
+    // category fields first, then the rest
+    const order=d.fields.map((f,i)=>({f,i})).sort((x,y)=>((y.f===d.catField||y.f===d.subField)-(x.f===d.catField||x.f===d.subField)));
     form=`<div class="card bx-partform"><div class="bx-ecn-h"><h2 class="bx-h3">${ed.isNew?'New part':'Change part '+esc(ed.partNo)}</h2>${row&&row.used.length?`<span class="text-muted">Used in ${row.used.map(esc).join(', ')}. Changes are copied to these BOMs.</span>`:''}</div>
       <div class="bx-pf">${bxImg(url)}<div class="bx-grid2" style="flex:1">
         <label class="bx-lbl">Part number${ed.isNew?'':' (cannot be changed)'}<input class="field mono" data-bxf="pf__no" value="${esc(ed.isNew?bxFval('pf__no'):ed.partNo)}" ${ed.isNew?'':'readonly'} maxlength="60"></label>
-        ${d.fields.map((f,i)=>`<label class="bx-lbl" ${f===d.descField?'style="grid-column:1/-1"':''}>${esc(f.replace(/_/g,' '))}${f===d.urlField?' (https link)':''}
-          ${f===d.descField?`<textarea class="field" rows="2" data-bxf="pf_${esc(f)}" maxlength="500">${esc(val(f,i))}</textarea>`:`<input class="field" data-bxf="pf_${esc(f)}" value="${esc(val(f,i))}" maxlength="${f===d.urlField?600:200}">`}</label>`).join('')}
+        ${cats.length&&d.catField?`<div class="bx-lbl" style="align-self:end"><button class="btn btn-ghost btn-sm" data-bx="pfSuggest" type="button">Suggest category from part number and description</button></div>`:''}
+        ${order.map(x=>fieldHtml(x.f,x.i)).join('')}
       </div></div>
+      ${!cats.length&&d.catField?'<p class="text-muted">No categories yet: add them with Categories.</p>':''}
       <div class="bx-foot"><button class="btn btn-primary" data-bx="partSave" ${bx.busy?'disabled':''}>${bx.busy==='part'?'Saving…':ed.isNew?'Create part':'Save changes'}</button><button class="btn btn-ghost" data-bx="partCancel">Cancel</button></div></div>`;
   }
-  const show=d.fields.map((f,i)=>({f,i})).filter(x=>x.f!==d.urlField).slice(0,4);
+  let catPanel='';
+  if(bx.ui.cats){
+    if(!cr.data) catPanel=bxWait(cr,'categories');
+    else{
+      if(!bx.ui.catRows) bx.ui.catRows=cr.data.cats.flatMap(c=>c.subs.length?c.subs.map(x=>({cat:c.name,sub:x.name,codes:c.codes.join(', '),keywords:(x.keywords||[]).join(', '),parts:x.parts||0})):[{cat:c.name,sub:'',codes:c.codes.join(', '),keywords:'',parts:0}]);
+      catPanel=`<div class="card"><div class="bx-ecn-h"><h2 class="bx-h3">Categories and sub categories</h2><span class="text-muted">${cr.data.unclassified?`${cr.data.unclassified} parts not classified yet.`:'Every part is classified.'}</span></div>
+        <p class="text-muted" style="margin:4px 0 10px">One row per sub category. <b>Codes</b>: part-number group codes that suggest the category (e.g. 41 in D018.410190202). <b>Keywords</b>: words in the description that suggest the sub category. A row used by parts cannot be removed.</p>
+        <div class="bx-tw"><table class="res-table cat-tbl"><thead><tr><th>Category</th><th>Sub category</th><th>Codes</th><th>Keywords</th><th class="num">Parts</th><th></th></tr></thead><tbody>
+        ${bx.ui.catRows.map((x,i)=>`<tr><td><input class="field catF" data-i="${i}" data-k="cat" value="${esc(x.cat)}" list="catNames" maxlength="60"></td><td><input class="field catF" data-i="${i}" data-k="sub" value="${esc(x.sub)}" maxlength="60"></td><td><input class="field mono catF" data-i="${i}" data-k="codes" value="${esc(x.codes)}" maxlength="120"></td><td><input class="field catF" data-i="${i}" data-k="keywords" value="${esc(x.keywords)}" maxlength="400"></td><td class="num mono">${x.parts||0}</td><td><button class="btn-icon" data-bx="catDel" data-i="${i}" aria-label="Remove row" ${x.parts?'disabled title="Used by parts"':''}>${ico('x')}</button></td></tr>`).join('')}
+        </tbody></table></div><datalist id="catNames">${[...new Set(bx.ui.catRows.map(x=>x.cat).filter(Boolean))].map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+        <div class="bx-foot"><button class="btn btn-ghost" data-bx="catAdd">Add row</button><span style="flex:1"></span><button class="btn btn-primary" data-bx="catSave" ${bx.busy?'disabled':''}>${bx.busy==='cats'?'Saving…':'Save categories'}</button></div></div>`;
+    }
+  }
+  const q=(bx.ui.partQ||'').trim().toLowerCase(), fc=bx.ui.partCat||'', fs=bx.ui.partSub||'';
+  const shownRows=d.rows.filter(x=>(!q||(x.partNo+' '+x.v.join(' ')).toLowerCase().includes(q))&&(!fc||(fc==='__none'?!(x.v[ci]||''):x.v[ci]===fc))&&(!fs||x.v[si]===fs));
+  const show=d.fields.map((f,i)=>({f,i})).filter(x=>x.f!==d.urlField&&x.f!==d.catField&&x.f!==d.subField).slice(0,3);
   const ui=d.fields.indexOf(d.urlField);
-  return head+form+`<p class="text-muted">${d.rows.length} parts in PART_MASTER.</p><div class="bx-tw"><table class="res-table bx-tbl"><thead><tr><th>Image</th><th>Part no</th>${show.map(x=>`<th>${esc(x.f.replace(/_/g,' '))}</th>`).join('')}<th>Used in</th><th></th></tr></thead><tbody>
-    ${d.rows.map(p=>`<tr class="bxRow" data-s="${esc((p.partNo+' '+p.v.join(' ')).toLowerCase())}"><td>${bxImg(ui>=0?p.v[ui]:'')}</td><td class="mono">${esc(p.partNo)}</td>${show.map(x=>`<td>${esc(p.v[x.i])}</td>`).join('')}
-      <td>${p.used.length?p.used.map(esc).join(', '):'<span class="text-muted">-</span>'}</td><td class="bx-act"><button class="btn btn-ghost btn-sm" data-bx="partEdit" data-p="${esc(p.partNo)}">Change</button></td></tr>`).join('')}
-    </tbody></table></div>`;
+  return head+catPanel+form+`<p class="text-muted">${shownRows.length===d.rows.length?d.rows.length+' parts in PART_MASTER.':shownRows.length+' of '+d.rows.length+' parts shown.'}</p><div class="bx-tw"><table class="res-table bx-tbl"><thead><tr><th>Image</th><th>Part no</th>${d.catField?'<th>Category</th><th>Sub category</th>':''}${show.map(x=>`<th>${esc(x.f.replace(/_/g,' '))}</th>`).join('')}<th>Used in</th><th></th></tr></thead><tbody>
+    ${shownRows.slice(0,600).map(x=>`<tr><td>${bxImg(ui>=0?x.v[ui]:'')}</td><td class="mono">${esc(x.partNo)}</td>${d.catField?`<td>${x.v[ci]?esc(x.v[ci]):'<span class="text-muted">—</span>'}</td><td>${esc(x.v[si]||'')}</td>`:''}${show.map(c=>`<td>${esc(x.v[c.i])}</td>`).join('')}<td>${x.used.length?x.used.map(esc).join(', '):'<span class="text-muted">-</span>'}</td><td><button class="btn btn-ghost btn-sm" data-bx="partEdit" data-p="${esc(x.partNo)}">Change</button></td></tr>`).join('')||'<tr><td colspan="9" class="text-muted">No parts match.</td></tr>'}
+    </tbody></table></div>${shownRows.length>600?'<p class="text-muted">First 600 shown; narrow the filter to see more.</p>':''}`;
+}
+/* suggestion: category from the part-number group code, sub category from description words */
+function bxSuggestClass(partNo,desc,cats){
+  const pn=String(partNo||'').toUpperCase(), dsc=String(desc||'').toLowerCase();
+  let cat=null;
+  const m=pn.match(/^[A-Z0-9]+\.(?:PCT-)?(\d{2})/);
+  if(m) cat=cats.find(c=>c.codes.includes(m[1]))||null;
+  // the longest description keyword wins; first inside the code's category, then across all categories
+  const best=pool=>{ let hit=null,len=0; pool.forEach(c=>c.subs.forEach(x=>(x.keywords||[]).forEach(k=>{ if(k&&k.length>len&&dsc.includes(k)){ hit={c,x}; len=k.length; } }))); return hit; };
+  const h=(cat&&best([cat]))||best(cats);
+  if(h) return {cat:h.c.name,sub:h.x.name};
+  return {cat:cat?cat.name:'',sub:''};
 }
 
 // ---- Compare BOMs ----
@@ -3139,7 +3187,7 @@ function bxCompare(){
     const r=bxGet('compareTwoModels',{a,b});
     if(!r.data) return h+bxWait(r,'comparison');
     const c=r.data, diff=c.common.filter(x=>!x.same).length;
-    const tbl=(rows,hd,cell)=>`<div class="bx-tw"><table class="res-table"><thead><tr><th>Image</th><th>Part</th><th>Description</th>${hd}</tr></thead><tbody>${rows.map(x=>`<tr class="${x.same===false?'row-bad':''}"><td>${bxImg(x.img)}</td><td class="mono">${esc(x.part)}</td><td>${esc(x.desc)}</td>${cell(x)}</tr>`).join('')||'<tr><td colspan="6" class="text-muted">None</td></tr>'}</tbody></table></div>`;
+    const tbl=(rows,hd,cell)=>`<div class="bx-tw"><table class="res-table"><thead><tr><th>Image</th><th>Part</th><th>Category</th><th>Description</th>${hd}</tr></thead><tbody>${rows.map(x=>`<tr class="${x.same===false?'row-bad':''}"><td>${bxImg(x.img)}</td><td class="mono">${esc(x.part)}</td><td>${esc(x.cat||'—')}${x.sub?`<div class="text-muted" style="font-size:12px">${esc(x.sub)}</div>`:''}</td><td>${esc(x.desc)}</td>${cell(x)}</tr>`).join('')||'<tr><td colspan="7" class="text-muted">None</td></tr>'}</tbody></table></div>`;
     return h+`<div class="bx-stats"><div><b>${c.common.length}</b><span>common parts</span></div><div><b class="${diff?'text-fail':''}">${diff}</b><span>with different QPS</span></div><div><b>${c.onlyA.length}</b><span>only in ${esc(a)}</span></div><div><b>${c.onlyB.length}</b><span>only in ${esc(b)}</span></div></div>
       <h3 class="bx-h3">Common parts</h3>${tbl(c.common,`<th class="num">QPS ${esc(a)}</th><th class="num">QPS ${esc(b)}</th><th>Check</th>`,x=>`<td class="num mono">${esc(x.qa)}</td><td class="num mono">${esc(x.qb)}</td><td class="${x.same?'':'bad'}">${x.same?'Same':'Different'}</td>`)}
       <h3 class="bx-h3">Only in ${esc(a)}</h3>${tbl(c.onlyA,'<th class="num">QPS</th>',x=>`<td class="num mono">${esc(x.q)}</td>`)}
@@ -3154,8 +3202,8 @@ function bxCompare(){
   const groups={all:d.rows,common:d.rows.filter(x=>x.used===n),diff:d.rows.filter(x=>x.check==='Different'),only:d.rows.filter(x=>x.used===1&&n>1)};
   const fl=(k,l)=>`<button class="seg-btn ${f===k?'on':''}" data-bx="cmpFilter" data-t="${k}">${l}<span>${groups[k].length}</span></button>`;
   return h+`<div class="seg" style="margin-bottom:12px">${fl('all','All parts')}${fl('common','Common to all')}${fl('diff','Different QPS')}${fl('only','Model-specific')}</div>
-    <div class="bx-tw"><table class="res-table bx-tbl"><thead><tr><th>Part</th><th>Description</th>${d.models.map(m=>`<th class="num">${esc(m)}</th>`).join('')}<th>Used in</th><th>QPS check</th></tr></thead><tbody>
-    ${groups[f].map(x=>`<tr class="bxRow" data-s="${esc((x.partNo+' '+x.desc).toLowerCase())}"><td class="mono">${esc(x.partNo)}</td><td>${esc(x.desc)}</td>${x.qps.map(q=>`<td class="num mono">${q==null?'<span class="text-muted">-</span>':esc(q)}</td>`).join('')}<td>${esc(x.status)}</td><td class="${x.check==='Different'?'bad':''}">${esc(x.check)}</td></tr>`).join('')}
+    <div class="bx-tw"><table class="res-table bx-tbl"><thead><tr><th>Part</th><th>Category</th><th>Description</th>${d.models.map(m=>`<th class="num">${esc(m)}</th>`).join('')}<th>Used in</th><th>QPS check</th></tr></thead><tbody>
+    ${groups[f].map(x=>`<tr class="bxRow" data-s="${esc((x.partNo+' '+x.desc+' '+(x.cat||'')+' '+(x.sub||'')).toLowerCase())}"><td class="mono">${esc(x.partNo)}</td><td>${esc(x.cat||'—')}${x.sub?`<div class="text-muted" style="font-size:12px">${esc(x.sub)}</div>`:''}</td><td>${esc(x.desc)}</td>${x.qps.map(q=>`<td class="num mono">${q==null?'<span class="text-muted">-</span>':esc(q)}</td>`).join('')}<td>${esc(x.status)}</td><td class="${x.check==='Different'?'bad':''}">${esc(x.check)}</td></tr>`).join('')}
     </tbody></table></div>`;
 }
 
@@ -3169,6 +3217,37 @@ async function bxAction2(a,el){
     if(!confirm(`Create model BOM ${name} with ${items.length} part${items.length===1?'':'s'}? It is locked as Rev 0.`)) return true;
     const d=await bxRun('newmodel','createModel',{payload:{newModel:name,items:items.map(x=>({partNo:x.partNo,qps:Number(x.qps)}))}},d=>`${d.model} created with ${d.parts} parts.`);
     if(d){ bx.model=d.model; bx.ui.newModel=false; delete bx.f.nmName; delete bx.f.nmParts; await loadAll(true); render(); }
+    return true;
+  }
+  if(a==='pfSuggest'){
+    const d=(bx.cache['listParts|{}']||{}).data, cats=((bx.cache['getPartCategories|{}']||{}).data||{}).cats||[]; if(!d) return true;
+    const ed=bx.ui.part, row=ed&&!ed.isNew?d.rows.find(x=>x.partNo===ed.partNo):null;
+    const pn=ed.isNew?bxFval('pf__no'):ed.partNo, desc=bxFval('pf_'+d.descField,row?row.v[d.fields.indexOf(d.descField)]:'');
+    const sg=bxSuggestClass(pn,desc,cats);
+    if(!sg.cat){ toast('No suggestion: choose the category yourself, or add codes and keywords under Categories.','err'); return true; }
+    bx.f['pf_'+d.catField]=sg.cat; bx.f['pf_'+d.subField]=sg.sub; render(); toast(`Suggested: ${sg.cat}${sg.sub?' / '+sg.sub:''}`); return true;
+  }
+  if(a==='pfCat'){ const k=el.getAttribute('data-k'), d=(bx.cache['listParts|{}']||{}).data; bx.f[k]=el.value; if(d) bx.f['pf_'+d.subField]=''; render(); return true; }
+  if(a==='partCatF'){ bx.ui.partCat=el.value; bx.ui.partSub=''; render(); return true; }
+  if(a==='partSubF'){ bx.ui.partSub=el.value; render(); return true; }
+  if(a==='catEdit'){ bx.ui.cats=!bx.ui.cats; bx.ui.catRows=null; render(); return true; }
+  if(a==='catAdd'){ (bx.ui.catRows=bx.ui.catRows||[]).push({cat:'',sub:'',codes:'',keywords:'',parts:0}); render(); document.querySelector(`.catF[data-i="${bx.ui.catRows.length-1}"][data-k="cat"]`)?.focus(); return true; }
+  if(a==='catDel'){ bx.ui.catRows.splice(+el.getAttribute('data-i'),1); render(); return true; }
+  if(a==='catSave'){
+    const rows=(bx.ui.catRows||[]).filter(x=>x.cat.trim()||x.sub.trim());
+    if(rows.some(x=>!x.cat.trim()||!x.sub.trim())){ toast('Every row needs a category and a sub category.','err'); return true; }
+    // codes belong to the category: use the first row's codes for all its rows
+    const codes={}; rows.forEach(x=>{ if(x.codes.trim()&&!codes[x.cat.trim()]) codes[x.cat.trim()]=x.codes.trim(); });
+    const d=await bxRun('cats','savePartCategories',{payload:{rows:rows.map(x=>({cat:x.cat.trim(),sub:x.sub.trim(),codes:codes[x.cat.trim()]||'',keywords:x.keywords}))}},x=>`Category list saved (${x.rows} sub categories).`);
+    if(d){ bx.ui.catRows=null; render(); }
+    return true;
+  }
+  if(a==='partsXlsx'){
+    const d=(bx.cache['listParts|{}']||{}).data; if(!d) return true;
+    const ci=d.fields.indexOf(d.catField), si=d.fields.indexOf(d.subField), rest=d.fields.map((f,i)=>({f,i})).filter(x=>x.i!==ci&&x.i!==si);
+    const cols=[{h:'Part No',w:22,text:true}].concat(ci>=0?[{h:'Category',w:22},{h:'Sub Category',w:24}]:[],rest.map(x=>({h:x.f.replace(/_/g,' '),w:x.f===d.descField?60:20})),[{h:'Used in',w:24}]);
+    const rows=d.rows.map(x=>[x.partNo].concat(ci>=0?[x.v[ci],x.v[si]]:[],rest.map(c=>x.v[c.i]),[x.used.join(', ')]));
+    saveBlob(makeXlsx(cols,rows,'Parts',[['Parts list (PART_MASTER)'],['Downloaded',new Date().toLocaleString(),user?user.name:''],[]]),`Parts_${bxToday()}.xlsx`);
     return true;
   }
   if(a==='partNew'){ bx.ui.part={isNew:true}; Object.keys(bx.f).filter(k=>k.startsWith('pf_')).forEach(k=>delete bx.f[k]); render(); window.scrollTo(0,0); return true; }
@@ -3192,14 +3271,14 @@ async function bxAction2(a,el){
   if(a==='dlCmpTwo'){
     const list=bxModels()||[]; const A=bx.f.cmpA||(list[0]||{}).model, B=bx.f.cmpB||(list[1]||list[0]||{}).model;
     const c=(bx.cache['compareTwoModels|'+JSON.stringify({a:A,b:B})]||{}).data; if(!c) return true;
-    const rows=[].concat(c.common.map(x=>['Common',x.part,x.desc,x.qa,x.qb,x.same?'Same':'Different']),c.onlyA.map(x=>['Only in '+A,x.part,x.desc,x.q,'','']),c.onlyB.map(x=>['Only in '+B,x.part,x.desc,'',x.q,'']));
-    saveBlob(makeXlsx([{h:'Group',w:18},{h:'Part No',w:22,text:true},{h:'Description',w:60},{h:'QPS '+A,w:12},{h:'QPS '+B,w:12},{h:'QPS check',w:12}],rows,'Compare',[['BOM comparison',A+' vs '+B],['Downloaded',new Date().toLocaleString()],[]]),`BOM_compare_${bxFile(A)}_vs_${bxFile(B)}.xlsx`);
+    const rows=[].concat(c.common.map(x=>['Common',x.part,x.cat||'',x.sub||'',x.desc,x.qa,x.qb,x.same?'Same':'Different']),c.onlyA.map(x=>['Only in '+A,x.part,x.cat||'',x.sub||'',x.desc,x.q,'','']),c.onlyB.map(x=>['Only in '+B,x.part,x.cat||'',x.sub||'',x.desc,'',x.q,'']));
+    saveBlob(makeXlsx([{h:'Group',w:18},{h:'Part No',w:22,text:true},{h:'Category',w:22},{h:'Sub Category',w:24},{h:'Description',w:60},{h:'QPS '+A,w:12},{h:'QPS '+B,w:12},{h:'QPS check',w:12}],rows,'Compare',[['BOM comparison',A+' vs '+B],['Downloaded',new Date().toLocaleString()],[]]),`BOM_compare_${bxFile(A)}_vs_${bxFile(B)}.xlsx`);
     return true;
   }
   if(a==='dlCmpAll'){
     const d=(bx.cache['compareAll|{}']||{}).data; if(!d) return true;
-    saveBlob(makeXlsx([{h:'Part No',w:22,text:true},{h:'Description',w:60}].concat(d.models.map(m=>({h:m,w:12})),[{h:'Used in',w:20},{h:'QPS check',w:12}]),
-      d.rows.map(x=>[x.partNo,x.desc].concat(x.qps.map(q=>q==null?'':q),[x.status,x.check])),'Compare',[['BOM comparison','All models'],['Downloaded',new Date().toLocaleString()],[]]),`BOM_compare_all_${bxToday()}.xlsx`);
+    saveBlob(makeXlsx([{h:'Part No',w:22,text:true},{h:'Category',w:22},{h:'Sub Category',w:24},{h:'Description',w:60}].concat(d.models.map(m=>({h:m,w:12})),[{h:'Used in',w:20},{h:'QPS check',w:12}]),
+      d.rows.map(x=>[x.partNo,x.cat||'',x.sub||'',x.desc].concat(x.qps.map(q=>q==null?'':q),[x.status,x.check])),'Compare',[['BOM comparison','All models'],['Downloaded',new Date().toLocaleString()],[]]),`BOM_compare_all_${bxToday()}.xlsx`);
     return true;
   }
   return false;
@@ -3383,6 +3462,8 @@ document.addEventListener('change',ev=>{ const t=ev.target; if(page!=='bom') ret
   else if(t.matches('[data-bxf]')) bx.f[t.getAttribute('data-bxf')]=t.value; });
 document.addEventListener('input',ev=>{ const t=ev.target; if(page!=='bom') return;
   if(t.matches('[data-bxf]')) bx.f[t.getAttribute('data-bxf')]=t.value;
+  if(t.id==='bxPartQ'){ bx.ui.partQ=t.value; const pos=t.selectionStart; render(); const n=document.getElementById('bxPartQ'); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} } return; }
+  if(t.matches('.catF')){ const r=(bx.ui.catRows||[])[+t.getAttribute('data-i')]; if(r) r[t.getAttribute('data-k')]=t.value; return; }
   if(t.id==='bxFilter'){ const q=t.value.trim().toLowerCase(); document.querySelectorAll('.bxRow').forEach(r=>{ r.style.display=!q||r.getAttribute('data-s').includes(q)?'':'none'; }); } });
 
 // ─── BATCH FLOW STRIP ─────────────────────────────────────
@@ -3535,7 +3616,7 @@ function buildBomVerify(){
     if(a.filter==='todo'&&!(st==='todo'||st==='open')) return false;
     if(a.filter==='match'&&st!=='match') return false;
     if(a.filter==='diff'&&st!=='dev') return false;
-    return !q||p.partNo.toLowerCase().includes(q)||p.description.toLowerCase().includes(q)||String((a.items[p.partNo]||{}).found||'').toLowerCase().includes(q);
+    return !q||p.partNo.toLowerCase().includes(q)||p.description.toLowerCase().includes(q)||String(p.category||'').toLowerCase().includes(q)||String(p.subCategory||'').toLowerCase().includes(q)||String((a.items[p.partNo]||{}).found||'').toLowerCase().includes(q);
   });
   const pct=k=>c.total?(k/c.total*100).toFixed(2):0;
   const canEcn=can('bommgmt');
@@ -3575,7 +3656,7 @@ function buildBomVerify(){
     const img=p.imageUrl?`<img src="${esc(p.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='No image'">`:'No image';
     return `<div class="bom-row ${st==='match'?'r-match':st==='dev'?'r-diff':st==='open'?'r-open':''}" data-pn="${esc(p.partNo)}">
       <div class="bom-img">${img}</div>
-      <div><div class="bom-pn">${esc(p.partNo)}</div><div class="bom-desc">${esc(p.description)}</div><div class="bom-meta">${esc(p.supplier||'')}${p.uom?', '+esc(p.uom):''}${p.alternates.length?`. Alternates: <span style="font-family:var(--code)">${p.alternates.map(esc).join(', ')}</span>`:''}</div>${bomStatusPill(p,it)}</div>
+      <div><div class="bom-pn">${esc(p.partNo)}</div><div class="bom-desc">${esc(p.description)}</div><div class="bom-meta">${p.category?`<span class="cat-chip">${esc(p.category)}${p.subCategory?' · '+esc(p.subCategory):''}</span> `:''}${esc(p.supplier||'')}${p.uom?', '+esc(p.uom):''}${p.alternates.length?`. Alternates: <span style="font-family:var(--code)">${p.alternates.map(esc).join(', ')}</span>`:''}</div>${bomStatusPill(p,it)}</div>
       <div class="bom-qps"><b>${esc(p.qps)}</b><span>QPS</span></div>
       <div class="bom-act">
         <button class="btn btn-sm btn-ghost bomQuick ${simple?'on-match':''}" data-pn="${esc(p.partNo)}" aria-pressed="${simple}" title="Same part, full BOM quantity in one place">Matches BOM</button>

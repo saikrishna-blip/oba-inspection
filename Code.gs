@@ -1953,6 +1953,15 @@ function readBom_(ss, model){
   return parts;
 }
 
+/* part number → {cat, sub} from PART_MASTER (one place for the classification) */
+function partClassMap_(ss){
+  var out = {}, m = ss.getSheetByName("PART_MASTER");
+  if(!m || m.getLastRow() < 2) return out;
+  var v = m.getDataRange().getValues(), h = v[0].map(String), ci = catColOf_(h) - 1, si = subColOf_(h) - 1;
+  if(ci < 0) return out;
+  for(var i = 1; i < v.length; i++){ var k = String(v[i][0] || "").replace(/^'/, "").trim().toUpperCase(); if(k) out[k] = {cat:String(v[i][ci] || "").trim(), sub:si >= 0 ? String(v[i][si] || "").trim() : ""}; }
+  return out;
+}
 function getBom(d){
   var model = String(d.model||"").trim();
   if(!model) return {ok:false, error:"No BOM model given. Set the Lumio model number for this model."};
@@ -1961,6 +1970,8 @@ function getBom(d){
     var parts = readBom_(ss, model);
     if(!parts) return {ok:false, error:"No BOM tab named \"" + model + "\" in the BOM sheet."};
     var ctl = bomControl_(ss)[model] || {model:model, status:"", rev:""};
+    var cls = partClassMap_(ss);
+    parts.forEach(function(p){ var c = cls[String(p.partNo).trim().toUpperCase()] || {}; p.category = c.cat || ""; p.subCategory = c.sub || ""; });
     return {ok:true, model:model, control:ctl, parts:parts};
   }catch(e){
     console.error(e); return {ok:false, error:"Cannot open the BOM sheet. Ask an admin to check access to it."};
@@ -2075,12 +2086,13 @@ function getBomVerification(d){
       }
     }
     if(!head) return {ok:true, found:false};
-    var dv = det.getDataRange().getValues(), items = [];
+    var dv = det.getDataRange().getValues(), items = [], cls = partClassMap_(ss);
     for(var j = 1; j < dv.length; j++){
       if(String(dv[j][0]) !== head.verId) continue;
       items.push({partNo:String(dv[j][4]), description:String(dv[j][5]), imageUrl:String(dv[j][6]),
                   bomQps:dv[j][7], lotPartNo:String(dv[j][8]), lotQps:dv[j][9], remark:String(dv[j][10]||""), result:String(dv[j][11]),
-                  locations:String(dv[j][12]||"")});
+                  locations:String(dv[j][12]||""),
+                  category:(cls[String(dv[j][4]).trim().toUpperCase()] || {}).cat || "", subCategory:(cls[String(dv[j][4]).trim().toUpperCase()] || {}).sub || ""});
     }
     return {ok:true, found:true, verification:head, items:items};
   }catch(e){
@@ -2204,6 +2216,9 @@ function setBatchStage(d){
    BOM MANAGEMENT (native). Same rules as the Part DB tools; data in this spreadsheet.
    Ported from PartDB.gs. Everything here is reached through the "bom" action only.
    ===================================================================== */
+/* Category / Sub Category columns of PART_MASTER, found by header name (used by the portal and the BOM engine) */
+function catColOf_(mh) { const i = mh.findIndex(h => /^(part[\s_-]*)?category$/i.test(String(h).trim())); return i >= 0 ? i + 1 : 0; }
+function subColOf_(mh) { const i = mh.findIndex(h => /^(part[\s_-]*)?sub[\s_-]*category$/i.test(String(h).trim())); return i >= 0 ? i + 1 : 0; }
 var BOMX = (function(){
 const IMAGE_FOLDER_ID = '1xwpe_z03u3dk2z40QHJ_559yDouuAFHM';
 const SHEET_NAME      = 'PART_MASTER';
@@ -2513,15 +2528,18 @@ function readMaster_() {
   // Falls back to the fixed DESC_COL / COL_IMAGE_URL only if no header matches.
   const descCol = findCol_(mh, /desc/i) || DESC_COL;
   const urlCol  = findCol_(mh, /image.*url|url.*image/i) || COL_IMAGE_URL;
-  return { mh: mh, mVals: mVals, mForm: mForm, idx: idx, descCol: descCol, urlCol: urlCol };
+  const catCol  = catColOf_(mh), subCol = subColOf_(mh);
+  return { mh: mh, mVals: mVals, mForm: mForm, idx: idx, descCol: descCol, urlCol: urlCol, catCol: catCol, subCol: subCol };
 }
 
 /** Description + image URL of PART_MASTER row i (0-based), or blanks if i is undefined. */
 function masterExtra_(ctx, i) {
-  if (i === undefined || i === null) return { desc: '', img: '' };
+  if (i === undefined || i === null) return { desc: '', img: '', cat: '', sub: '' };
   return {
     desc: ctx.descCol ? String(ctx.mVals[i][ctx.descCol - 1] || '').trim() : '',
-    img:  ctx.urlCol  ? String(ctx.mVals[i][ctx.urlCol  - 1] || '').trim() : ''
+    img:  ctx.urlCol  ? String(ctx.mVals[i][ctx.urlCol  - 1] || '').trim() : '',
+    cat:  ctx.catCol  ? String(ctx.mVals[i][ctx.catCol  - 1] || '').trim() : '',
+    sub:  ctx.subCol  ? String(ctx.mVals[i][ctx.subCol  - 1] || '').trim() : ''
   };
 }
 
@@ -3501,7 +3519,7 @@ function getVerifyBom(model) {
       const p = String(r[0]).trim();
       if (!p) return;
       const ex = masterExtra_(ctx, ctx.idx[norm_(p)]);
-      parts.push({ partNo: p, desc: ex.desc, img: ex.img, qps: qv ? qv[i][0] : '' });
+      parts.push({ partNo: p, desc: ex.desc, img: ex.img, cat: ex.cat, sub: ex.sub, qps: qv ? qv[i][0] : '' });
     });
   }
   return { locked: c.status === 'Locked', rev: c.rev, parts: parts };
@@ -3684,12 +3702,12 @@ function compareTwoModels(a, b) {
     const k = norm_(p.partNo);
     seenA[k] = true;
     const o = mapB[k];
-    if (o) common.push({ part: p.partNo, desc: p.desc, img: p.img, qa: p.qps, qb: o.qps,
+    if (o) common.push({ part: p.partNo, desc: p.desc, img: p.img, cat: p.cat, sub: p.sub, qa: p.qps, qb: o.qps,
                          same: Number(p.qps) === Number(o.qps) });
-    else   onlyA.push({ part: p.partNo, desc: p.desc, img: p.img, q: p.qps });
+    else   onlyA.push({ part: p.partNo, desc: p.desc, img: p.img, cat: p.cat, sub: p.sub, q: p.qps });
   });
   B.parts.forEach(p => {
-    if (!seenA[norm_(p.partNo)]) onlyB.push({ part: p.partNo, desc: p.desc, img: p.img, q: p.qps });
+    if (!seenA[norm_(p.partNo)]) onlyB.push({ part: p.partNo, desc: p.desc, img: p.img, cat: p.cat, sub: p.sub, q: p.qps });
   });
 
   return {
@@ -3795,7 +3813,7 @@ function compareAll() {
     const used = names.filter(n => n in p.q);
     const qs = used.map(n => String(p.q[n]));
     const ex = masterExtra_(ctx, ctx.idx[k]);
-    return { partNo: p.partNo, desc: ex.desc, img: ex.img, qps: names.map(n => n in p.q ? p.q[n] : null),
+    return { partNo: p.partNo, desc: ex.desc, img: ex.img, cat: ex.cat, sub: ex.sub, qps: names.map(n => n in p.q ? p.q[n] : null),
              used: used.length,
              status: used.length === total ? 'Common' : used.length === 1 ? 'Only in ' + used[0] : 'Shared',
              check: used.length < 2 ? '' : (qs.filter((x, i) => qs.indexOf(x) === i).length === 1 ? 'Same' : 'Different') };
@@ -3823,6 +3841,53 @@ function usageMap_(mh) {
   });
   return m;
 }
+/* ── part classification: Category and Sub Category ──
+   The list lives in the PART_CATEGORIES tab: Category | Sub_Category | Codes | Keywords.
+   Codes are part-number group codes (the digits after the prefix, e.g. 41 in D018.410190202) used to suggest the category;
+   Keywords are words in a part description used to suggest the sub category. */
+const CAT_HDR = ['Category', 'Sub_Category', 'Codes', 'Keywords'];
+function readPartCategories_() {
+  const sh = dataSS_().getSheetByName('PART_CATEGORIES');
+  const cats = [];
+  if (!sh || sh.getLastRow() < 2) return { cats: cats };
+  sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues().forEach(r => {
+    const cn = String(r[0] || '').trim(), sn = String(r[1] || '').trim();
+    if (!cn) return;
+    let c = cats.filter(x => x.name === cn)[0];
+    if (!c) { c = { name: cn, subs: [], codes: [] }; cats.push(c); }
+    String(r[2] || '').replace(/^'/, '').split(/[\s,;]+/).map(x => x.trim().replace(/^'/, '')).filter(String).forEach(x => { if (c.codes.indexOf(x) < 0) c.codes.push(x); });
+    if (sn && !c.subs.some(x => x.name === sn)) c.subs.push({ name: sn, keywords: String(r[3] || '').split(/\s*,\s*/).map(x => x.trim().toLowerCase()).filter(String) });
+  });
+  return { cats: cats };
+}
+function getPartCategories() {
+  const t = readPartCategories_(), ctx = readMaster_();
+  const used = {};
+  if (ctx.catCol && ctx.subCol) ctx.mVals.forEach(r => { const k = String(r[ctx.catCol - 1] || '').trim() + '\u0001' + String(r[ctx.subCol - 1] || '').trim(); used[k] = (used[k] || 0) + 1; });
+  t.cats.forEach(c => c.subs.forEach(s => { s.parts = used[c.name + '\u0001' + s.name] || 0; }));
+  t.unclassified = ctx.catCol ? ctx.mVals.filter(r => String(r[COL_PART_NO - 1]).trim() && !String(r[ctx.catCol - 1] || '').trim()).length : 0;
+  t.ready = !!(ctx.catCol && ctx.subCol);
+  return t;
+}
+/** payload = { rows:[{cat, sub, codes, keywords}] }. A category / sub category that parts still use cannot be removed. */
+function savePartCategories(p) {
+  return withLock_(() => {
+    const rows = (Array.isArray(p.rows) ? p.rows : []).slice(0, 400).map(r => ({
+      cat: String(r.cat || '').trim().substring(0, 60), sub: String(r.sub || '').trim().substring(0, 60),
+      codes: String(r.codes || '').trim().substring(0, 120), keywords: String(r.keywords || '').trim().substring(0, 400) }));
+    if (rows.some(r => !r.cat || !r.sub)) throw uerr_('Every row needs a category and a sub category.');
+    const seen = {};
+    rows.forEach(r => { const k = (r.cat + '|' + r.sub).toLowerCase(); if (seen[k]) throw uerr_(r.cat + ' / ' + r.sub + ' is listed twice.'); seen[k] = 1; });
+    const now = getPartCategories(), gone = [];
+    now.cats.forEach(c => c.subs.forEach(s => { if (s.parts && !rows.some(r => r.cat === c.name && r.sub === s.name)) gone.push(c.name + ' / ' + s.name + ' (' + s.parts + ' parts)'); }));
+    if (gone.length) throw uerr_('These are still used by parts; move the parts first: ' + gone.join(', '));
+    const sh = migratedSheet_('PART_CATEGORIES', CAT_HDR);
+    if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 4).clearContent();
+    if (rows.length) sh.getRange(2, 1, rows.length, 4).setValues(rows.map(r => [r.cat, r.sub, "'" + r.codes, r.keywords].map(x => typeof x === 'string' ? safe_(x, 400) : x)));
+    appendRows_(migratedSheet_('PART_LOG', PART_LOG_HDR), [[now_(), '(category list)', 'Categories', now.cats.length + ' categories', rows.length + ' rows', user_()]]);
+    return { rows: rows.length };
+  });
+}
 /** Every part with its editable fields and the model BOMs that use it. */
 function listParts() {
   let ctx = readMaster_();
@@ -3834,7 +3899,7 @@ function listParts() {
     const p = String(r[COL_PART_NO - 1]).trim();
     if (p) rows.push({ partNo: p, v: f.map(x => txt_(r[x.i])), used: use[norm_(p)] || [] });
   });
-  return { fields: f.map(x => x.h), descField: ctx.descCol ? ctx.mh[ctx.descCol - 1] : '',
+  return { fields: f.map(x => x.h), catField: ctx.catCol ? ctx.mh[ctx.catCol - 1] : '', subField: ctx.subCol ? ctx.mh[ctx.subCol - 1] : '', descField: ctx.descCol ? ctx.mh[ctx.descCol - 1] : '',
            urlField: ctx.urlCol ? ctx.mh[ctx.urlCol - 1] : '', rows: rows };
 }
 /** payload = { partNo, isNew, values:{ header: value } }. Edits are copied to every model BOM that lists the part. */
@@ -3852,6 +3917,22 @@ function savePart(p) {
     if (descH && descH in vals && !String(vals[descH]).trim()) throw uerr_('Enter the part description.');
     if (p.isNew && descH && !String(vals[descH] || '').trim()) throw uerr_('Enter the part description.');
     if (urlH && String(vals[urlH] || '').trim() && !docLink_(vals[urlH])) throw uerr_('The image link must be an https link.');
+    // Category and sub category come from the PART_CATEGORIES list; the sub category must belong to the category
+    const catH = ctx.catCol ? ctx.mh[ctx.catCol - 1] : '', subH = ctx.subCol ? ctx.mh[ctx.subCol - 1] : '';
+    const tax = readPartCategories_();
+    if (catH && subH && tax.cats.length) {
+      const curRow = exists ? ctx.mVals[ctx.idx[k]] : null;
+      const cat = String(catH in vals ? vals[catH] : (curRow ? curRow[ctx.catCol - 1] : '') || '').trim();
+      const sub = String(subH in vals ? vals[subH] : (curRow ? curRow[ctx.subCol - 1] : '') || '').trim();
+      if (p.isNew || catH in vals || subH in vals) {
+        if (!cat) throw uerr_('Choose the part category.');
+        const c = tax.cats.filter(x => x.name === cat)[0];
+        if (!c) throw uerr_('Category "' + cat + '" is not in the category list.');
+        if (!sub) throw uerr_('Choose the sub category.');
+        if (c.subs.map(x => x.name).indexOf(sub) < 0) throw uerr_('Sub category "' + sub + '" does not belong to ' + cat + '.');
+        vals[catH] = cat; vals[subH] = sub;
+      }
+    }
     if (urlH && urlH in vals) vals[urlH] = docLink_(vals[urlH]);
     const imgCol = ctx.mh.findIndex(h => norm_(h) === 'IMAGE') + 1;
     const log = migratedSheet_('PART_LOG', PART_LOG_HDR), when = now_(), by = user_();
@@ -3940,7 +4021,8 @@ const API_ = {
   updateEcnMeta: [1, ['payload']], deleteEcn: [1, ['ecnNo']], deleteEcnRecordOnly: [1, ['ecnNo']],
   restoreBomVersion: [1, ['model', 'rev', 'reason']], mergeBomRevisions: [1, ['model', 'revs']],
   assignPart: [1, ['payload']], saveBom: [1, ['payload']], dedupe: [1, []],
-  listParts: [0, []], savePart: [1, ['payload']], repairImages: [1, []], createModel: [1, ['payload']]
+  listParts: [0, []], savePart: [1, ['payload']], repairImages: [1, []], createModel: [1, ['payload']],
+  getPartCategories: [0, []], savePartCategories: [1, ['payload']]
 };
 const FNS_ = {
   getControlData, getVerifyModels, getBomData, getTodayStr, getVerifyBom, getModelParts, getModelBomCsv,
@@ -3948,7 +4030,7 @@ const FNS_ = {
   getPartInModel, getMasterPart, getAfterPartInfo, getPartsInModel, getMasterParts, getLotList, getLotBom,
   getLotCsv, compareTwoModels, compareAll, getPartUsage, lockBom, unlockBom, runEcnChange, updateEcnMeta,
   deleteEcn, deleteEcnRecordOnly, restoreBomVersion, mergeBomRevisions, assignPart, saveBom, dedupe,
-  listParts, savePart, repairImages, createModel
+  listParts, savePart, repairImages, createModel, getPartCategories, savePartCategories
 };
 // Functions that take a model name check it is a real model BOM first.
 const MODEL_ARG_ = { model: 1, a: 1, b: 1 };
@@ -3976,7 +4058,7 @@ function call(d) {
     const args = spec[1].map(name => {
       const v = a[name];
       if (MODEL_ARG_[name] && v !== '' && v != null) modelOk_(v);
-      if (name === 'payload' && v && v.model && !v.newModel && fn !== 'savePart') modelOk_(v.model);
+      if (name === 'payload' && v && v.model && !v.newModel && fn !== 'savePart' && fn !== 'savePartCategories') modelOk_(v.model);
       if (name === 'payload' && v && v.newModel) {
         if (!NAME_RE_.test(String(v.newModel))) throw uerr_('Model names may use letters, numbers, spaces and - _ . / ( ) # & only.');
       }
