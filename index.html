@@ -1498,7 +1498,7 @@ function groupBatches(){
     const fgTotal    = lots.reduce((s,l)=>s+Number(l.fgPassQty||0),0);
     return{name,lots,batchQty,totalLots,completed,pending,holdLots,passLots,failLots,fgTotal,
            model:lots[0].model||'',prodMonthCode:lots[0].prodMonthCode||'',prodMonthCode2:lots[0].prodMonthCode2||'',
-           bomStatus:lots[0].bomStatus||'',bomVerId:lots[0].bomVerId||''};
+           bomStatus:lots[0].bomStatus||'',bomVerId:lots[0].bomVerId||'',bomRev:(lots.find(l=>l.bomRev!=='' && l.bomRev!=null)||{}).bomRev??''};
   });
 }
 
@@ -3056,6 +3056,16 @@ async function dlModelBom(model){
   const rows=r.parts.map((p,i)=>[i+1,p.partNo,p.category||'',p.subCategory||'',p.description,p.qps,(p.alternates||[]).join(', '),p.supplier,p.uom,p.imageUrl]);
   saveBlob(makeXlsx(cols,rows,'BOM',pre),`BOM_${bxFile(model)}_Rev${bxFile(c.rev)}_${bxToday()}.xlsx`);
 }
+async function dlModelBomRev(model,rev){
+  if(!model||rev===''||rev==null) return;
+  toast(`Preparing ${model} Rev ${rev}…`);
+  const r=await api('getBomRev',{model,rev});
+  if(!r.ok){ toast(r.error||'Could not load that BOM revision.','err'); return; }
+  const pre=[['Model BOM',model],['BOM revision',String(r.rev),r.current?'Current':'Superseded'],['Last ECN in this revision',r.lastEcn||'-'],['Source',r.source||''],['Downloaded',new Date().toLocaleString(),user?user.name:''],[]];
+  const cols=[{h:'#',w:6},{h:'Part No',w:22,text:true},{h:'Category',w:22},{h:'Sub Category',w:24},{h:'Description',w:60},{h:'QPS',w:8},{h:'Image URL',w:40}];
+  const rows=r.parts.map((p,i)=>[i+1,p.partNo,p.category||'',p.subCategory||'',p.description,p.qps,p.imageUrl||'']);
+  saveBlob(makeXlsx(cols,rows,'BOM Rev '+r.rev,pre),`BOM_${bxFile(model)}_Rev${bxFile(String(r.rev))}_${bxToday()}.xlsx`);
+}
 async function dlVerifiedBom(verId){
   if(!verId) return;
   toast('Preparing the verified BOM…');
@@ -3086,15 +3096,17 @@ function bxView(){
   // batches built on this BOM, with their verification
   const gs=bxBatchesFor(bx.model);
   h+=`<div class="card"><h2 class="bx-h3">Batches built on ${esc(bx.model)} (${gs.length})</h2>
-    ${gs.length?`<div class="bx-tw"><table class="res-table"><thead><tr><th>Batch</th><th>Product model</th><th class="num">Qty</th><th>Lots</th><th>BOM verification</th><th></th></tr></thead><tbody>
-    ${gs.map(g=>{ const ver=/^VER-/.test(g.bomVerId)?g.bomVerId:''; const st=g.bomStatus||'Not required';
+    ${gs.length?`<div class="bx-tw"><table class="res-table"><thead><tr><th>Batch</th><th>Product model</th><th class="num">Qty</th><th>Lots</th><th>BOM verification</th><th>BOM rev</th><th></th></tr></thead><tbody>
+    ${gs.map(g=>{ const ver=/^VER-/.test(g.bomVerId)?g.bomVerId:''; const st=g.bomStatus||'Not required'; const gr=String(g.bomRev??'');
       return `<tr><td><b>${esc(g.name)}</b></td><td>${esc(modelLabel(g.model))}</td><td class="num mono">${esc(g.batchQty)}</td><td>${esc(g.completed)} of ${esc(g.totalLots)} inspected</td>
-      <td><span class="badge ${st==='Passed'?'badge-pass':st==='Failed'?'badge-fail':st==='Pending'?'badge-open':'badge-closed'}">${esc(st)}</span> ${ver?`<span class="mono text-muted">${esc(ver)}</span>`:''}</td>
-      <td class="bx-act">${ver?`<button class="btn btn-ghost btn-sm" data-bx="dlVer" data-v="${esc(ver)}">Verified BOM</button>`:''}<button class="btn btn-ghost btn-sm" data-bx="openBatch" data-b="${esc(g.name)}">Open batch</button></td></tr>`; }).join('')}
+      <td><span class="badge ${st==='Passed'?'badge-pass':st==='Failed'?'badge-fail':st==='Pending'?'badge-open':'badge-closed'}">${esc(st)}</span> ${ver?`<span class="mono text-muted">${esc(ver)}</span>`:''}</td><td class="mono">${gr!==''?'Rev '+esc(gr):'<span class="text-muted">-</span>'}</td>
+      <td class="bx-act">${gr!==''?`<button class="btn btn-ghost btn-sm" data-bx="dlRev" data-m="${esc(bx.model)}" data-r="${esc(gr)}">BOM Rev ${esc(gr)}</button>`:''}${ver?`<button class="btn btn-ghost btn-sm" data-bx="dlVer" data-v="${esc(ver)}">Verified BOM</button>`:''}<button class="btn btn-ghost btn-sm" data-bx="openBatch" data-b="${esc(g.name)}">Open batch</button></td></tr>`; }).join('')}
     </tbody></table></div>`:'<p class="text-muted">No batch uses this BOM yet. A batch uses it when its product model has this Lumio model number.</p>'}</div>`;
   if(!r.data) return h+bxWait(r,'BOM');
   const b=r.data;
-  return h+`<div class="bx-bar"><div class="bx-sum">${bxStatus(b.locked,b.rev)} <span class="text-muted">${b.parts.length} parts</span></div><span style="flex:1"></span>
+  const revOpts=Array.from({length:(Number(b.rev)||0)+1},(_,i)=>i).reverse();
+  return h+`<div class="bx-bar"><div class="bx-sum">${bxStatus(b.locked,b.rev)} <span class="text-muted">${b.parts.length} parts</span></div>
+    ${Number(b.rev)>0?`<label class="bx-lbl" style="flex-direction:row;align-items:center;gap:6px">Older revision <select id="bxRevSel" class="field bx-sel" aria-label="BOM revision">${revOpts.filter(x=>x!==Number(b.rev)).map(x=>`<option value="${x}">Rev ${x}</option>`).join('')}</select></label><button class="btn btn-ghost btn-sm" data-bx="dlRev" data-m="${esc(bx.model)}">Download revision</button>`:''}<span style="flex:1"></span>
     <input id="bxFilter" class="field bx-search" type="search" placeholder="Filter parts" aria-label="Filter parts"></div>
     <div class="bx-tw"><table class="res-table bx-tbl"><thead><tr><th>#</th><th>Image</th><th>Part no</th><th>Category</th><th>Sub category</th><th>Description</th><th class="num">QPS</th></tr></thead><tbody>
     ${b.parts.map((p,i)=>`<tr class="bxRow" data-s="${esc((p.partNo+' '+p.desc+' '+(p.cat||'')+' '+(p.sub||'')).toLowerCase())}"><td class="text-muted">${i+1}</td><td>${bxImg(p.img)}</td><td class="mono">${esc(p.partNo)}</td><td>${esc(p.cat||'—')}</td><td>${esc(p.sub||'')}</td><td>${esc(p.desc)}</td><td class="num mono">${esc(p.qps)}</td></tr>`).join('')||'<tr><td colspan="7" class="text-muted">No parts in this BOM yet.</td></tr>'}
@@ -3405,6 +3417,7 @@ async function bxAction(a,el){
   if(a==='model'){ bx.model=el.value; bx.ui={ecnTab:bx.ui.ecnTab,cmpTab:bx.ui.cmpTab,newModel:bx.ui.newModel}; bx.f.repEcn=''; render(); return; }
   if(a==='repEcn'){ bx.f.repEcn=el.value; render(); return; }
   if(a==='dlBom'){ dlModelBom(el.getAttribute('data-m')||bx.model); return; }
+  if(a==='dlRev'){ const sel=document.getElementById('bxRevSel'); dlModelBomRev(el.getAttribute('data-m')||bx.model, el.getAttribute('data-r')??(sel?sel.value:'')); return; }
   if(a==='dlVer'){ dlVerifiedBom(el.getAttribute('data-v')); return; }
   if(await bxAction2(a,el)) return;
   if(a==='ecnTab'){ bx.ui.ecnTab=el.getAttribute('data-t'); render(); return; }
@@ -3455,7 +3468,7 @@ async function bxAction(a,el){
   if(a==='ecnPrint'){ bx.f.repEcn=e; bx.ui.ecnTab='print'; render(); window.scrollTo(0,0); return; }
   if(a==='print'){ document.body.classList.add('bx-printing'); window.print(); setTimeout(()=>document.body.classList.remove('bx-printing'),500); return; }
 }
-document.addEventListener('click',ev=>{ const g=ev.target.closest('[data-bxg]'); if(g){ ev.preventDefault(); if(g.getAttribute('data-bxg')==='dlBom') dlModelBom(g.getAttribute('data-m')); else dlVerifiedBom(g.getAttribute('data-v')); return; } });
+document.addEventListener('click',ev=>{ const g=ev.target.closest('[data-bxg]'); if(g){ ev.preventDefault(); const k=g.getAttribute('data-bxg'); if(k==='dlBom') dlModelBom(g.getAttribute('data-m')); else if(k==='dlRev') dlModelBomRev(g.getAttribute('data-m'),g.getAttribute('data-r')); else dlVerifiedBom(g.getAttribute('data-v')); return; } });
 document.addEventListener('click',ev=>{ const t=ev.target.closest('[data-bx]'); if(t&&!t.disabled&&page==='bom'){ ev.preventDefault(); bxAction(t.getAttribute('data-bx'),t); } });
 document.addEventListener('change',ev=>{ const t=ev.target; if(page!=='bom') return;
   if(t.matches('[data-bxc]')) bxAction(t.getAttribute('data-bxc'),t);
@@ -3479,9 +3492,12 @@ function buildFlow(g,isAdmin){
   else if(s==='Pending'){ cls='s-wait'; txt=canVerify?`Check all ${bm.parts} BOM parts of ${esc(bm.model)} for this batch`:`No BOM found for ${esc(modelLabel(g.model))}. Set its Lumio model number to a BOM tab name.`; }
   else if(s==='Waived'){ cls='s-na'; txt='Not required (waived by admin)'; }
   else { cls='s-na'; txt='Not required (batch created before the BOM step)'; }
+  const bRev=String(g.bomRev??''), oldRev=bm&&bRev!==''&&String(bm.rev)!==bRev;
+  if(bm&&bRev!=='') txt+=`<br><span class="text-muted">Built on ${esc(bm.model)} Rev ${esc(bRev)}${oldRev?`; the BOM is now at Rev ${esc(bm.rev)}`:''}.</span>`;
   if(sd&&(s==='Pending'||s==='Failed')) txt+=`<br><span class="text-muted">Draft: ${sd.checked} of ${sd.total} parts checked${sd.open?`, ${sd.open} in progress`:''}${sd.deviations?`, ${sd.deviations} deviation${sd.deviations===1?'':'s'}${sd.ecn?` (${sd.ecn} ECN pending)`:''}`:''}. Saved ${esc(fmtDate(sd.at))} by ${esc(sd.by)}.</span>`;
   if((s==='Pending'||s==='Failed')&&canVerify&&can('bomverify')) act+=`<button class="btn btn-primary btn-sm bomStartBtn" data-batch="${esc(g.name)}">${startLbl}</button>`;
-  if(bm) act+=`<button class="btn btn-ghost btn-sm" data-bxg="dlBom" data-m="${esc(bm.model)}">BOM ${esc(bm.model)} Rev ${esc(bm.rev)}</button>`;
+  if(bm&&oldRev) act+=`<button class="btn btn-ghost btn-sm" data-bxg="dlRev" data-m="${esc(bm.model)}" data-r="${esc(bRev)}">BOM ${esc(bm.model)} Rev ${esc(bRev)}</button>`;
+  if(bm) act+=`<button class="btn btn-ghost btn-sm" data-bxg="dlBom" data-m="${esc(bm.model)}">${oldRev?'Current BOM':'BOM '+esc(bm.model)} Rev ${esc(bm.rev)}</button>`;
   if(verRef) act+=`<button class="btn btn-ghost btn-sm" data-bxg="dlVer" data-v="${esc(verRef)}">Verified BOM</button>`;
   if(verRef) act+=`<button class="btn btn-ghost btn-sm bomViewBtn" data-batch="${esc(g.name)}" data-ver="${esc(verRef)}">${bomResult&&bomResult.batch===g.name?'Hide result':'View result'}</button>`;
   if(isAdmin&&(s==='Pending'||s==='Failed')) act+=`<button class="btn btn-ghost btn-sm bomStageBtn" data-batch="${esc(g.name)}" data-st="Waived">Waive</button>`;

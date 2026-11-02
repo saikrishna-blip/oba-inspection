@@ -26,9 +26,9 @@ var MODULES        = ["bomverify","fai","sampling","reports","createbatch","mode
 var DEFAULT_ACCESS = ["bomverify","fai","sampling"];
 // Actions any signed-in user may call (reading, own password)
 // Actions that only read; every other successful action clears the cache
-var READ_ACTIONS = ["login","logout","whoami","bootstrap","getBatches","getModels","modelInsights","getBomList","getBom","getBomVerification","getBomDraft",
+var READ_ACTIONS = ["login","logout","whoami","bootstrap","getBatches","getModels","modelInsights","getBomList","getBom","getBomRev","getBomVerification","getBomDraft",
                     "getLotUnits","checkSerial","getFaiSpec","getFai","listUsers","scanDuplicates","searchRecords","qListAll","qLogFor","qAnalytics"];
-var ALWAYS_ACTIONS = ["qListAll","qLogFor","qAnalytics","bootstrap","modelInsights","logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai","getBom"];
+var ALWAYS_ACTIONS = ["qListAll","qLogFor","qAnalytics","bootstrap","modelInsights","logout","whoami","getBatches","getModels","getBomList","getBomVerification","getLotUnits","changePassword","getFaiSpec","getFai","getBom","getBomRev"];
 // recordRework (rework data + reoffer) belongs to the sampling module
 // Actions unlocked by a module; everything not listed here or above is admin only
 var ACTION_MODULE  = {getBom:"bomverify", submitBomVerification:"bomverify", getBomDraft:"bomverify", saveBomDraft:"bomverify",
@@ -54,6 +54,7 @@ var COL_BOM_VER    = 17;   // Ver_ID of the verification that set the status
 var COL_FAI_STATUS = 18;   // reserved for FAI inspection
 var COL_ROUND      = 19;   // inspection round of the lot: 1 = first offer, 2+ = reoffer after rework
 var COL_REOFFER    = 20;   // serial numbers picked for the current reoffer (comma separated)
+var COL_BOM_REV    = 21;   // BOM revision the batch was built on (set by its BOM verification, or by an admin for older batches)
 var MASTER_ROUND_COL = 20; // Master: round the sample row belongs to (blank = 1)
 
 // Lot status (Batches column F): Open -> (defect) Hold -> (rework saved) Reoffered -> ... -> Closed
@@ -234,6 +235,9 @@ function doPost(e){
     }
     if(action === "getBom"){
       result = getBom(data);
+    }
+    if(action === "getBomRev"){
+      result = getBomRev(data);
     }
     if(action === "submitBomVerification"){
       result = submitBomVerification(data);
@@ -681,6 +685,7 @@ function getBatches(){
       prodMonthCode2: rawPM2,
       bomStatus     : String(r[COL_BOM_STATUS-1]||""),
       bomVerId      : String(r[COL_BOM_VER-1]||""),
+      bomRev        : String(r[COL_BOM_REV-1] === undefined ? "" : r[COL_BOM_REV-1]).trim(),
       faiStatus     : String(r[COL_FAI_STATUS-1]||""),
       round         : Number(r[COL_ROUND-1]) || 1,
       reofferSerials: String(r[COL_REOFFER-1]||"").split(",").map(function(x){ return x.trim(); }).filter(String),
@@ -1864,6 +1869,7 @@ function ensureStageHeaders_(sheet){
   var h2 = sheet.getRange(1, COL_ROUND, 1, 2).getValues()[0];
   if(h2[0] === "") sheet.getRange(1, COL_ROUND).setValue("Round");
   if(h2[1] === "") sheet.getRange(1, COL_REOFFER).setValue("ReofferSerials");
+  if(sheet.getRange(1, COL_BOM_REV).getValue() === "") sheet.getRange(1, COL_BOM_REV).setValue("BOMRev");
 }
 var BOM_SS_CACHE_ = null;
 function bomMigrated_(){ return !!getSpreadsheet().getSheetByName("BOM_CONTROL"); }
@@ -1978,6 +1984,15 @@ function getBom(d){
   }
 }
 
+/* A model BOM as it stood at an older revision (for batches built on it), for every signed-in user. */
+function getBomRev(d){
+  var r = BOMX.call({fn:"getBomAtRevision", args:{model:String(d.model||""), rev:d.rev}, _session:d._session});
+  if(!r.ok) return r;
+  var b = r.data;
+  return {ok:true, model:b.model, rev:b.rev, current:b.current, status:b.status, source:b.source, lastEcn:b.asOfEcn||"",
+          parts:b.parts.map(function(p){ return {partNo:p.partNo, description:p.desc, imageUrl:p.img, qps:p.qps, category:p.cat||"", subCategory:p.sub||""}; })};
+}
+
 function nextVerId_(log){
   var v = log.getDataRange().getValues(), max = 0;
   for(var i = 1; i < v.length; i++){
@@ -1987,7 +2002,7 @@ function nextVerId_(log){
   return "VER-" + ("0000" + (max + 1)).slice(-4);
 }
 
-function setBomStatus_(batchName, status, verId){
+function setBomStatus_(batchName, status, verId, rev){
   var sh = getOrCreateSheet("Batches",[]);
   ensureStageHeaders_(sh);
   var v = sh.getDataRange().getValues();
@@ -1995,6 +2010,7 @@ function setBomStatus_(batchName, status, verId){
   for(var i = 1; i < v.length; i++){
     if(String(v[i][0]) !== String(batchName)) continue;
     sh.getRange(i+1, COL_BOM_STATUS, 1, 2).setValues([[status, verId||""]]);
+    if(rev !== undefined && rev !== "") sh.getRange(i+1, COL_BOM_REV).setValue(rev);
     n++;
   }
   return n;
@@ -2056,7 +2072,7 @@ function submitBomVerification(d){
     det.getRange(det.getLastRow()+1, 1, detail.length, detail[0].length).setValues(detail);
 
     var status = dev === 0 ? "Passed" : "Failed";
-    setBomStatus_(batchName, status, verId);
+    setBomStatus_(batchName, status, verId, ctl.rev);
     deleteBomDraft_(batchName);
     return {ok:true, verId:verId, status:status, partsChecked:parts.length, deviations:dev, result:result};
   }catch(e){
@@ -2489,6 +2505,7 @@ function unlockBom(model, reason) {
     if (!String(reason || '').trim()) throw uerr_('Enter a reason for unlocking.');
     const c = getControl_(model);
     if (c.status !== 'Locked') throw uerr_(model + ' is not locked.');
+    freezeCurrentRev_(model);   // keep the locked revision before it can be edited
     setControl_(model, { status: 'Unlocked', rev: c.rev, by: c.by, on: c.on, ecn: c.ecn });
     appendRows_(migratedSheet_(ECN_SHEET, ECN_HDR),
       [[now_(), '-', model, c.rev, '', 'BOM UNLOCKED', '', '', String(reason).trim(), '', '', user_()]]);
@@ -2627,6 +2644,7 @@ function planBom_(sheet, ctx, items, remove) {
 }
 
 function applyBom_(sheet, plan) {
+  if (plan.changes && plan.changes.length) freezeCurrentRev_(sheet.getName());
   if (plan.n > 0 && plan.changes.some(c => c.action === 'QPS changed'))
     sheet.getRange(HEADER_ROW + 1, plan.h.qpsCol, plan.n, 1).setValues(plan.qv);
   if (plan.newRows.length) {
@@ -3218,33 +3236,72 @@ function getBomRevisions(model) {
   });
 }
 
+/* ── BOM revisions kept for old batches ─────────────────────────────
+   BOM_REVISIONS holds a frozen copy of every revision once the BOM has moved past it:
+   Model | Rev | Line | Part_No | Description | QPS | Frozen_At | Frozen_By | Source.
+   A revision is frozen (a) just before an ECN changes a locked BOM, or (b) the first time an
+   older revision is opened, rebuilt by undoing the ECN history from today's BOM. A frozen
+   revision never changes, so batches built on it can always download their BOM. */
+const REV_SHEET = 'BOM_REVISIONS';
+const REV_HDR = ['Model', 'Rev', 'Line', 'Part_No', 'Description', 'QPS', 'Frozen_At', 'Frozen_By', 'Source'];
+function frozenRev_(model, rev) {
+  const sh = dataSS_().getSheetByName(REV_SHEET);
+  if (!sh || sh.getLastRow() < 2) return null;
+  const want = norm_(model);
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, REV_HDR.length).getValues()
+    .filter(r => norm_(r[0]) === want && String(r[1]).trim() !== '' && Number(r[1]) === Number(rev) && String(r[3]).trim());
+  if (!rows.length) return null;
+  rows.sort((x, y) => Number(x[2]) - Number(y[2]));
+  return { at: txt_(rows[0][6]), by: txt_(rows[0][7]), source: txt_(rows[0][8]),
+           parts: rows.map(r => ({ partNo: txt_(r[3]).replace(/^'/, ''), desc: txt_(r[4]).replace(/^'/, ''), qps: r[5] })) };
+}
+function freezeRev_(model, rev, parts, source) {
+  if (frozenRev_(model, rev) || !parts.length) return false;
+  const sh = sysSheet_(REV_SHEET, REV_HDR);
+  appendRows_(sh, parts.map((p, i) => [model, rev, i + 1, "'" + p.partNo, safe_(String(p.desc || ''), 500), p.qps, now_(), user_(), source]));
+  return true;
+}
+/** Called before a BOM tab is changed: a locked revision is kept as it stands. */
+function freezeCurrentRev_(model) {
+  const c = getControl_(model);
+  if (!c.row || c.status !== 'Locked') return;
+  try { freezeRev_(model, c.rev, getVerifyBom(model).parts, 'Locked revision, saved before the next change'); }
+  catch (e) { console.error('freeze ' + model + ' Rev ' + c.rev + ': ' + e); }
+}
+/** Undoes the ECN history, newest first, from today's BOM back to the given revision. */
+function rebuildRev_(model, target, curParts) {
+  const list = curParts.map(p => ({ partNo: p.partNo, qps: p.qps }));
+  const find = pn => list.findIndex(x => norm_(x.partNo) === norm_(pn));
+  ecnPartRowsFor_(model).filter(r => r.rev > target).reverse().forEach(r => {
+    const i = find(r.partNo);
+    if (r.action === 'Added') { if (i >= 0) list.splice(i, 1); }
+    else if (i >= 0) list[i].qps = r.oldQ;            // Removed or QPS changed: back to the old QPS
+    else list.push({ partNo: r.partNo, qps: r.oldQ });
+  });
+  return list;
+}
 /**
- * Reconstructs the model's BOM as it stood at a given revision by replaying
- * every part-level ECN_HISTORY row up to and including that revision, in
- * order. Description/image come from PART_MASTER as it is today (those
- * aren't tracked per-revision), so only part numbers and QPS are historical.
+ * The model's BOM as it stood at a revision: today's BOM for the current revision, the frozen
+ * copy when there is one, otherwise rebuilt from the ECN history (and then frozen).
+ * Category, image and (when blank) description come from PART_MASTER as it is today.
  */
 function getBomAtRevision(model, rev) {
   const target = Number(rev);
+  if (String(rev).trim() === '' || !isFinite(target) || target < 0 || Math.floor(target) !== target) throw uerr_('Choose a BOM revision.');
+  const c = getControl_(model), cur = getVerifyBom(model);
+  if (target > c.rev) throw uerr_(model + ' is at Rev ' + c.rev + '; Rev ' + target + ' does not exist.');
   const ctx = readMaster_();
-  const map = {}; // norm partNo -> { partNo, qps }
-  let lastWhen = '', lastEcn = '';
-  ecnPartRowsFor_(model).forEach(r => {
-    if (r.rev > target) return;
-    const key = norm_(r.partNo);
-    if (r.action === 'Removed') {
-      delete map[key];
-    } else {
-      map[key] = { partNo: r.partNo, qps: r.newQ };
-    }
-    lastWhen = r.when; lastEcn = r.ecnNo;
+  const dress = list => list.map(p => {
+    const ex = masterExtra_(ctx, ctx.idx[norm_(p.partNo)]);
+    return { partNo: p.partNo, desc: p.desc || ex.desc, img: ex.img, cat: ex.cat, sub: ex.sub, qps: p.qps };
   });
-  const parts = Object.keys(map).map(k => {
-    const row = map[k];
-    const ex = masterExtra_(ctx, ctx.idx[k]);
-    return { partNo: row.partNo, desc: ex.desc, img: ex.img, qps: row.qps };
-  }).sort((a, b) => a.partNo.localeCompare(b.partNo));
-  return { rev: target, model: model, asOfWhen: lastWhen, asOfEcn: lastEcn, parts: parts };
+  const lastEcn = () => { let e = ''; ecnPartRowsFor_(model).forEach(r => { if (r.rev <= target) e = r.ecnNo; }); return e; };
+  if (target === c.rev) return { model: model, rev: target, current: true, status: c.status, source: 'Current BOM', asOfEcn: c.ecn || '', parts: cur.parts };
+  const fz = frozenRev_(model, target);
+  if (fz) return { model: model, rev: target, current: false, status: 'Superseded', source: 'Frozen ' + fz.at + (fz.source ? ' (' + fz.source + ')' : ''), asOfEcn: lastEcn(), parts: dress(fz.parts) };
+  const parts = dress(rebuildRev_(model, target, cur.parts).map(p => ({ partNo: p.partNo, qps: p.qps, desc: '' })));
+  try { withLock_(() => freezeRev_(model, target, parts, 'Rebuilt from the ECN history')); } catch (e) { console.error(e); }
+  return { model: model, rev: target, current: false, status: 'Superseded', source: 'Rebuilt from the ECN history', asOfEcn: lastEcn(), parts: parts };
 }
 
 /** CSV download of a model's BOM as it stood at a given historical revision. */
@@ -3759,7 +3816,7 @@ function hasPartNo_(s) {
 }
 function reservedName_(name) {
   name = String(name || '');
-  return [SHEET_NAME, COMPARE_SHEET, CONTROL_SHEET, ECN_SHEET, VERIFY_SHEET, LOT_SHEET, LOTVIEW_SHEET, TWO_SHEET, 'PART_LOG'].indexOf(name) >= 0 ||
+  return [SHEET_NAME, COMPARE_SHEET, CONTROL_SHEET, ECN_SHEET, VERIFY_SHEET, LOT_SHEET, LOTVIEW_SHEET, TWO_SHEET, 'PART_LOG', REV_SHEET].indexOf(name) >= 0 ||
          PORTAL_TABS_.indexOf(name.toLowerCase()) >= 0;
 }
 function isSystemSheet_(name) {
